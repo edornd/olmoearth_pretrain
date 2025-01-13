@@ -1,0 +1,44 @@
+[project]
+name = "helios"
+version = "0.0.1"
+description = "A library for developing earth system foundation models"
+authors = [
+    {name = "Favyen Bastani", email = "favyenb@allenai.org"},
+    {name = "Patrick Beukema", email = "patrickb@allenai.org"},
+    {name = "Henry Herzog", email = "henryh@allenai.org"},
+    {name = "Gabirel Tseng", email = "gabrielt@allenai.org"},
+    {name = "Yawen Zhang", email = "yawenz@allenai.org"},
+]
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+
+dynamic = ["dependencies", "optional-dependencies"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["helios*"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies = {extra = { file = ["extra_requirements.txt"] }}
+
+[tool.ruff]
+fix = true
+
+[tool.ruff.lint]
+extend-select = ["D", "I", "UP"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+addopts = [
+    "--import-mode=importlib",
+]
