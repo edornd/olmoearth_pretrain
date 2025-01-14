@@ -1,5 +1,7 @@
 einops==0.7.0
 numpy
+pandas
+pandera
 rasterio
 rioxarray
 torch>=2.5
