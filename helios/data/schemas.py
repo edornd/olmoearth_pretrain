@@ -110,18 +110,18 @@ class Sentinel2MonthlyMetadataDataModel(BaseDataModel):
     )
 
     image_idx: Series[int] = pa.Field(
-        description="Index of the image on the time axis for the geotiff",
+        description="Index of the monthly mosaic on the time axis for the geotiff",
         nullable=False,
     )
 
     start_time: Series[str] = pa.Field(
-        description="Start time of the image in ISO format",
+        description="Start time of the monthly mosaic in ISO format",
         nullable=False,
         regex=r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2}",  # ISO timestamp format
     )
 
     end_time: Series[str] = pa.Field(
-        description="End time of the image in ISO format",
+        description="End time of the monthly mosaic in ISO format",
         nullable=False,
         regex=r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2}",  # ISO timestamp format
     )
