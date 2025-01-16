@@ -1,0 +1,189 @@
+"""Module for navigating Dataset Index.
+
+TODO: Add the assumed dataset organizing format and rules
+"""
+
+from typing import Literal
+
+import numpy as np
+from upath import UPath
+
+from helios.data.utils import (
+    load_data_index,
+    load_sentinel2_frequency_metadata,
+    load_sentinel2_monthly_metadata,
+)
+
+# Quick and dirty interface for data sources
+ALL_DATA_SOURCES = ["sentinel2"]
+
+DATA_FREQUENCY_TYPES = ["freq", "monthly"]
+
+LOAD_DATA_SOURCE_METADATA_FUNCTIONS = {
+    "sentinel2": {
+        "freq": load_sentinel2_frequency_metadata,
+        "monthly": load_sentinel2_monthly_metadata,
+    },
+}
+
+
+# what should this do
+# Create sample paths from the index for each example_id and each frequency type
+# Gather all the metadata associated with a sample
+# create an index that allows you to access via index for a dict that it goes
+class DatasetIndexParser:
+    """Parses the dataset index and provides paths to individual samples along with sample_me."""
+
+    def __init__(self, data_index_path: UPath | str):
+        """Initialize the dataset index parser."""
+        self.data_sources = ALL_DATA_SOURCES
+        self.data_index_path = UPath(data_index_path)
+        self.root_dir = self.data_index_path.parent
+        # Using a df as initial ingest due to ease of inspection and manipulation,
+        self.data_index_df = load_data_index(data_index_path)
+        self.example_id_to_sample_metadata_dict = self.data_index_df.set_index(
+            "example_id"
+        ).to_dict("index")
+
+        self.freq_metadata_df_dict = {}
+        self.monthly_metadata_df_dict = {}
+        for data_source in self.data_sources:
+            self.freq_metadata_df_dict[data_source] = (
+                LOAD_DATA_SOURCE_METADATA_FUNCTIONS[
+                    data_source
+                ]["freq"](self.get_path_to_data_source_metadata(data_source, "freq"))
+            )
+            self.monthly_metadata_df_dict[data_source] = (
+                LOAD_DATA_SOURCE_METADATA_FUNCTIONS[
+                    data_source
+                ][
+                    "monthly"
+                ](self.get_path_to_data_source_metadata(data_source, "monthly"))
+            )
+
+        # Intersect available data sources with index column names
+
+        assert (
+            len(self.data_sources) > 0
+        ), "No data sources found in index, check naming of columns"
+
+        self.monthly_example_ids = self.get_example_ids_by_frequency_type("monthly")
+        self.freq_example_ids = self.get_example_ids_by_frequency_type("freq")
+
+        # figure out which datasources are available for all example_ids
+        # I want a list of data sources for each example_id per frequency type
+        # What we want is a dict per sample mapping the data_source to a path, along with associated metadata
+        # SO {paths: {data_source: path}, data_source_metadata: {data_source: metadata}, sample_metadata: {sample_metadata}}
+        # We can then use this to create a dataset
+        # SUper slow implementation for now
+        samples = self.get_sample_information_from_example_id_list(
+            self.monthly_example_ids, "monthly"
+        ) + self.get_sample_information_from_example_id_list(
+            self.freq_example_ids, "freq"
+        )
+
+        self._samples = samples
+
+        self.root_dir = self.data_index_path.parent
+
+    def get_sample_information_from_example_id(
+        self, example_id: str, freq_type: Literal["monthly", "freq"]
+    ) -> dict:
+        """Get the sample information from an example ID."""
+        data_source_metadata = {}
+        data_source_paths = {}
+        sample_metadata = self.example_id_to_sample_metadata_dict[example_id]
+        example_row = self.data_index_df[
+            self.data_index_df["example_id"] == example_id
+        ].iloc[0]
+        for data_source in self.data_sources:
+            if example_row[f"{data_source}_{freq_type}"] != "y":
+                continue
+            data_source_metadata[data_source] = (
+                self.get_metadata_for_data_source_in_sample(
+                    data_source, example_id, freq_type
+                )
+            )
+            data_source_paths[data_source] = self.get_tif_path(
+                data_source, example_id, freq_type
+            )
+        return {
+            "data_source_metadata": data_source_metadata,
+            "data_source_paths": data_source_paths,
+            "sample_metadata": sample_metadata,
+        }
+
+    def get_sample_information_from_example_id_list(
+        self, example_ids: list[str], freq_type: Literal["monthly", "freq"]
+    ) -> list[dict]:
+        """Get the sample information from a list of example IDs."""
+        return [
+            self.get_sample_information_from_example_id(example_id, freq_type)
+            for example_id in example_ids
+        ]
+
+    def get_example_ids_by_frequency_type(
+        self, frequency_type: Literal["monthly", "freq"]
+    ) -> np.ndarray:
+        """Get the example IDs by frequency type."""
+        frequency_type_mask = (
+            self.data_index_df[
+                [col for col in self.data_index_df.columns if frequency_type in col]
+            ]
+            .eq("y")
+            .any(axis=1)
+        )
+        example_ids = self.data_index_df.loc[
+            frequency_type_mask, "example_id"
+        ].to_numpy(dtype=str)
+        return example_ids
+
+    def get_path_to_data_source_metadata(
+        self, data_source: str, frequency_type: str
+    ) -> UPath:
+        """Get the path to the data source metadata."""
+        return self.root_dir / f"{data_source}_{frequency_type}.csv"
+
+    def get_tif_path(
+        self,
+        data_source: str,
+        example_id: str,
+        frequency_type: Literal["monthly", "freq"],
+    ) -> UPath:
+        """Get the path to the tif file."""
+        return self.root_dir / f"{data_source}_{frequency_type}" / f"{example_id}.tif"
+
+    def get_metadata_for_data_source_in_sample(
+        self, data_source: str, example_id: str, frequency_type: str
+    ) -> dict:
+        """Get the metadata for a sample."""
+        metadata_df = self.freq_metadata_df_dict[data_source]
+        meta_dict_records = metadata_df[
+            metadata_df["example_id"] == example_id
+        ].to_dict(orient="records")
+        # TURN INto single dict without example_id
+        meta_dict = {}
+        for record in meta_dict_records:
+            image_idx = record.pop("image_idx")
+            record.pop("example_id")
+            meta_dict[image_idx] = record
+        print(
+            f"Metadata for {example_id} from {data_source} {frequency_type}: {meta_dict}"
+        )
+        return meta_dict
+
+    def __len__(self) -> int:
+        """Get the number of unique samples {co-located multimodal data}."""
+        return len(self.samples)
+
+    @property
+    def samples(self) -> list[dict]:
+        """Get the samples."""
+        return self._samples
+
+
+if __name__ == "__main__":
+    index_path = "gs://ai2-helios/data/20250113-sample-dataset-helios/index.csv"
+    index_parser = DatasetIndexParser(index_path)
+    print(index_parser.samples)
+    print(len(index_parser))
