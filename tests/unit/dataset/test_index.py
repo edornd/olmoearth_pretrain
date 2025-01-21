@@ -39,3 +39,6 @@ def test_dataset_index(sample_index_path: str) -> None:
 
     # Check the keys in the first sample's sample_metadata
     assert "example_id" in first_sample_info.sample_metadata
+
+
+# Unit tests for all the methods in the index.py file

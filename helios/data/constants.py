@@ -2,10 +2,6 @@
 
 from typing import Literal
 
-ALL_DATA_SOURCES = ["sentinel2"]
-
-DATA_FREQUENCY_TYPES = ["freq", "monthly"]
-
 DATA_SOURCE_VARIATION_TYPES = Literal[
     "space_time_varying", "time_varying_only", "space_varying_only", "static_only"
 ]

@@ -2,17 +2,15 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, Optional, TypeVar
 
 import pandas as pd
 import pandera as pa
 from pandera.typing import DataFrame
 
-from helios.dataset.schemas import (
-    Sentinel2FrequencyMetadataDataModel,
-    Sentinel2MonthlyMetadataDataModel,
-    TrainingDataIndexDataModel,
-)
+from helios.dataset.schemas import (Sentinel2FrequencyMetadataDataModel,
+                                    Sentinel2MonthlyMetadataDataModel,
+                                    TrainingDataIndexDataModel)
 
 T = TypeVar("T")
 FrequencyType = Literal["monthly", "freq"]
@@ -54,51 +52,61 @@ class DataSourceMetadataRegistry:
     _registry: dict[str, dict[FrequencyType, Callable[..., DataFrame[T]]]] = {}
 
     @classmethod
-    def register(cls, data_source: str, frequency_type: FrequencyType) -> Callable:
-        """Register a metadata loading function for a data source and frequency type."""
+    def register(
+        cls, data_source: str, frequency_type: Optional[FrequencyType]
+    ) -> Callable:
+        """Register a metadata loading function for a data source and frequency type.
+
+        If frequency_type is None, the function is registered as a static data source.
+        """
 
         def decorator(func: Callable[..., DataFrame[T]]) -> Callable[..., DataFrame[T]]:
             if data_source not in cls._registry:
                 cls._registry[data_source] = {}
-            cls._registry[data_source][frequency_type] = func
+            if frequency_type is not None:
+                cls._registry[data_source][frequency_type] = func
+            else:
+                cls._registry[data_source] = func
             return func
 
         return decorator
 
     @classmethod
     def load_and_validate(
-        cls, data_source: str, frequency_type: FrequencyType, **kwargs: Any
+        cls, data_source: str, frequency_type: Optional[FrequencyType], **kwargs: Any
     ) -> DataFrame[T]:
         """Load and validate metadata for a given data source and frequency type."""
         if data_source not in cls._registry:
             raise ValueError(f"Unknown data source: {data_source}")
-        if frequency_type not in cls._registry[data_source]:
+        if frequency_type is None:
+            func = cls._registry[data_source]
+        elif frequency_type not in cls._registry[data_source]:
             raise ValueError(
                 f"Unknown frequency type {frequency_type} for data source {data_source}"
             )
+        else:
+            func = cls._registry[data_source][frequency_type]
 
         # Get the registered function and call it with the provided kwargs
-        func = cls._registry[data_source][frequency_type]
         return func(**kwargs)
 
 
 @DataSourceMetadataRegistry.register("sentinel2", "monthly")
 @pa.check_types
 def load_sentinel2_monthly_metadata(
-    sentinel2_monthly_metadata_path: Path | str, **kwargs: Any
+    path: Path | str, **kwargs: Any
 ) -> DataFrame[Sentinel2MonthlyMetadataDataModel]:
     """Load the Sentinel-2 Monthly metadata from a csv file."""
-    return load_metadata(
-        sentinel2_monthly_metadata_path, Sentinel2MonthlyMetadataDataModel, **kwargs
-    )
+    return load_metadata(path, Sentinel2MonthlyMetadataDataModel, **kwargs)
 
 
 @DataSourceMetadataRegistry.register("sentinel2", "freq")
 @pa.check_types
 def load_sentinel2_frequency_metadata(
-    sentinel2_frequency_metadata_path: Path | str, **kwargs: Any
+    path: Path | str, **kwargs: Any
 ) -> DataFrame[Sentinel2FrequencyMetadataDataModel]:
     """Load the Sentinel-2 Frequency metadata from a csv file."""
-    return load_metadata(
-        sentinel2_frequency_metadata_path, Sentinel2FrequencyMetadataDataModel, **kwargs
-    )
+    return load_metadata(path, Sentinel2FrequencyMetadataDataModel, **kwargs)
+
+
+# maybe I want a single loading function per data source

@@ -16,10 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 ## Config does not yet support our new dataset type so we will construct manually for now
+
 if __name__ == "__main__":
     setup_logging()
 
-    index_path = "gs://ai2-helios/data/20250113-sample-dataset-helios/index.csv"
+    index_path_old = "gs://ai2-helios/data/20250113-sample-dataset-helios/index.csv"
+    index_path = "gs://ai2-helios/data/20250115-sample-dataset-helios"
     index_parser = DatasetIndexParser(index_path)
     samples = index_parser.samples
     workdir = UPath("/Users/henryh/Desktop/eai-repos/helios-repos/helios/workdir")
