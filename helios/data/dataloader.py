@@ -60,14 +60,18 @@ def iter_batched(
 
 
 class HeliosIterableDatasetWrapper(_IterableDatasetWrapper):
-    """Helios iterable dataset wrapper."""
+    """Helios iterable dataset wrapper.
 
-    def __init__(self, data_loader: NumpyDataLoaderBase):
-        """Initialize the iterable dataset wrapper."""
-        super().__init__(data_loader)
+    This is a modified version of olmo_core.data.data_loader._IterableDatasetWrapper that
+    creates batches of size local_batch_size for the local rank from an iterator of items using
+    multi-threading.
+    """
 
     def __iter__(self) -> Iterator[dict]:
-        """Iterate over the dataset."""
+        """Iterate over the dataset.
+
+        Customized iteratormethod based on olmo_core.data.data_loader._IterableDatasetWrapper
+        """
         global_indices = self.data_loader.get_global_indices()
 
         num_threads = self.data_loader.num_threads
@@ -156,7 +160,27 @@ class HeliosDataLoader(NumpyDataLoaderBase):
     ) -> "NumpyDataLoaderBase":
         """Construct the corresponding :class:`NumpyDataLoaderBase` instance for the given :class:`NumpyDatasetBase`.
 
-        :param dataset: The dataset to wrap.
+        This is a modified version of olmo_core.data.data_loader.wrap_numpy_dataset
+
+        Args:
+            dataset: The dataset to wrap.
+            global_batch_size: The global batch size.
+            collator: The collator to use.
+            work_dir: The work directory.
+            dp_world_size: The number of data parallel workers.
+            dp_rank: The data parallel rank.
+            fs_local_rank: The file system local rank.
+            seed: The seed to use.
+            num_threads: The number of threads to use.
+            num_workers: The number of workers to use.
+            prefetch_factor: The prefetch factor.
+            target_device_type: The target device type.
+
+        Returns:
+            The wrapped data loader.
+
+        Raises:
+            NotImplementedError: If the dataset is not a HeliosDataset.
         """
         kwargs = dict(
             global_batch_size=global_batch_size,

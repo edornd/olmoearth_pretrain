@@ -1,11 +1,10 @@
 """Dataset module for helios."""
 
 import logging
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
-import rioxarray
-import xarray as xr
+import rasterio
 from einops import rearrange
 from olmo_core.data.numpy_dataset import NumpyDatasetBase
 from torch.utils.data import Dataset
@@ -78,14 +77,8 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
 
         variation_type = DATA_SOURCE_TO_VARIATION_TYPE[data_source]
         if variation_type == "space_time_varying":
-            with cast(xr.Dataset, rioxarray.open_rasterio(tif_path)) as data:
-                # [all_combined_bands, H, W]
-                # all_combined_bands includes all dynamic-in-time bands
-                # interleaved for all timesteps
-                # followed by the static-in-time bands
-                values = cast(np.ndarray, data.values)
-                # lon = np.mean(cast(np.ndarray, data.x)).item()
-                # lat = np.mean(cast(np.ndarray, data.y)).item()
+            with rasterio.open(tif_path) as data:
+                values = data.read()
 
             num_timesteps = values.shape[0] / len(space_bands)
             assert (
@@ -116,6 +109,8 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
             return output
         except Exception as e:
             logger.error(f"Replacing tif {tif_path} due to {e}")
+            # TODO: Implement behavior so that we don't hit bad indices again
+            # For now just raise the error so it fails obviously
             raise e
 
     def __getitem__(self, index: int) -> dict[str, Any]:
