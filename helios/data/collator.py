@@ -13,7 +13,7 @@ from helios.data.masking import apply_random_masking
 logger = logging.getLogger(__name__)
 
 
-class CollateFnOutput(NamedTuple):
+class CollatedOutput(NamedTuple):
     """Output of the collate function.
 
     Based on presto-v3
@@ -38,7 +38,7 @@ def variable_time_collate_fn(
     patch_size: int = 4,
     encode_ratio: float = 0.5,
     decode_ratio: float = 0.5,
-) -> CollateFnOutput:
+) -> CollatedOutput:
     """Collate function for inputs with variable time data."""
     assert items
     max_len = max(item["num_timesteps"] for item in items)
@@ -104,7 +104,7 @@ def variable_time_collate_fn(
         decode_ratio=decode_ratio,
     )
 
-    collated_output = CollateFnOutput(
+    collated_output = CollatedOutput(
         space_time_x=masked_output.space_time_x,
         space_x=masked_output.space_x,
         time_x=masked_output.time_x,
