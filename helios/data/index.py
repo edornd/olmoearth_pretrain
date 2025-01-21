@@ -11,6 +11,8 @@ from upath import UPath
 from helios.data.constants import ALL_DATA_SOURCES
 from helios.data.utils import LOAD_DATA_SOURCE_METADATA_FUNCTIONS, load_data_index
 
+FrequencyType = Literal["monthly", "freq"]
+
 
 class DatasetIndexParser:
     """Parses the dataset index and provides paths to individual samples along with sample_me."""
@@ -63,7 +65,7 @@ class DatasetIndexParser:
         self.root_dir = self.data_index_path.parent
 
     def get_sample_information_from_example_id(
-        self, example_id: str, freq_type: Literal["monthly", "freq"]
+        self, example_id: str, freq_type: FrequencyType
     ) -> dict:
         """Get the sample information from an example ID."""
         data_source_metadata = {}
@@ -91,7 +93,7 @@ class DatasetIndexParser:
         }
 
     def get_sample_information_from_example_id_list(
-        self, example_ids: list[str], freq_type: Literal["monthly", "freq"]
+        self, example_ids: list[str], freq_type: FrequencyType
     ) -> list[dict]:
         """Get the sample information from a list of example IDs."""
         return [
@@ -100,7 +102,7 @@ class DatasetIndexParser:
         ]
 
     def get_example_ids_by_frequency_type(
-        self, frequency_type: Literal["monthly", "freq"]
+        self, frequency_type: FrequencyType
     ) -> np.ndarray:
         """Get the example IDs by frequency type."""
         frequency_type_mask = (
@@ -125,16 +127,19 @@ class DatasetIndexParser:
         self,
         data_source: str,
         example_id: str,
-        frequency_type: Literal["monthly", "freq"],
+        frequency_type: FrequencyType,
     ) -> UPath:
         """Get the path to the tif file."""
         return self.root_dir / f"{data_source}_{frequency_type}" / f"{example_id}.tif"
 
     def get_metadata_for_data_source_in_sample(
-        self, data_source: str, example_id: str, frequency_type: str
+        self, data_source: str, example_id: str, frequency_type: FrequencyType
     ) -> dict:
         """Get the metadata for a sample."""
-        metadata_df = self.freq_metadata_df_dict[data_source]
+        if frequency_type == "monthly":
+            metadata_df = self.monthly_metadata_df_dict[data_source]
+        else:
+            metadata_df = self.freq_metadata_df_dict[data_source]
         meta_dict_records = metadata_df[
             metadata_df["example_id"] == example_id
         ].to_dict(orient="records")
