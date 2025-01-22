@@ -3,6 +3,7 @@
 TODO: Add the assumed dataset organizing format and rules
 """
 
+import logging
 from typing import NamedTuple
 
 import numpy as np
@@ -15,6 +16,8 @@ from helios.dataset.utils import (
     load_data_index,
     load_data_source_metadata,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SampleInformation(NamedTuple):
@@ -31,6 +34,17 @@ class SampleInformation(NamedTuple):
     sample_metadata: dict[str, dict]
 
 
+class DataSourceMetadata(NamedTuple):
+    """Holds dictionaries to metadata for each data source.
+
+    These dicts are divided by frequency type.
+    """
+
+    static: dict[str, DataFrame]
+    freq: dict[str, DataFrame]
+    monthly: dict[str, DataFrame]
+
+
 class DatasetIndexParser:
     """Parses the dataset index and provides paths to individual samples along with sample_me."""
 
@@ -39,8 +53,7 @@ class DatasetIndexParser:
     EXTENSIONS = {
         "naip": "tif",
         "openstreetmap": "geojson",
-        "sentinel2_freq": "tif",
-        "sentinel2_monthly": "tif",
+        "sentinel2": "tif",
         "worldcover": "tif",
     }
 
@@ -58,12 +71,10 @@ class DatasetIndexParser:
         assert (
             len(self.data_source_and_freq_types) > 0
         ), "No data sources found in index, check naming of columns"
-        (
-            self.freq_metadata_df_dict,
-            self.monthly_metadata_df_dict,
-            self.static_metadata_df_dict,
-        ) = self._load_all_data_source_metadata()
-
+        all_metadata = self._load_all_data_source_metadata()
+        self.static_metadata_df_dict = all_metadata.static
+        self.freq_metadata_df_dict = all_metadata.freq
+        self.monthly_metadata_df_dict = all_metadata.monthly
         # Intersect available data sources with index column names
 
         self.monthly_example_ids = self.get_example_ids_by_frequency_type("monthly")
@@ -92,16 +103,21 @@ class DatasetIndexParser:
             metadata = getattr(field, "metadata", {})
             if not metadata:
                 continue
-            if metadata.get("is_data_source", False):
+            if not metadata.get("is_data_source", False):
+                logger.debug(f"Skipping {column_name} as it is not a data source")
                 continue
             # No Frequency Type means static data source
             freq_type = metadata.get("frequency_type", None)
-            data_source_columns_and_freq_types.append((column_name, freq_type))
+            data_source = (
+                column_name.replace(f"_{freq_type}", "") if freq_type else column_name
+            )
+            logger.debug(f"Adding {data_source} {freq_type}")
+            data_source_columns_and_freq_types.append((data_source, freq_type))
         return data_source_columns_and_freq_types
 
     def _load_all_data_source_metadata(
         self,
-    ) -> tuple[dict[str, DataFrame], dict[str, DataFrame], dict[str, DataFrame]]:
+    ) -> DataSourceMetadata:
         """Load all data source metadata."""
         static_metadata_df_dict = {}
         freq_metadata_df_dict = {}
@@ -109,6 +125,9 @@ class DatasetIndexParser:
         for data_source, freq_type in self.data_source_and_freq_types:
             metadata_path = self.get_path_to_data_source_metadata(
                 data_source, freq_type
+            )
+            logger.debug(
+                f"Loading metadata from {metadata_path} for {data_source} {freq_type}"
             )
             data_source_metadata_df = load_data_source_metadata(metadata_path)
             if freq_type is None:
@@ -119,7 +138,11 @@ class DatasetIndexParser:
                 monthly_metadata_df_dict[data_source] = data_source_metadata_df
             else:
                 raise ValueError(f"Unknown frequency type: {freq_type}")
-        return static_metadata_df_dict, freq_metadata_df_dict, monthly_metadata_df_dict
+        return DataSourceMetadata(
+            static=static_metadata_df_dict,
+            freq=freq_metadata_df_dict,
+            monthly=monthly_metadata_df_dict,
+        )
 
     def get_sample_information_from_example_id(
         self, example_id: str, freq_type: FrequencyType
