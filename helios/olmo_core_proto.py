@@ -7,28 +7,37 @@ import numpy as np
 from olmo_core.utils import setup_logging
 from upath import UPath
 
-from helios.data.collator import variable_time_collate_fn
+from helios.data.collator import per_modality_collate_fn
 from helios.data.dataloader import HeliosDataLoader
 from helios.data.dataset import HeliosDataset
-from helios.helios.dataset.index import DatasetIndexParser
+from helios.dataset.index import DatasetIndexParser
 
 logger = logging.getLogger(__name__)
 
 
 ## Config does not yet support our new dataset type so we will construct manually for now
+
 if __name__ == "__main__":
     setup_logging()
+    # set log level to debug
+    logger.setLevel(logging.DEBUG)
 
-    index_path = "gs://ai2-helios/data/20250113-sample-dataset-helios/index.csv"
+    index_path_old = "gs://ai2-helios/data/20250113-sample-dataset-helios/index.csv"
+    index_path = "gs://ai2-helios/data/20250115-sample-dataset-helios/index.csv"
     index_parser = DatasetIndexParser(index_path)
     samples = index_parser.samples
     workdir = UPath("/Users/henryh/Desktop/eai-repos/helios-repos/helios/workdir")
     dataloader = HeliosDataLoader.wrap_numpy_dataset(
-        dataset=HeliosDataset(*samples, dtype=np.dtype("float32")),
+        dataset=HeliosDataset(
+            *samples,
+            ignore_data_sources=["openstreetmap"],
+            filter_samples_with_missing_inputs=True,
+            dtype=np.dtype("float32"),
+        ),
         global_batch_size=4,
-        collator=variable_time_collate_fn,
+        collator=per_modality_collate_fn,
         work_dir=workdir,
-        num_threads=4,
+        num_threads=0,
     )
 
     # potentially missing dataset prepare
