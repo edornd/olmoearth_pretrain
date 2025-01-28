@@ -120,6 +120,8 @@ if __name__ == "__main__":
     from olmo_core.train.checkpoint import CheckpointerConfig
     from olmo_core.train.common import Duration, LoadStrategy
 
+    from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
+
     max_duration = Duration.epochs(4)
 
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
@@ -135,12 +137,10 @@ if __name__ == "__main__":
         load_strategy=LoadStrategy.never,
         device=DEVICE,
         save_folder=workdir / "save_folder",
-        callbacks={},
+        callbacks={"speed_monitor": HeliosSpeedMonitorCallback()},
         rank_microbatch_size=4,
         max_duration=max_duration,
         checkpointer=checkpointer,
     )
-    # drop the speed_monitor callback
 
-    trainer.callbacks.pop("speed_monitor")
     trainer.fit()
