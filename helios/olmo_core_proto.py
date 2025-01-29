@@ -27,7 +27,7 @@ if __name__ == "__main__":
     index_path = "gs://ai2-helios/data/20250115-sample-dataset-helios/index.csv"
     index_parser = DatasetIndexParser(index_path)
     samples = index_parser.samples
-    workdir = UPath("/Users/henryh/Desktop/eai-repos/helios-repos/helios/workdir")
+    workdir = UPath("/weka/dfive-default/henryh/helios/workdir")
     dataloader = HeliosDataLoader.wrap_numpy_dataset(
         dataset=HeliosDataset(
             *samples,
@@ -40,6 +40,7 @@ if __name__ == "__main__":
         collator=per_modality_collate_fn,
         work_dir=workdir,
         num_threads=0,
+        num_workers=0,
     )
 
     from helios.latent_predictor import LatentMIMStyle
@@ -127,6 +128,7 @@ if __name__ == "__main__":
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
     checkpointer = checkpointer_config.build()
     DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model = model.to(DEVICE)
     optim_config = AdamWConfig()
     optim = optim_config.build(model)
     trainer = HeliosTrainer(
@@ -139,6 +141,7 @@ if __name__ == "__main__":
         save_folder=workdir / "save_folder",
         callbacks={"speed_monitor": HeliosSpeedMonitorCallback()},
         rank_microbatch_size=4,
+        cancel_check_interval=1,
         max_duration=max_duration,
         checkpointer=checkpointer,
     )

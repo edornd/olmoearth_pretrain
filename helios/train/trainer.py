@@ -14,13 +14,13 @@ logger = getLogger(__name__)
 
 
 def move_to_device_helios(
-    batch: PerModalityCollatedOutput, device: torch.device
+    batch: PerModalityCollatedOutput, device: torch.device, non_blocking: bool = True
 ) -> PerModalityCollatedOutput:
     """Move the batch to the device."""
     return PerModalityCollatedOutput(
-        sentinel2=batch.sentinel2.to(device),
-        naip=batch.naip.to(device),
-        worldcover=batch.worldcover.to(device),
+        sentinel2=batch.sentinel2.to(device, non_blocking=non_blocking),
+        naip=batch.naip.to(device, non_blocking=non_blocking),
+        worldcover=batch.worldcover.to(device, non_blocking=non_blocking),
         sample_metadata=batch.sample_metadata,
     )
 
@@ -70,8 +70,6 @@ class HeliosTrainer(Trainer):
 
         # Backpropagate and optimize
         loss.backward()
-
-        print(f"Epoch {self.epoch}, Loss: {loss.item():.4f}")
 
         # Update target encoder with EMA
         with torch.no_grad():

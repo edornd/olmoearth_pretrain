@@ -133,7 +133,6 @@ class PatchEncoder(nn.Module):
         # Set num_patches if not set
         if self.num_patches is None:
             self.num_patches = T * H * W
-        print(f"num_patches: {self.num_patches}")
 
         # Add position embeddings
         patches = patches + self.pos_embed[:, : patches.size(1), :]
