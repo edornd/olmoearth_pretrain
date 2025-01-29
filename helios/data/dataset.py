@@ -53,13 +53,18 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
     def max_sequence_length(self) -> int:
         """Max sequence length."""
         # NOT SUPER needed
-        return max(item["num_timesteps"] for item in self.paths)
+        # instances are always based on batch size
+        return 1
 
     @property
     def fingerprint(self) -> str:
         """Fingerprint of the dataset."""
-        # LM specific
-        raise NotImplementedError("Fingerprint not implemented")
+        import hashlib
+
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(f"dtype={self.dtype}".encode())
+        logger.warning("Fingerprint: is not yet meaningful")
+        return sha256_hash.hexdigest()
 
     def __len__(self) -> int:
         """Get the length of the dataset."""
@@ -99,6 +104,7 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
                 # make the data all have same dtype
                 data_input = data_input.astype(self.dtype)
             data_inputs[data_source] = data_input
+
         return {
             "data_inputs": data_inputs,
             "sample_metadata": sample.sample_metadata,

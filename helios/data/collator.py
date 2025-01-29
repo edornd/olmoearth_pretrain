@@ -54,7 +54,11 @@ def per_modality_collate_fn(items: Sequence[dict]) -> PerModalityCollatedOutput:
         assert "sentinel2" in data_inputs.keys()
         assert "naip" in data_inputs.keys()
         assert "worldcover" in data_inputs.keys()
-
+        # Random time index a number between 0 and 365 padded to max num timesteps
+        sentinel2_time_index = torch.randint(0, 365, (item["num_timesteps"],))
+        sentinel2_time_index = F.pad(
+            sentinel2_time_index, (0, max_len - item["num_timesteps"])
+        )
         all_sentinel2.append(
             pad_time_dim(
                 torch.as_tensor(data_inputs["sentinel2"]),
@@ -68,6 +72,8 @@ def per_modality_collate_fn(items: Sequence[dict]) -> PerModalityCollatedOutput:
     sentinel2_batch = torch.stack(all_sentinel2)
     naip_batch = torch.stack(all_naip)
     worldcover_batch = torch.stack(all_worldcover)
+    # for each time index we just need the day of the year of each timestep
+    # That can be gotten and acqured from the metadata but also must be padded
     return PerModalityCollatedOutput(
         sentinel2=sentinel2_batch,
         naip=naip_batch,
