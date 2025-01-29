@@ -1,4 +1,4 @@
-"""Loss functions for training"""
+"""Loss functions for training."""
 
 import torch
 import torch.nn.functional as F
@@ -10,6 +10,17 @@ def patch_disc_loss(
     tau: float = 0.2,
     pred2unit: bool = True,
 ) -> torch.Tensor:
+    """Patch discriminator loss.
+
+    Args:
+        pred: Predicted patches.
+        target: Target patches.
+        tau: Temperature parameter for the loss.
+        pred2unit: Whether to normalize the predicted patches to unit length.
+
+    Returns:
+        Loss tensor.
+    """
     # Input shape: (B, N, C)
     # Target shape: (B, N, C)
     # B is batch size

@@ -104,7 +104,6 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
                 # make the data all have same dtype
                 data_input = data_input.astype(self.dtype)
             data_inputs[data_source] = data_input
-            metadata = sample.data_source_metadata[data_source]
 
         return {
             "data_inputs": data_inputs,
