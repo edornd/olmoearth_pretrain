@@ -76,6 +76,7 @@ if __name__ == "__main__":
     from olmo_core.utils import get_default_device
 
     from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
+
     max_duration = Duration.epochs(4)
 
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
@@ -92,11 +93,12 @@ if __name__ == "__main__":
         loss_fn=patch_disc_loss,
     )
     import uuid
-    run_name = f"test-debug-{uuid.uuid4()[:8]}"
+
+    run_name = f"test-debug-{str(uuid.uuid4())[:8]}"
     wandb_callback = WandBCallback(
         name=run_name,
         project="helios-test",
-        entity="henryhzog",#PLEASE CHANGE
+        entity="henryhzog",  # PLEASE CHANGE
     )
     trainer = HeliosTrainer(
         work_dir=workdir,
@@ -105,7 +107,10 @@ if __name__ == "__main__":
         load_strategy=LoadStrategy.if_available,
         device=DEVICE,
         save_folder=workdir / "save_folder",
-        callbacks={"speed_monitor": HeliosSpeedMonitorCallback(), "wandb": wandb_callback},
+        callbacks={
+            "speed_monitor": HeliosSpeedMonitorCallback(),
+            "wandb": wandb_callback,
+        },
         cancel_check_interval=1,
         metrics_collect_interval=1,
         max_duration=max_duration,

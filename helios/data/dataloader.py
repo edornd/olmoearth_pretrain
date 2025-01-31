@@ -8,8 +8,7 @@ from typing import Any
 
 import numpy as np
 import torch
-from olmo_core.data.data_loader import (NumpyDataLoaderBase,
-                                        _IterableDatasetWrapper)
+from olmo_core.data.data_loader import NumpyDataLoaderBase, _IterableDatasetWrapper
 from olmo_core.data.numpy_dataset import NumpyDatasetBase
 from olmo_core.data.utils import get_rng
 from olmo_core.utils import roundrobin, threaded_generator
