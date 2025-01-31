@@ -11,23 +11,20 @@ import torch.distributed as dist
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 import torch.nn as nn
 from einops import rearrange
-from olmo_core.distributed.parallel import (
-    DataParallelType,
-    build_device_mesh,
-    get_dp_mesh,
-    get_dp_process_group,
-)
+from olmo_core.distributed.parallel import (DataParallelConfig,
+                                            DataParallelType,
+                                            build_device_mesh, get_dp_mesh,
+                                            get_dp_process_group)
 from olmo_core.distributed.utils import get_world_size
 from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.float8 import Float8Config, Float8Handler
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import ReduceType
-from olmo_core.train.train_module import EvalBatchSizeUnit, EvalBatchSpec, TrainModule
+from olmo_core.train.train_module import (EvalBatchSizeUnit, EvalBatchSpec,
+                                          TrainModule)
 from olmo_core.train.train_module.transformer import (
-    TransformerActivationCheckpointingConfig,
-    TransformerDataParallelConfig,
-)
+    TransformerActivationCheckpointingConfig, TransformerDataParallelConfig)
 from olmo_core.utils import gc_cuda, get_default_device, move_to_device
 from torch.distributed.checkpoint.metadata import Metadata
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -70,7 +67,7 @@ class HeliosTrainModule(TrainModule):
         rank_batch_size: int,
         compile_model: bool = False,
         float8_config: Float8Config | None = None,
-        dp_config: TransformerDataParallelConfig | None = None,
+        dp_config: DataParallelConfig | None = None,
         ac_config: TransformerActivationCheckpointingConfig | None = None,
         loss_fn: Callable | None = None,
         compile_loss: bool = False,
@@ -109,7 +106,6 @@ class HeliosTrainModule(TrainModule):
         logger.info(
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )
-
         self.base_loss_fn = loss_fn
         if compile_loss:
             self.base_loss_fn = torch.compile(self.base_loss_fn)

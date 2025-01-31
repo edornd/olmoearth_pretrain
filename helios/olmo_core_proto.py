@@ -7,17 +7,31 @@ The released version on pypi is behind what is used here.
 """
 
 import logging
+import uuid
 
 import numpy as np
-from olmo_core.utils import setup_logging
+from olmo_core.distributed.parallel import DataParallelConfig, DataParallelType
+from olmo_core.distributed.utils import (get_fs_local_rank, get_rank,
+                                         get_world_size)
+from olmo_core.optim import AdamWConfig
+from olmo_core.train import (prepare_training_environment,
+                             teardown_training_environment)
+from olmo_core.train.callbacks.wandb import WandBCallback
+from olmo_core.train.checkpoint import CheckpointerConfig
+from olmo_core.train.common import Duration, LoadStrategy
+from olmo_core.utils import get_default_device
 from upath import UPath
 
 from helios.data.collator import per_modality_collate_fn
 from helios.data.dataloader import HeliosDataLoader
 from helios.data.dataset import HeliosDataset
 from helios.dataset.index import DatasetIndexParser
+from helios.latent_predictor import LatentMIMStyle
+from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
 from helios.train.decoder import SimpleLatentDecoder
+from helios.train.encoder import PatchEncoder
 from helios.train.loss import patch_disc_loss
+from helios.train.trainer import HeliosTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +40,8 @@ logger = logging.getLogger(__name__)
 
 
 if __name__ == "__main__":
-    setup_logging()
+    # for distributed training use torchrun
+    prepare_training_environment(seed=42)
     # set log level to debug
     logger.setLevel(logging.DEBUG)
 
@@ -34,24 +49,7 @@ if __name__ == "__main__":
     index_parser = DatasetIndexParser(index_path)
     samples = index_parser.samples
     workdir = UPath("/Users/henryh/Desktop/eai-repos/helios-repos/helios/workdir")
-    dataloader = HeliosDataLoader.wrap_numpy_dataset(
-        dataset=HeliosDataset(
-            *samples,
-            ignore_data_sources=["openstreetmap"],
-            filter_samples_with_missing_inputs=True,
-            dtype=np.dtype("float32"),
-        ),
-        global_batch_size=4,
-        dp_world_size=1,
-        collator=per_modality_collate_fn,
-        work_dir=workdir,
-        num_threads=0,
-        num_workers=2,
-    )
 
-    from helios.latent_predictor import LatentMIMStyle
-    from helios.train.encoder import PatchEncoder
-    from helios.train.trainer import HeliosTrainer
 
     # Variable masking is not used
     encoder = PatchEncoder(
@@ -69,30 +67,40 @@ if __name__ == "__main__":
     )
     model = LatentMIMStyle(encoder, decoder)
 
-    from olmo_core.optim import AdamWConfig
-    from olmo_core.train.callbacks.wandb import WandBCallback
-    from olmo_core.train.checkpoint import CheckpointerConfig
-    from olmo_core.train.common import Duration, LoadStrategy
-    from olmo_core.utils import get_default_device
-
-    from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
 
     max_duration = Duration.epochs(4)
-
+    device = get_default_device()
+    # Ideally though this should be handled by the Model COnfig and build
+    model = model.to(device)
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
     checkpointer = checkpointer_config.build()
-    DEVICE = get_default_device()
-    model = model.to(DEVICE)
     optim_config = AdamWConfig()
     from helios.train.train_module import HeliosTrainModule
 
+    dp_config = DataParallelConfig(name=DataParallelType.ddp)
     train_module = HeliosTrainModule(
         model=model,
         optim=optim_config,
         rank_batch_size=4,
         loss_fn=patch_disc_loss,
     )
-    import uuid
+    dp_process_group = train_module.dp_process_group
+    dataloader = HeliosDataLoader.wrap_numpy_dataset(
+        dataset=HeliosDataset(
+            *samples,
+            ignore_data_sources=["openstreetmap"],
+            filter_samples_with_missing_inputs=True,
+            dtype=np.dtype("float32"),
+        ),
+        global_batch_size=8,
+        dp_world_size=get_world_size(dp_process_group),
+        dp_rank=get_rank(dp_process_group),
+        fs_local_rank=get_fs_local_rank(),
+        collator=per_modality_collate_fn,
+        work_dir=workdir,
+        num_threads=0,
+        num_workers=0,
+    )
 
     run_name = f"test-debug-{str(uuid.uuid4())[:8]}"
     wandb_callback = WandBCallback(
@@ -105,7 +113,7 @@ if __name__ == "__main__":
         train_module=train_module,
         data_loader=dataloader,
         load_strategy=LoadStrategy.if_available,
-        device=DEVICE,
+        device=device,
         save_folder=workdir / "save_folder",
         callbacks={
             "speed_monitor": HeliosSpeedMonitorCallback(),
@@ -118,3 +126,4 @@ if __name__ == "__main__":
     )
 
     trainer.fit()
+    teardown_training_environment()
