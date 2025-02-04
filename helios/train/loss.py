@@ -72,24 +72,24 @@ class PatchDiscriminationLoss(Loss):
             The computed loss value.
         """
         all_preds = torch.cat(
-            [self._flatten(predictions[d] for d in predictions.data_fields)]
+            [self._flatten(getattr(predictions, d)) for d in predictions.data_fields],
+            dim=1,
         )
         all_masks = torch.cat(
             [
-                self._flatten(
-                    predictions[f"{d}_mask"].unsqueeze(dim=-1)
-                    for d in predictions.data_fields
-                )
-            ]
-        )
+                self._flatten(getattr(predictions, f"{d}_mask").unsqueeze(dim=-1))
+                for d in predictions.data_fields
+            ],
+            dim=1,
+        )[:, :, 0]
         all_targets = torch.cat(
-            [self._flatten(targets[d] for d in predictions.data_fields)]
+            [self._flatten(getattr(targets, d)) for d in predictions.data_fields], dim=1
         )
 
         pred = all_preds[all_masks == 2].unsqueeze(dim=0)
         target = all_targets[all_masks == 2].unsqueeze(dim=0)
 
-        bs, nt, d = pred.shape
+        bs, nt, _ = pred.shape
 
         if self.pred2unit:
             pred_mu = pred.mean(1, keepdims=True)

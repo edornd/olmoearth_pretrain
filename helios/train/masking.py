@@ -9,7 +9,7 @@ from class_registry import ClassRegistry
 from olmo_core.config import Config
 
 from helios.data.dataset import HeliosSample
-from helios.helios.types import ArrayTensor
+from helios.types import ArrayTensor
 
 
 # SHould be return type of masking strategy
