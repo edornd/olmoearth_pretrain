@@ -18,7 +18,7 @@ class TokensAndMasks(NamedTuple):
         latlon_mask: lat lon mask indicating which coordinates are masked/unmasked
     """
 
-    s2: Tensor  # (B, C_G, T, P_H, P_W)
+    s2: Tensor  # (B, C_G, T, P_H, P_W, D)
     s2_mask: Tensor
     latlon: Tensor
     latlon_mask: Tensor
@@ -27,6 +27,11 @@ class TokensAndMasks(NamedTuple):
     def device(self) -> torch.device:
         """Get the device of the tokens and masks."""
         return self.s2.device
+
+    @property
+    def data_fields(self):
+        """Return all data fields"""
+        return [x for x in self._fields if not x.endswith("mask")]
 
 
 class Encoder(nn.Module):

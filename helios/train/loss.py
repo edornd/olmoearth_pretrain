@@ -7,7 +7,9 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from class_registry import ClassRegistry
+from einops import rearrange
 from olmo_core.config import Config
+from torch import Tensor
 
 from helios.train.model import TokensAndMasks
 
@@ -77,10 +79,33 @@ LOSS_REGISTRY = ClassRegistry[Loss]()
 class PatchDiscriminationLoss(Loss):
     """Loss function for patch discrimination task."""
 
-    def __init__(self, tau: float = 0.07, pred2unit: bool = True):
+    def __init__(
+        self, tau: float = 0.07, pred2unit: bool = True, mask_other_samples: bool = True
+    ):
         """Initialize patch discrimination loss."""
         self.tau = tau
         self.pred2unit = pred2unit
+        self.mask_other_samples = mask_other_samples
+
+    @staticmethod
+    def _flatten(x: Tensor) -> Tensor:
+        if x.dim() == 6:
+            # (B, C_G, T, P_H, P_W, D)
+            return rearrange(x, "b c t h w d -> b (h w t c) d")
+        elif x.dim() == 5:
+            # (B, C_G, P_H, P_W, D)
+            return rearrange(x, "b c h w d -> b (h w c) d")
+        elif x.dim() == 4:
+            # (B, C_G, T, D)
+            return rearrange(x, "b c t d -> b (t c) d")
+        elif x.dim() == 3:
+            # (B, C_G, D)
+            return x
+
+    @staticmethod
+    def _expand_and_reciprocate(t):
+        reciprocals = torch.reciprocal(t.float())
+        return torch.repeat_interleave(reciprocals, t)
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
@@ -94,11 +119,59 @@ class PatchDiscriminationLoss(Loss):
 
         Returns:
             The computed loss value.
-
-        Raises:
-            NotImplementedError: This method needs to be implemented.
         """
-        raise NotImplementedError
+        all_preds = torch.cat(
+            [self._flatten(predictions[d] for d in predictions.data_fields)]
+        )
+        all_masks = torch.cat(
+            [
+                self._flatten(
+                    predictions[f"{d}_mask"].unsqueeze(dim=-1)
+                    for d in predictions.data_fields
+                )
+            ]
+        )
+        all_targets = torch.cat(
+            [self._flatten(targets[d] for d in predictions.data_fields)]
+        )
+
+        pred = all_preds[all_masks == 2].unsqueeze(dim=0)
+        target = all_targets[all_masks == 2].unsqueeze(dim=0)
+
+        bs, nt, d = pred.shape
+
+        if self.pred2unit:
+            pred_mu = pred.mean(1, keepdims=True)
+            pred_std = pred.std(1, keepdims=True)
+            pred = (pred - pred_mu) / (pred_std + 1e-4)
+
+        pred = F.normalize(pred, p=2, dim=-1)
+        target = F.normalize(target, p=2, dim=-1)
+
+        scores = torch.einsum("npd,nqd->npq", pred, target) / self.tau
+        count = (all_masks == 2).sum(dim=-1)
+
+        if self.mask_other_samples:
+            logit_mask = torch.full_like(scores, -torch.finfo(scores.dtype).max)
+            start = 0
+            for c in count:
+                end = start + c
+                logit_mask[:, start:end, start:end] = 0
+                start += c
+
+            scores = scores + logit_mask
+
+        labels = torch.arange(nt, dtype=torch.long, device=pred.device)[None].repeat(
+            bs, 1
+        )
+        loss = F.cross_entropy(
+            scores.flatten(0, 1), labels.flatten(0, 1), reduction="none"
+        ) * (self.tau * 2)
+
+        # emulate averaging across the batch dimension
+        loss_multiplier = self._expand_and_reciprocate(count)
+        loss = (loss * loss_multiplier).sum() / bs
+        return loss
 
 
 class CompositeLoss:
