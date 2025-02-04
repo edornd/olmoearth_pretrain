@@ -30,7 +30,7 @@ class TokensAndMasks(NamedTuple):
 
     @property
     def data_fields(self):
-        """Return all data fields"""
+        """Return all data fields."""
         return [x for x in self._fields if not x.endswith("mask")]
 
 
