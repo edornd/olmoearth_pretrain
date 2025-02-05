@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+import torch
 from torch.utils.data import DataLoader
 
 from helios.evals.datasets import GeobenchDataset
@@ -23,6 +24,7 @@ def test_geobench_dataset(geobench_dir: Path) -> None:
         partition="0.01x_train",
     )
     sample, _ = d[0]
+    assert isinstance(sample.s2, torch.Tensor)
     assert sample.s2.shape == (13, 1, 64, 64)
 
 
@@ -40,4 +42,5 @@ def test_geobench_dataset_and_dataloader(geobench_dir: Path) -> None:
         shuffle=False,
     )
     sample, _ = next(iter(d))
+    assert isinstance(sample.s2, torch.Tensor)
     assert sample.s2.shape == (1, 13, 1, 64, 64)

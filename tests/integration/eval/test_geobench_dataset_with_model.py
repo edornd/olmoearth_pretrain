@@ -32,4 +32,4 @@ def test_geobench_dataset(geobench_dir: Path) -> None:
 
     # add a batch dimension
     batch, _ = next(iter(d))
-    _ = model(x=batch.s2)
+    _ = model(x=batch.s2.float())
