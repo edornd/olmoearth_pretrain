@@ -1,3 +1,5 @@
+"""GeoBench datasets, returning data in the Helios format."""
+
 from collections.abc import Sequence
 from pathlib import Path
 from types import MethodType
@@ -32,7 +34,7 @@ GEOBENCH_S2_BAND_NAMES = [
 ]
 
 
-def geobench_band_index_from_helios_name(helios_name: str) -> int:
+def _geobench_band_index_from_helios_name(helios_name: str) -> int:
     for idx, band_name in enumerate(GEOBENCH_S2_BAND_NAMES):
         if helios_name.endswith(band_name.split(" ")[0][-2:]):
             return idx
@@ -40,11 +42,13 @@ def geobench_band_index_from_helios_name(helios_name: str) -> int:
 
 
 GEOBENCH_TO_HELIOS_S2_BANDS = [
-    geobench_band_index_from_helios_name(b) for b in S2_BANDS
+    _geobench_band_index_from_helios_name(b) for b in S2_BANDS
 ]
 
 
 class GeoBenchConfig(NamedTuple):
+    """GeoBench configs."""
+
     benchmark_name: str
     imputes: list[str]
     num_classes: int
@@ -62,6 +66,8 @@ DATASET_TO_CONFIG = {
 
 
 class GeobenchDataset(Dataset):
+    """GeoBench dataset, returning data in the Helios format."""
+
     def __init__(
         self,
         geobench_dir: Path,
@@ -70,6 +76,7 @@ class GeobenchDataset(Dataset):
         partition: str,
         norm_method: str = "norm_no_clip",
     ):
+        """Init GeoBench dataset."""
         config = DATASET_TO_CONFIG[dataset]
         self.config = config
         self.num_classes = config.num_classes
@@ -107,15 +114,15 @@ class GeobenchDataset(Dataset):
         self.band_indices = [
             original_band_names.index(band_name) for band_name in self.band_names
         ]
-        imputed_band_info = self.impute_normalization_stats(
+        imputed_band_info = self._impute_normalization_stats(
             task.band_stats, config.imputes
         )
-        self.mean, self.std = self.get_norm_stats(imputed_band_info)
+        self.mean, self.std = self._get_norm_stats(imputed_band_info)
         self.active_indices = range(int(len(self.dataset)))
         self.norm_method = norm_method
 
     @staticmethod
-    def get_norm_stats(imputed_band_info: list[Stats]):
+    def _get_norm_stats(imputed_band_info: list[Stats]):
         means = []
         stds = []
         for band_name in GEOBENCH_S2_BAND_NAMES:
@@ -125,7 +132,7 @@ class GeobenchDataset(Dataset):
         return np.array(means), np.array(stds)
 
     @staticmethod
-    def impute_normalization_stats(band_info: list[float], imputes: list[str]):
+    def _impute_normalization_stats(band_info: list[float], imputes: list[str]):
         # band_info is a dictionary with band names as keys and statistics (mean / std) as values
         if not imputes:
             return band_info
@@ -149,7 +156,7 @@ class GeobenchDataset(Dataset):
         return new_band_info
 
     @staticmethod
-    def impute_bands(
+    def _impute_bands(
         image_list: list[np.ndarray], names_list: list[str], imputes: list[str]
     ):
         # image_list should be one np.array per band, stored in a list
@@ -176,7 +183,7 @@ class GeobenchDataset(Dataset):
         return new_image_list
 
     @staticmethod
-    def normalize_bands(
+    def _normalize_bands(
         image: np.ndarray, means: np.array, stds: np.array, method: str = "norm_no_clip"
     ):
         original_dtype = image.dtype
@@ -208,13 +215,14 @@ class GeobenchDataset(Dataset):
         return image
 
     def __getitem__(self, idx):
+        """Return a single GeoBench data instance."""
         label = self.dataset[idx].label
 
         x = []
         for band_idx in self.band_indices:
             x.append(self.dataset[idx].bands[band_idx].data)
 
-        x = self.impute_bands(x, self.band_names, self.config.imputes)
+        x = self._impute_bands(x, self.band_names, self.config.imputes)
 
         x = np.stack(x, axis=2)  # (h, w, 13)
         assert (
@@ -223,7 +231,9 @@ class GeobenchDataset(Dataset):
         if self.dataset == "m-so2sat":
             x = x * 10_000
 
-        x = torch.tensor(self.normalize_bands(x, self.mean, self.std, self.norm_method))
+        x = torch.tensor(
+            self._normalize_bands(x, self.mean, self.std, self.norm_method)
+        )
 
         # check if label is an object or a number
         if not (isinstance(label, int) or isinstance(label, list)):
@@ -236,10 +246,12 @@ class GeobenchDataset(Dataset):
         return HeliosSample(s2=s2), target
 
     def __len__(self):
+        """Length of dataset."""
         return len(self.dataset)
 
     @staticmethod
     def collate_fn(batch: Sequence[tuple[HeliosSample, torch.Tensor]]):
+        """Collate function for DataLoaders."""
         samples, targets = zip(*batch)
         # we assume that the same values are consistently None
         collated_sample = default_collate(

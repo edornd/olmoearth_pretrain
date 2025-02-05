@@ -13,6 +13,7 @@ def geobench_dir() -> Path:
 
 
 def test_geobench_dataset(geobench_dir):
+    """Test the dataset works."""
     d = GeobenchDataset(
         dataset="m-eurosat",
         geobench_dir=geobench_dir,
@@ -24,6 +25,7 @@ def test_geobench_dataset(geobench_dir):
 
 
 def test_geobench_dataset(geobench_dir):
+    """Test the dataloader (and specifically the collate fn) works."""
     d = DataLoader(
         GeobenchDataset(
             dataset="m-eurosat",
