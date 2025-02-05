@@ -9,9 +9,11 @@ from torch import Tensor, nn
 
 from helios.constants import BASE_GSD
 from helios.nn.attention import Block
-from helios.nn.encodings import (get_1d_sincos_pos_encoding,
-                                 get_2d_sincos_pos_encoding_with_resolution,
-                                 get_month_encoding_table)
+from helios.nn.encodings import (
+    get_1d_sincos_pos_encoding,
+    get_2d_sincos_pos_encoding_with_resolution,
+    get_month_encoding_table,
+)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample
 
@@ -34,6 +36,7 @@ class TokensAndMasks(NamedTuple):
         s2_mask: sentinel 2 mask indicating which tokens are masked/unmasked
         latlon: lat lon data containing geographical coordinates
         latlon_mask: lat lon mask indicating which coordinates are masked/unmasked
+        timestamps: timestamps of the data
     """
 
     s2: Tensor  # (B, C_G, T, P_H, P_W)
@@ -225,7 +228,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         per_modality_input_tokens: TokensOnly,
         timestamps: Tensor,
         patch_size: int,
-        input_res: Tensor,  # WHAT SHOULD THIS BE AND WHERE SHOULD THESE VALUES COME FROM
+        input_res: int = BASE_GSD,
     ) -> TokensOnly:
         """Apply the encodings to the patchified data"""
         # We need a test that keeps all of this organized so that we can easily add new modalities
@@ -243,7 +246,9 @@ class FlexiHeliosCompositeEncodings(nn.Module):
                 raise NotImplementedError(
                     "Only modalities that have bathc, width, height, channel_group, embedding dims are supported"
                 )
-            b, h, w, t, c_g, _ = modality_tokens.shape  # Embed dim is unused and last dim is embedding dim
+            b, h, w, t, c_g, _ = (
+                modality_tokens.shape
+            )  # Embed dim is unused and last dim is embedding dim
 
             modality_channel_embed = self.per_modality_channel_embeddings[modality]
             modality_channel_embed = repeat(
@@ -368,7 +373,9 @@ class Encoder(nn.Module):
     # apply Encodings
     # Apply attention
     # apply Norm
-    def apply_attn(self, x: TokensAndMasks) -> TokensAndMasks:
+    def apply_attn(
+        self, x: TokensAndMasks, timestamps: Tensor, patch_size: int, input_res: int
+    ) -> TokensAndMasks:
         """Apply the attention to the tokens and masks."""
         tokens_only_dict = {}
         for modalities in self.modalities_to_bands_dict.keys():
@@ -378,10 +385,15 @@ class Encoder(nn.Module):
         tokens_only = TokensOnly(**tokens_only_dict)
         # We will need input resolution and patch size at this point
         tokens_only = self.composite_encodings.forward(
-            tokens_only, x.months, self.base_patch_size, x.input_res
+            tokens_only,
+            timestamps,
+            patch_size,
+            input_res,
         )
 
         # Step to  do the collapsing and combining of the tokens so that we get all the non masked tokens left only
+
+        # actually do the attention
 
         # TODO: Add exit token support and configuration for the exit token
         return tokens_only
@@ -532,7 +544,7 @@ if __name__ == "__main__":
         base_patch_size,
         use_channel_embs,
     )
-    input_res = torch.ones(1) * 10
+    input_res = BASE_GSD
     encoded_tokens = composite_encodings.forward(
         tokens_only, x.timestamps, patch_size, input_res
     )

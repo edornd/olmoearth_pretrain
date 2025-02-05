@@ -1,7 +1,5 @@
 """Constants shared across the helios package."""
 
-from typing import Literal
-
 NAIP_BANDS = ["R", "G", "B", "IR"]
 
 S2_BANDS = [

@@ -165,11 +165,12 @@ class FlexiPatchEmbed(nn.Module):
             weight = self.resize_patch_embed(self.proj.weight, patch_size)
         # Apply conv with resized weights
         x = F.conv2d(x, weight, bias=self.proj.bias, stride=patch_size)
-
+        # At this point x has embedding dim sized channel dimension
         if has_time_dimension:
-            x = rearrange(x, "(b t) c h w -> b h w t c", b=batch_size, t=num_timesteps)
+            x = rearrange(x, "(b t) d h w -> b h w t d", b=batch_size, t=num_timesteps)
         else:
-            x = rearrange(x, "b c h w -> b h w c")
+            x = rearrange(x, "b d h w -> b h w d")
+
         x = self.norm(x)
 
         return x
