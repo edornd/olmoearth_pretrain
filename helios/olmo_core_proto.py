@@ -192,7 +192,7 @@ if __name__ == "__main__":
 
     from helios.evals.datasets import GeobenchDataset
     from helios.evals.embeddings import get_embeddings
-    from helios.evals.knn import run_knn_or_kmeans
+    from helios.evals.knn import run_knn
 
     geobench_dir = UPath("/weka/skylight-default/presto-geobench/dataset/geobench")
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     val_embeddings, test_labels = get_embeddings(
         data_loader=val_loader, model=encoder, device=device
     )
-    val_result = run_knn_or_kmeans(
+    val_result = run_knn(
         eval_type="KNN-20",
         train_embeddings=train_embeddings,
         train_labels=train_labels,

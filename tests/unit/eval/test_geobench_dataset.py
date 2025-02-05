@@ -1,3 +1,5 @@
+"""Test GeoBench dataset."""
+
 from pathlib import Path
 
 import pytest
@@ -24,7 +26,7 @@ def test_geobench_dataset(geobench_dir):
     assert sample.s2.shape == (13, 1, 64, 64)
 
 
-def test_geobench_dataset(geobench_dir):
+def test_geobench_dataset_and_dataloader(geobench_dir):
     """Test the dataloader (and specifically the collate fn) works."""
     d = DataLoader(
         GeobenchDataset(

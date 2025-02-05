@@ -1,9 +1,11 @@
+"""KNN evals of Helios models."""
+
 import torch
 import torch.nn as nn
 from sklearn.metrics import accuracy_score, f1_score
 
 
-def run_knn_or_kmeans(
+def run_knn(
     eval_type: str,
     train_embeddings: torch.Tensor,
     train_labels: torch.Tensor,
@@ -14,11 +16,12 @@ def run_knn_or_kmeans(
     device: torch.device,
     skip_idx: bool = False,
 ) -> float:
+    """Run KNN on the Helios model."""
     if not eval_type.startswith("KNN-"):
         raise ValueError(f"Unexpected eval type {eval_type}")
     k = int(eval_type.split("-")[-1])
     if not is_multilabel:
-        predictions = run_knn(
+        predictions = _run_knn_for_k(
             train_embeddings=train_embeddings,
             train_labels=train_labels,
             test_embeddings=test_embeddings,
@@ -37,7 +40,7 @@ def run_knn_or_kmeans(
         predictions = []
         for class_idx in range(num_classes):
             train_single_labels = train_labels[:, class_idx]  # (num_samples)
-            single_predictions = run_knn(
+            single_predictions = _run_knn_for_k(
                 train_embeddings=train_embeddings,
                 train_labels=train_single_labels,
                 test_embeddings=test_embeddings,
@@ -52,7 +55,7 @@ def run_knn_or_kmeans(
         return f1_score(y_true=test_labels, y_pred=predictions, average="micro")
 
 
-def run_knn(
+def _run_knn_for_k(
     train_embeddings: torch.Tensor,
     train_labels: torch.Tensor,
     test_embeddings: torch.Tensor,
