@@ -1204,9 +1204,7 @@ if __name__ == "__main__":
     )
     print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
 
-    # add Integration tests for the encoder decoder full process seperate and together
     # Seperate out into additional files for ease and clarity
     # Remove the unneeded tokens only class
-
     # Add S1 data into the test
     # SUbmit the PR

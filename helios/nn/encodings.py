@@ -97,7 +97,13 @@ def get_2d_sincos_pos_encoding_with_resolution(
 
 
 def get_month_encoding_table(encoding_dim: int) -> torch.Tensor:
-    """Sinusoid month encoding table, for 12 months indexed from 0-11"""
+    """Sinusoid month encoding table, for 12 months indexed from 0-11.
+
+    Args:
+        encoding_dim: output dimension for each position
+    Returns:
+        month_table: position encoding for the given grid: size (M, D)
+    """
     assert encoding_dim % 2 == 0
     angles = torch.arange(0, 13) / (12 / (2 * np.pi))
 
