@@ -993,8 +993,8 @@ class Predictor(FlexiHeliosBase):
             B, H, W, T, _, _ = modality_data.shape
             for idx in range(len(channel_groups_dict)):
                 if self.is_any_data_to_be_decoded(modality_mask):
-                    modality_data = modality_data[:, :, :, :, idx]
-                    output_data = self.to_output_embed(self.norm(modality_data))
+                    per_channel_modality_data = modality_data[:, :, :, :, idx, :]
+                    output_data = self.to_output_embed(self.norm(per_channel_modality_data))
                 else:
                     # If all data should be ignored by encoder, we need to return an empty tensor
                     output_data = torch.empty(
@@ -1107,7 +1107,7 @@ if __name__ == "__main__":
         .unsqueeze(0)
         .permute(0, 2, 1)
     )
-
+    device = torch.device("cuda")
     x = MaskedHeliosSample(
         s2_array,
         s2_mask,
@@ -1158,9 +1158,9 @@ if __name__ == "__main__":
     decoded_tokens = predictor.forward(
         encoded_tokens, timestamps, patch_size, input_res
     )
-    print(decoded_tokens)
+    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
 
-    # write the decoder
+
     # write  unit tests for the decoder
     # Add S1 data into the test
     # add additional unit tests for the tsub components
