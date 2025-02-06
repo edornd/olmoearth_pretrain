@@ -1,4 +1,4 @@
-"""Unit tests for different encodings of data"""
+"""Unit tests for different encodings of data."""
 
 import torch
 
@@ -10,8 +10,8 @@ from helios.nn.encodings import (
 )
 
 
-def test_get_1d_sincos_pos_encoding():
-    """Test that the 1D sinusoidal position encoding is correct"""
+def test_get_1d_sincos_pos_encoding() -> None:
+    """Test that the 1D sinusoidal position encoding is correct."""
     atol = 1e-4
     rtol = 1e-4
     expected_output = torch.tensor(
@@ -29,8 +29,8 @@ def test_get_1d_sincos_pos_encoding():
     assert torch.allclose(encoding, expected_output, atol=atol, rtol=rtol)
 
 
-def test_get_2d_sincos_pos_encoding():
-    """Test that the 2D sinusoidal position encoding is correct"""
+def test_get_2d_sincos_pos_encoding() -> None:
+    """Test that the 2D sinusoidal position encoding is correct."""
     atol = 1e-4
     rtol = 1e-4
     expected_output = torch.tensor(
@@ -73,8 +73,8 @@ def test_get_2d_sincos_pos_encoding():
     assert torch.allclose(encoding, expected_output, atol=atol, rtol=rtol)
 
 
-def test_get_2d_sincos_pos_encoding_with_resolution():
-    """Test that the 2D sinusoidal position encoding with resolution is correct"""
+def test_get_2d_sincos_pos_encoding_with_resolution() -> None:
+    """Test that the 2D sinusoidal position encoding with resolution is correct."""
     atol = 1e-4
     rtol = 1e-4
     expected_output = torch.tensor(
@@ -104,8 +104,8 @@ def test_get_2d_sincos_pos_encoding_with_resolution():
     assert torch.allclose(encoding, expected_output, atol=atol, rtol=rtol)
 
 
-def test_get_month_encoding_table():
-    """Test that the month encoding table is correct"""
+def test_get_month_encoding_table() -> None:
+    """Test that the month encoding table is correct."""
     atol = 1e-4
     rtol = 1e-4
     expected_output = torch.tensor(
