@@ -221,11 +221,12 @@ class GeobenchDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[HeliosSample, torch.Tensor]:
         """Return a single GeoBench data instance."""
-        label = self.dataset[idx].label
+        sample = self.dataset[idx]
+        label = sample.label
 
         x_list = []
         for band_idx in self.band_indices:
-            x_list.append(self.dataset[idx].bands[band_idx].data)
+            x_list.append(sample.bands[band_idx].data)
 
         x_list = self._impute_bands(x_list, self.band_names, self.config.imputes)
 
