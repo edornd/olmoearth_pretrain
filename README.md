@@ -11,8 +11,6 @@ Earth system foundation model: data, training, and evaluation
 3. Navigate to root directory of this repo and run `pip install -e .`
 4. Run `pre-commit install`
 
-Note: Python 3.12 may be incompatible with `ai2-olmo-core==1.8.0`.
-
 ## Setup Instructions for running olmo_core_proto.py
 
 1. Clone the [Olmo-core](https://github.com/allenai/OLMo-core/tree/v2) repo and switch to the v2 branch
