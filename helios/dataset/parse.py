@@ -3,7 +3,7 @@
 import csv
 from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum  # type: ignore
+from enum import Enum
 
 from upath import UPath
 
@@ -68,7 +68,7 @@ class ModalityTile:
         return bands
 
 
-class TimeSpan(StrEnum):
+class TimeSpan(str, Enum):
     """Enum to distinguish data that is valid for different time ranges."""
 
     # Only one data point (not time series).

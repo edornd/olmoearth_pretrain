@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+# TODO: data related constants should be moved to the data package.
 NAIP_BANDS = ["R", "G", "B", "IR"]
 
 S2_BANDS = [

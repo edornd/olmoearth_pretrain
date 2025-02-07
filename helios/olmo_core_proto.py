@@ -109,10 +109,6 @@ if __name__ == "__main__":
     # set log level to debug
     logger.setLevel(logging.DEBUG)
 
-    tile_path = "/weka/dfive-default/helios_sample_data/20250130-sample-dataset-helios/"
-    tiles = parse_helios_dataset(tile_path)
-    samples = image_tiles_to_samples(tiles)
-
     # Variable masking is not used
     encoder = PatchEncoder(
         in_channels=13,
@@ -142,6 +138,13 @@ if __name__ == "__main__":
     )
     train_module = train_module_config.build(model=model)
     dp_process_group = train_module.dp_process_group
+
+    # Prepare samples from Helios dataset
+    tile_path = "/weka/dfive-default/helios_sample_data/20250130-sample-dataset-helios/"
+    tiles = parse_helios_dataset(tile_path)
+    samples = image_tiles_to_samples(tiles)
+
+    # Create HeliosDataLoader
     dataloader = HeliosDataLoader(
         dataset=HeliosDataset(
             *samples,

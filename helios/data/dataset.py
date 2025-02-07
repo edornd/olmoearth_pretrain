@@ -127,7 +127,7 @@ class HeliosDataset(Dataset):
         self,
         *samples: SampleInformation,
         path: UPath,
-        dtype: np.dtype,
+        dtype: np.dtype = np.float32,
     ):
         """Initialize the dataset.
 
@@ -144,9 +144,9 @@ class HeliosDataset(Dataset):
         self.samples = self._filter_samples(list(samples))
         self.path = path
         self.dtype = dtype
-        self.fs_local_rank = get_fs_local_rank()
-        self.work_dir: Path | None = None  # type: ignore
-        self.work_dir_set = False
+        self._fs_local_rank = get_fs_local_rank()
+        self._work_dir: Path | None = None  # type: ignore
+        self._work_dir_set = False
 
     def _filter_samples(
         self, samples: list[SampleInformation]
@@ -182,26 +182,31 @@ class HeliosDataset(Dataset):
     @property
     def fs_local_rank(self) -> int:
         """Get the fs local rank."""
-        return self.fs_local_rank
+        return self._fs_local_rank
 
     @fs_local_rank.setter
-    def fs_local_rank(self, fs_local_rank: int) -> None:
+    def fs_local_rank(self, _fs_local_rank: int) -> None:
         """Set the fs local rank."""
-        self.fs_local_rank = fs_local_rank
+        self._fs_local_rank = _fs_local_rank
 
     @property
     def work_dir(self) -> Path:
-        """Get the work directory."""
-        if self.work_dir is not None:
-            return self.work_dir
+        """Get the working directory."""
+        if self._work_dir is not None:
+            return self._work_dir
         else:
             return Path(tempfile.gettempdir())
 
     @work_dir.setter
-    def work_dir(self, work_dir: PathOrStr) -> None:
-        """Set the work directory."""
-        self.work_dir = Path(work_dir)
-        self.work_dir_set = True
+    def work_dir(self, _work_dir: PathOrStr) -> None:
+        """Set the working directory."""
+        self._work_dir = Path(_work_dir)
+        self._work_dir_set = True
+
+    @property
+    def work_dir_set(self) -> bool:
+        """Check if the working directory was explicitly set."""
+        return self._work_dir_set
 
     def prepare(self) -> None:
         """Prepare the dataset."""
@@ -217,10 +222,10 @@ class HeliosDataset(Dataset):
         sample_s2 = sample.modalities[Modality.S2]
         timestamps = [i.start_time for i in sample_s2.images]
         image = load_image_for_sample(sample_s2, sample)
-        s2_data = image.permute(1, 0, 2, 3)  # from [T, C, H, W] to [C, T, H, W]
+        s2_data = image.transpose(1, 0, 2, 3)  # [T, C, H, W] -> [C, T, H, W]
         dt = pd.to_datetime(timestamps)
         time_data = np.array([dt.day, dt.month, dt.year])  # [3, T]
-        # Get coordinates at projection units, and transform to latlon
+        # Get coordinates at projection units, and then transform to latlon
         grid_resolution = sample.grid_tile.resolution_factor * BASE_RESOLUTION
         x, y = (
             (sample.grid_tile.col + 0.5) * grid_resolution * IMAGE_TILE_SIZE,
