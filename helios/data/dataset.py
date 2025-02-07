@@ -8,6 +8,8 @@ from typing import Any, NamedTuple
 
 import numpy as np
 import pandas as pd
+import torch
+from einops import rearrange
 from olmo_core.aliases import PathOrStr
 from olmo_core.distributed.utils import get_fs_local_rank
 from pyproj import Transformer
@@ -120,6 +122,23 @@ class HeliosSample(NamedTuple):
         return self.s2.shape[-1]
 
 
+def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
+    """Collate function."""
+
+    # Stack tensors while handling None values
+    def stack_or_none(attr: str) -> torch.Tensor | None:
+        """Stack the tensors while handling None values."""
+        if batch[0].__getattribute__(attr) is None:
+            return None
+        return torch.stack([getattr(sample, attr) for sample in batch], dim=0)
+
+    return HeliosSample(
+        s2=stack_or_none("s2"),
+        latlon=stack_or_none("latlon"),
+        timestamps=stack_or_none("timestamps"),
+    )
+
+
 class HeliosDataset(Dataset):
     """Helios dataset."""
 
@@ -222,7 +241,7 @@ class HeliosDataset(Dataset):
         sample_s2 = sample.modalities[Modality.S2]
         timestamps = [i.start_time for i in sample_s2.images]
         image = load_image_for_sample(sample_s2, sample)
-        s2_data = image.transpose(1, 0, 2, 3)  # [T, C, H, W] -> [C, T, H, W]
+        s2_data = rearrange(image, "t c h w -> c t h w")
         dt = pd.to_datetime(timestamps)
         time_data = np.array([dt.day, dt.month, dt.year])  # [3, T]
         # Get coordinates at projection units, and then transform to latlon

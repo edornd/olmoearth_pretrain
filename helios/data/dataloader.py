@@ -16,7 +16,6 @@ from olmo_core.utils import roundrobin, threaded_generator
 from torch.utils.data import default_collate
 from upath import UPath
 
-from helios.constants import S2_BANDS
 from helios.data.dataset import HeliosDataset
 
 logger = logging.getLogger(__name__)
@@ -248,7 +247,7 @@ class HeliosDataLoader(DataLoaderBase):
 
     def get_mock_batch(self) -> dict[str, Any]:
         """Get a mock batch, for dry-run of forward and backward pass."""
-        mock_s2 = np.random.rand(1, len(S2_BANDS), 256, 256)
+        mock_s2 = np.random.rand(1, 13, 12, 256, 256)
         mock_latlon = np.random.rand(1, 2)
         mock_timestamps = np.random.randint(1, 31, size=(1, 3, 12))
         # Return a dictionary mimicking a real batch
