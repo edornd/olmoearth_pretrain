@@ -98,11 +98,11 @@ class RandomMaskingStrategy(MaskingStrategy):
         channel_groups_dict: dict[str, list[int]],
         return_tensor_device: torch.device | None = None,
     ) -> ArrayTensor:
-        num_tokens_per_instance = b * len(channel_groups_dict)
+        num_tokens_per_instance = int(b * len(channel_groups_dict))
         num_encode_tokens = int(num_tokens_per_instance * encode_ratio)
         num_decode_tokens = int(num_tokens_per_instance * decode_ratio)
-        num_target_encode_tokens = num_tokens_per_instance - (
-            num_encode_tokens + num_decode_tokens
+        num_target_encode_tokens = int(
+            num_tokens_per_instance - (num_encode_tokens + num_decode_tokens)
         )
 
         # we do this as a numpy array to take advantage of
@@ -116,7 +116,7 @@ class RandomMaskingStrategy(MaskingStrategy):
         )
         # hopefully this will allow for reproducibility, since random is seeded
         rng = np.random.default_rng(random.randint(0, 100))
-        flat_mask_tokens = rng.permuted(flat_mask_tokens, axis=1)
+        flat_mask_tokens = rng.permuted(flat_mask_tokens, axis=0)
         static_mask = rearrange(
             flat_mask_tokens, "(b t) -> b t", b=b, t=len(channel_groups_dict)
         )
@@ -137,12 +137,12 @@ class RandomMaskingStrategy(MaskingStrategy):
         channel_groups_dict: dict[str, list[int]],
         return_tensor_device: torch.device | None = None,
     ) -> ArrayTensor:
-        h_p, w_p = h / patch_size, w / patch_size
-        num_tokens_per_instance = h_p * w_p * t * len(channel_groups_dict)
+        h_p, w_p = int(h / patch_size), int(w / patch_size)
+        num_tokens_per_instance = int(h_p * w_p * t * len(channel_groups_dict))
         num_encode_tokens = int(num_tokens_per_instance * encode_ratio)
         num_decode_tokens = int(num_tokens_per_instance * decode_ratio)
-        num_target_encode_tokens = num_tokens_per_instance - (
-            num_encode_tokens + num_decode_tokens
+        num_target_encode_tokens = int(
+            num_tokens_per_instance - (num_encode_tokens + num_decode_tokens)
         )
 
         # we do this as a numpy array to take advantage of
@@ -225,7 +225,7 @@ class RandomMaskingStrategy(MaskingStrategy):
                     modalities_to_channel_groups_dict[modality_name],
                     return_device,
                 )
-            elif len(modality.shape == 2):
+            elif len(modality.shape) == 2:
                 b = modality.shape[0]
                 mask = self._create_mask_per_static_modality(
                     b,
