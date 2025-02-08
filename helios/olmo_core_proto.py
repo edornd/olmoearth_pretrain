@@ -196,6 +196,7 @@ if __name__ == "__main__":
         GeobenchDataset(geobench_dir, "m-eurosat", "valid", "default"),
         collate_fn=GeobenchDataset.collate_fn,
     )
+    # TODO: this should use target encoder
     train_embeddings, train_labels = get_embeddings(
         data_loader=train_loader, model=encoder
     )
@@ -210,5 +211,5 @@ if __name__ == "__main__":
         is_multilabel=train_ds.is_multilabel,
         device=device,
     )
-    print(val_result)
+    logger.info(val_result)
     teardown_training_environment()
