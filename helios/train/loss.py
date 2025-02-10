@@ -8,10 +8,11 @@ import torch
 import torch.nn.functional as F
 from class_registry import ClassRegistry
 from einops import rearrange
-from helios.nn.flexihelios import TokensAndMasks
-from helios.train.masking import MaskValue
 from olmo_core.config import Config
 from torch import Tensor
+
+from helios.nn.flexihelios import TokensAndMasks
+from helios.train.masking import MaskValue
 
 
 class Loss(ABC):
@@ -167,7 +168,7 @@ class LossConfig(Config):
 
     loss_config: dict[str, Any]  # List of loss configs
 
-    def build(self) -> type[Loss]:
+    def build(self) -> Loss:
         """Build a Loss from the config."""
         loss_key = self.loss_config.pop("type")
         return LOSS_REGISTRY.get_class(loss_key)(**self.loss_config)

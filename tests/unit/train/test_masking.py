@@ -1,6 +1,7 @@
 """Test masking."""
 
 import torch
+
 from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskValue, RandomMaskingStrategy
 

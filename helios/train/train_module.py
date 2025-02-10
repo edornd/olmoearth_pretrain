@@ -2,7 +2,7 @@
 
 import contextlib
 import math
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from dataclasses import dataclass
 from logging import getLogger
 from typing import Any, cast
@@ -11,30 +11,33 @@ import torch
 import torch.distributed as dist
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 import torch.nn as nn
-from einops import rearrange
-from helios.data.dataset import HeliosSample
-from helios.train.loss import LossConfig
-from helios.train.masking import MaskedHeliosSample, MaskingConfig
 from olmo_core.config import Config, DType
-from olmo_core.distributed.parallel import (DataParallelConfig,
-                                            DataParallelType,
-                                            build_device_mesh, get_dp_mesh,
-                                            get_dp_process_group)
+from olmo_core.distributed.parallel import (
+    DataParallelConfig,
+    DataParallelType,
+    build_device_mesh,
+    get_dp_mesh,
+    get_dp_process_group,
+)
 from olmo_core.distributed.utils import get_world_size
 from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.float8 import Float8Config, Float8Handler
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import ReduceType
-from olmo_core.train.train_module import (EvalBatchSizeUnit, EvalBatchSpec,
-                                          TrainModule)
-from olmo_core.train.train_module.transformer import \
-    TransformerActivationCheckpointingConfig
-from olmo_core.utils import gc_cuda, get_default_device, move_to_device
+from olmo_core.train.train_module import EvalBatchSizeUnit, EvalBatchSpec, TrainModule
+from olmo_core.train.train_module.transformer import (
+    TransformerActivationCheckpointingConfig,
+)
+from olmo_core.utils import gc_cuda, get_default_device
 from torch.distributed.checkpoint.metadata import Metadata
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.tensor import DTensor
 from torch.optim import Optimizer
+
+from helios.data.dataset import HeliosSample
+from helios.train.loss import LossConfig
+from helios.train.masking import MaskedHeliosSample, MaskingConfig
 
 logger = getLogger(__name__)
 
@@ -170,6 +173,8 @@ class HeliosTrainModule(TrainModule):
         Args:
             model: The transformer model to train.
             optim: The corresponding optimizer config.
+            masking_config: The masking configuration for the model.
+            loss_config: The loss configuration for the model.
             rank_batch_size: The rank batch size in instances.
             compile_model: Whether to compile to the model.
             float8_config: Float8 configuration for the model.
@@ -307,10 +312,9 @@ class HeliosTrainModule(TrainModule):
         raise RuntimeError("Should not get here")
 
     # TODO: Do we always want tokens and masks?
-    def loss_fn(self, pred: Any, target: Any) -> torch.Tensor:
+    def loss_fn(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
-        # TODO: add more generic and configurable loss function support
-        return self.base_loss.compute(pred, target)
+        return self.base_loss.compute(pred, targets)
 
     def eval_loss_fn(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
@@ -332,7 +336,6 @@ class HeliosTrainModule(TrainModule):
 
     def state_dict_to_load(self, metadata: Metadata) -> dict[str, Any]:
         """Get the state dict to load."""
-        # TODO: Unclear how we want to use this metadata
         load_opts = self.state_dict_load_opts
         return self._get_state_dict(load_opts)
 
@@ -405,10 +408,6 @@ class HeliosTrainModule(TrainModule):
             self._clear_loss_buffers()
             return
 
-        # TODO: Record loss metrics.
-        # NOTE: losses could be none for pipeline parallelism if rank doesn't have the final stage.
-
-        # Lastly, clear internal loss buffers.
         self._clear_loss_buffers()
 
     def eval_batch(

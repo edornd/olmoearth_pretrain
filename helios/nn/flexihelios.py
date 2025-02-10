@@ -6,14 +6,17 @@ from typing import NamedTuple
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
+from torch import Tensor, nn
+
 from helios.constants import BASE_GSD
 from helios.nn.attention import Block
-from helios.nn.encodings import (get_1d_sincos_pos_encoding,
-                                 get_2d_sincos_pos_encoding_with_resolution,
-                                 get_month_encoding_table)
+from helios.nn.encodings import (
+    get_1d_sincos_pos_encoding,
+    get_2d_sincos_pos_encoding_with_resolution,
+    get_month_encoding_table,
+)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
-from torch import Tensor, nn
 
 logger = logging.getLogger(__name__)
 
@@ -1072,6 +1075,7 @@ class Predictor(FlexiHeliosBase):
 
 if __name__ == "__main__":
     import rasterio
+
     from helios.constants import S2_BANDS
 
     # Each band set is stored at different resolutions for monthly so that has to happen for us to load in

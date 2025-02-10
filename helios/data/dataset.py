@@ -10,21 +10,21 @@ import numpy as np
 import pandas as pd
 import torch
 from einops import rearrange
-from helios.constants import LATLON_BANDS, S2_BANDS, TIMESTAMPS
-from helios.data.constants import BASE_RESOLUTION, IMAGE_TILE_SIZE, Modality
-from helios.dataset.parse import TimeSpan
-from helios.dataset.sample import SampleInformation, load_image_for_sample
-from helios.types import ArrayTensor
 from olmo_core.aliases import PathOrStr
 from olmo_core.distributed.utils import get_fs_local_rank
 from pyproj import Transformer
 from torch.utils.data import Dataset
 from upath import UPath
 
+from helios.constants import LATLON_BANDS, S2_BANDS, TIMESTAMPS
+from helios.data.constants import BASE_RESOLUTION, IMAGE_TILE_SIZE, Modality
+from helios.dataset.parse import TimeSpan
+from helios.dataset.sample import SampleInformation, load_image_for_sample
+from helios.types import ArrayTensor
+
 logger = logging.getLogger(__name__)
 
 
-# TODO: THIS SHOULD BE THE OUTPUT OF THE DATASET GET ITEM
 class HeliosSample(NamedTuple):
     """A sample of the data from the Helios dataset.
 

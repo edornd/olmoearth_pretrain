@@ -1,10 +1,9 @@
 """Simple set up of latent predictor."""
 
-# TODO: THis should be adapted when we make everything work with new architecture
 from copy import deepcopy
 
-import torch
 import torch.nn as nn
+
 from helios.nn.flexihelios import TokensAndMasks
 from helios.train.masking import MaskedHeliosSample
 

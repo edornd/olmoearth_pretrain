@@ -11,9 +11,10 @@ import numpy as np
 import torch
 from class_registry import ClassRegistry
 from einops import rearrange, repeat
+from olmo_core.config import Config
+
 from helios.data.dataset import HeliosSample
 from helios.types import ArrayTensor
-from olmo_core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,9 @@ class MaskingConfig(Config):
 
     strategy_config: dict[str, Any]
 
-    def build(self) -> type[MaskingStrategy]:
+    def build(self) -> MaskingStrategy:
         """Build a MaskingStrategy from the config."""
-        return MASKING_STRATEGY_REGISTRY[self.strategy_config["type"]]
+        mask_strategy_key = self.strategy_config.pop("type")
+        return MASKING_STRATEGY_REGISTRY.get_class(mask_strategy_key)(
+            **self.strategy_config
+        )
