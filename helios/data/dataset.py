@@ -3,8 +3,9 @@
 import hashlib
 import logging
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -34,17 +35,54 @@ class HeliosSample(NamedTuple):
     For each modality. we have an ArrayTensor named by modality, positions in lat lon of each sample and
     timestamps of each sample.
     """
-    # Input shape is (B, C, T, H, W)
-    s1: ArrayTensor | None = None  # [B, len(S1_bands), T, H, W]
-    s2: ArrayTensor | None = None  # [B, len(S2_bands), T, H, W]
-    landsat: ArrayTensor | None = None  # [B, len(LS_bands), T, H, W]
-    naip: ArrayTensor | None = None  # [B, len(NAIP_bands), T, H, W]
-    worldcover: ArrayTensor | None = None  # [B, len(WC_bands), T, H, W]
-    openstreetmap: ArrayTensor | None = None  # [B, len(OSM_bands), T, H, W]
+    # Input shape is (B, H, W, T, C)
+    s1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
+    s2: ArrayTensor | None = None  # [B, H, W, T, len(S2_bands)]
+    landsat: ArrayTensor | None = None  # [B, H, W, T, len(LS_bands)]
+    naip: ArrayTensor | None = None  # [B, H, W, T, len(NAIP_bands)]
+    worldcover: ArrayTensor | None = None  # [B, H, W, T, len(WC_bands)]
+    openstreetmap: ArrayTensor | None = None  # [B, H, W, T, len(OSM_bands)]
     latlon: ArrayTensor | None = None  # [B, 2]
-    timestamps: ArrayTensor | None = None  # [B, 3, T], where D=[day, month, year]
+    timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
 
-    def as_dict(self, ignore_nones: bool = True) -> dict[str, Any]:
+    def shape(self, attribute: str, num_channels: int | None = None) -> Sequence[int]:
+        """Returns the expected shape of an attribute.
+
+        This is useful if you want to know what the shape of a
+        missing attribute would have been for this sample.
+        """
+        try:
+            b = [self.b]
+        except ValueError:
+            b = []
+        attribute_to_shape = {
+            "s2": b
+            + [
+                self.h,
+                self.w,
+                self.t,
+                len(self.attribute_to_bands()["s2"])
+                if num_channels is None
+                else num_channels,
+            ],
+            "latlon": b
+            + [
+                len(self.attribute_to_bands()["latlon"])
+                if num_channels is None
+                else num_channels
+            ],
+            "timestamps": b
+            + [
+                self.t,
+                len(self.attribute_to_bands()["timestamps"])
+                if num_channels is None
+                else num_channels,
+            ],
+        }
+
+        return attribute_to_shape[attribute]
+
+    def as_dict(self, ignore_nones: bool = True) -> dict[str, ArrayTensor | None]:
         """Convert the namedtuple to a dictionary.
 
         Args:
@@ -119,7 +157,7 @@ class HeliosSample(NamedTuple):
         """
         if self.s2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[-3]
+        return self.s2.shape[3]
 
     @property
     def h(self) -> int:
@@ -130,7 +168,7 @@ class HeliosSample(NamedTuple):
         """
         if self.s2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[-2]
+        return self.s2.shape[1]
 
     @property
     def w(self) -> int:
@@ -141,7 +179,7 @@ class HeliosSample(NamedTuple):
         """
         if self.s2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[-1]
+        return self.s2.shape[2]
 
 
 def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
@@ -286,8 +324,8 @@ class HeliosDataset(Dataset):
         sample = self.samples[index]
         sample_s2 = sample.modalities[Modality.S2]
         image = load_image_for_sample(sample_s2, sample)
-        s2_data = rearrange(image, "t c h w -> c t h w")
-        time_data = self._get_timestamps(sample)  # [3, T]
+        s2_data = rearrange(image, "t c h w -> h w t c")
+        time_data = self._get_timestamps(sample).T  # [T, 3]
         latlon_data = self._get_latlon(sample)  # [2,]
         # TODO: Add normalization and better way of doing dtype
         return HeliosSample(
