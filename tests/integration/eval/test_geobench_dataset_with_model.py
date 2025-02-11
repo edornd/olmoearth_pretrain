@@ -38,9 +38,9 @@ def test_geobench_dataset(geobench_dir: Path) -> None:
             "S2_NIR_20m": [S2_BANDS.index(b) for b in ["B8A"]],
             "S2_SWIR": [S2_BANDS.index(b) for b in ["B11", "B12"]],
         },
-        # "latlon": {
-        #     "latlon": [0, 1],
-        # },
+        "latlon": {
+            "latlon": [0, 1],
+        },
     }
     encoder = Encoder(
         embedding_size=16,
@@ -59,4 +59,4 @@ def test_geobench_dataset(geobench_dir: Path) -> None:
     masked_batch = MaskedHeliosSample.from_heliossample(
         batch, encoder.modalities_to_channel_groups_dict
     )
-    _ = encoder(masked_batch)
+    _ = encoder(masked_batch, patch_size=4)

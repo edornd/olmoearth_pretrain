@@ -97,23 +97,30 @@ class MaskedHeliosSample(NamedTuple):
         """
         masked_sample_dict = {}
         for key, t in sample.as_dict(ignore_nones=False).items():
-            # Todo how do we handle timestamps. Maybe assume never None?
-            if t is None:
-                masked_sample_dict[key] = torch.empty(sample.shape(key))
-                masked_sample_dict[f"{key}_mask"] = (
-                    torch.ones(
-                        sample.shape(key, len(modalities_to_channel_groups_dict[key]))
-                    )
-                    * MaskValue.MISSING.value
-                )
-            else:
+            if key == "timestamps":
+                # lets assume timestamps is not None
                 masked_sample_dict[key] = t
-                masked_sample_dict[f"{key}_mask"] = (
-                    torch.ones(
-                        sample.shape(key, len(modalities_to_channel_groups_dict[key]))
+            else:
+                if t is None:
+                    masked_sample_dict[key] = torch.empty(sample.shape(key))
+                    masked_sample_dict[f"{key}_mask"] = (
+                        torch.ones(
+                            sample.shape(
+                                key, len(modalities_to_channel_groups_dict[key])
+                            )
+                        )
+                        * MaskValue.MISSING.value
                     )
-                    * MaskValue.ONLINE_ENCODER.value
-                )
+                else:
+                    masked_sample_dict[key] = t
+                    masked_sample_dict[f"{key}_mask"] = (
+                        torch.ones(
+                            sample.shape(
+                                key, len(modalities_to_channel_groups_dict[key])
+                            )
+                        )
+                        * MaskValue.ONLINE_ENCODER.value
+                    )
 
         return MaskedHeliosSample(**masked_sample_dict)
 

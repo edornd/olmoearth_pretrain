@@ -250,9 +250,14 @@ class GeobenchDataset(Dataset):
             label = np.array(list(label))
 
         target = torch.tensor(label, dtype=torch.long)
-        s2 = repeat(x, "h w c -> c t h w", t=1)[GEOBENCH_TO_HELIOS_S2_BANDS, :, :, :]
-        timestamp = repeat(torch.tensor(self.default_day_month_year), "b -> t b", t=1)
-        return HeliosSample(s2=s2, timestamps=timestamp), target
+        s2 = repeat(x, "h w c -> h w t c", t=1)[
+            :,
+            :,
+            :,
+            GEOBENCH_TO_HELIOS_S2_BANDS,
+        ]
+        timestamp = repeat(torch.tensor(self.default_day_month_year), "d -> t d", t=1)
+        return HeliosSample(s2=s2.float(), timestamps=timestamp.float()), target
 
     def __len__(self) -> int:
         """Length of dataset."""

@@ -34,18 +34,18 @@ class HeliosSample(NamedTuple):
     timestamps of each sample.
 
     Args:
-        s2: ArrayTensor | None = None  # [B, len(S2_bands), T H, W]
+        s2: ArrayTensor | None = None  # [B, H, W, T, len(S2_bands)]
         latlon: ArrayTensor | None = None  # [B, 2]
-        timestamps: ArrayTensor | None = None  # [B, D=3, T], where D=[day, month, year]
+        timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     """
 
     # if an attribute is added here, its bands must also
     # be added to attribute_to_bands
 
     # input shape is (B, C, T, H, W)
-    s2: ArrayTensor | None = None  # [B, len(S2_bands), T H, W]
+    s2: ArrayTensor | None = None  # [B, H, W, T, len(S2_bands)]
     latlon: ArrayTensor | None = None  # [B, 2]
-    timestamps: ArrayTensor | None = None  # [B, D=3, T], where D=[day, month, year]
+    timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
 
     def shape(self, attribute: str, num_channels: int | None = None) -> Sequence[int]:
         """Returns the expected shape of an attribute.
@@ -60,12 +60,12 @@ class HeliosSample(NamedTuple):
         attribute_to_shape = {
             "s2": b
             + [
+                self.h,
+                self.w,
+                self.t,
                 len(self.attribute_to_bands()["s2"])
                 if num_channels is None
                 else num_channels,
-                self.t,
-                self.h,
-                self.w,
             ],
             "latlon": b
             + [
@@ -75,9 +75,10 @@ class HeliosSample(NamedTuple):
             ],
             "timestamps": b
             + [
+                self.t,
                 len(self.attribute_to_bands()["timestamps"])
                 if num_channels is None
-                else num_channels
+                else num_channels,
             ],
         }
 
@@ -150,7 +151,7 @@ class HeliosSample(NamedTuple):
         """
         if self.s2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[-3]
+        return self.s2.shape[3]
 
     @property
     def h(self) -> int:
@@ -161,7 +162,7 @@ class HeliosSample(NamedTuple):
         """
         if self.s2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[-2]
+        return self.s2.shape[1]
 
     @property
     def w(self) -> int:
@@ -172,7 +173,7 @@ class HeliosSample(NamedTuple):
         """
         if self.s2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[-1]
+        return self.s2.shape[2]
 
 
 def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
