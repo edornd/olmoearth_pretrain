@@ -10,7 +10,7 @@ from einops import rearrange, repeat
 from torch import Tensor, nn
 
 from helios.constants import BASE_GSD
-from helios.data.constants import Modality
+from helios.data.constants import Modality, MODALITIES
 from helios.nn.attention import Block
 from helios.nn.encodings import (
     get_1d_sincos_pos_encoding,
@@ -101,7 +101,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
 
     def _get_patch_embedding_module_for_modality(self, modality: str) -> nn.Module:
         """Get the patch embedding module for a modality."""
-        modality_spec = Modality.get_modality_from_name(modality)
+        modality_spec = MODALITIES.get(modality)
         # Based on the modality name we choose the way to embed the data
 
         # I likely will need to know about what the embedding strategy is in the forward as well
@@ -141,7 +141,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         modality_mask = getattr(input_data, masked_modality_name)
         modality_data = getattr(input_data, modality)
 
-        modality_spec = Modality.get_modality_from_name(modality)
+        modality_spec = MODALITIES.get(modality)
 
         modality_tokens, modality_masks = [], []
         for idx, channel_set_indices in enumerate(modality_spec.bandsets_as_indices()):
@@ -258,7 +258,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             {
                 modality: nn.Parameter(
                     torch.zeros(
-                        len(Modality.get_modality_from_name(modality).band_sets),
+                        len(MODALITIES.get(modality).band_sets),
                         self.embedding_dim_per_embedding_type,
                     ),
                     **args,
@@ -1126,7 +1126,7 @@ class Predictor(FlexiHeliosBase):
             modality_data = getattr(tokens_and_masks, modality)
             modality_specific_dims = self.grab_modality_specific_dims(modality_data)
 
-            band_sets = Modality.get_modality_from_name(modality).band_sets
+            band_sets = MODALITIES.get(modality).band_sets
             for idx in range(len(band_sets)):
                 if self.is_any_data_to_be_decoded(modality_mask):
                     per_channel_modality_data = modality_data[..., idx, :]
