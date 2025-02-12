@@ -184,6 +184,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         """Return flexibly patchified embeddings for each modality of the input data.
 
         Given a [B, H, W, (T), C] inputs, returns a [B, H, W, (T), C_G, D] output.
+        # TODO: Confirm The input Masked Helios Sample has masks at full resolution, (no patches and no band sets)
         We assume that the spatial masks are consistent for the given patch size,
         so that if patch_size == 2 then one possible mask would be
         [0, 0, 1, 1]
@@ -301,7 +302,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             Tensor with encodings applied based on modality type
         """
         # TODO: Improve this implementation
-        if modality_tokens.shape == 3:
+        if modality_tokens.ndim == 3:
             # modality_tokens = [B, C_G, D]; static in space, static in time
             b, c_g, _ = modality_tokens.shape
             # Static modality only needs channel embeddings
@@ -321,7 +322,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
                 f"timestamps, patch_size and input_res required for modality {modality}"
             )
 
-        if modality_tokens.shape != 5:
+        if modality_tokens.ndim != 6:
             raise ValueError(
                 f"Unsupported tokens shape {modality_tokens.shape} for {modality}"
             )
