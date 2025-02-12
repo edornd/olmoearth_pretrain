@@ -42,7 +42,7 @@ class HeliosSample(NamedTuple):
     # if an attribute is added here, its bands must also
     # be added to attribute_to_bands
 
-    s2: ArrayTensor | None = None  # [B, H, W, T, len(S2_bands)]
+    sentinel2: ArrayTensor | None = None  # [B, H, W, T, len(S2_bands)]
     latlon: ArrayTensor | None = None  # [B, 2]
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
 
@@ -56,32 +56,31 @@ class HeliosSample(NamedTuple):
             b = [self.b]
         except ValueError:
             b = []
-        attribute_to_shape = {
-            "s2": b
-            + [
-                self.h,
-                self.w,
-                self.t,
-                len(self.attribute_to_bands()["s2"])
-                if num_channels is None
-                else num_channels,
-            ],
-            "latlon": b
-            + [
-                len(self.attribute_to_bands()["latlon"])
-                if num_channels is None
-                else num_channels
-            ],
-            "timestamps": b
-            + [
+
+        if attribute == "timestamps":
+            return b + [
                 self.t,
                 len(self.attribute_to_bands()["timestamps"])
                 if num_channels is None
                 else num_channels,
-            ],
-        }
+            ]
 
-        return attribute_to_shape[attribute]
+        modality_spec = Modality.get_modality_from_name(attribute)
+
+        return_bands = b
+        if modality_spec.get_tile_resolution() > 0:
+            # for now, we only support a single resolution but
+            # this is how we'd also support differing modalities
+            return_bands += [self.h, self.w]
+        if modality_spec.is_multitemporal:
+            return_bands += [self.t]
+
+        return_bands += [
+            len(self.attribute_to_bands()[attribute])
+            if num_channels is None
+            else num_channels
+        ]
+        return return_bands
 
     def as_dict(self, ignore_nones: bool = True) -> dict[str, ArrayTensor | None]:
         """Convert the namedtuple to a dictionary.
@@ -111,7 +110,7 @@ class HeliosSample(NamedTuple):
             A new HeliosSample with all tensors moved to the specified device.
         """
         return HeliosSample(
-            s2=self.s2.to(device) if self.s2 is not None else None,
+            sentinel2=self.sentinel2.to(device) if self.sentinel2 is not None else None,
             latlon=self.latlon.to(device) if self.latlon is not None else None,
             timestamps=(
                 self.timestamps.to(device) if self.timestamps is not None else None
@@ -125,7 +124,7 @@ class HeliosSample(NamedTuple):
         Returns:
             A dictionary mapping attribute names to their corresponding bands.
         """
-        return {"s2": S2_BANDS, "latlon": LATLON_BANDS, "timestamps": TIMESTAMPS}
+        return {"sentinel2": S2_BANDS, "latlon": LATLON_BANDS, "timestamps": TIMESTAMPS}
 
     @property
     def b(self) -> int:
@@ -134,10 +133,10 @@ class HeliosSample(NamedTuple):
         Returns:
             The batch size of the sample.
         """
-        if self.s2 is None:
+        if self.sentinel2 is None:
             raise ValueError("S2 is not present in the sample")
-        if len(self.s2.shape) == 5:
-            return self.s2.shape[0]
+        if len(self.sentinel2.shape) == 5:
+            return self.sentinel2.shape[0]
         else:
             raise ValueError("This is a single sample and not a batch")
 
@@ -148,9 +147,9 @@ class HeliosSample(NamedTuple):
         Returns:
             The number of timesteps in the sample.
         """
-        if self.s2 is None:
+        if self.sentinel2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[3]
+        return self.sentinel2.shape[3]
 
     @property
     def h(self) -> int:
@@ -159,9 +158,9 @@ class HeliosSample(NamedTuple):
         Returns:
             The height of the image in the sample.
         """
-        if self.s2 is None:
+        if self.sentinel2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[1]
+        return self.sentinel2.shape[1]
 
     @property
     def w(self) -> int:
@@ -170,9 +169,9 @@ class HeliosSample(NamedTuple):
         Returns:
             The width of the image in the sample.
         """
-        if self.s2 is None:
+        if self.sentinel2 is None:
             raise ValueError("S2 is not present in the sample")
-        return self.s2.shape[2]
+        return self.sentinel2.shape[2]
 
 
 def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
@@ -188,7 +187,7 @@ def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
         )
 
     return HeliosSample(
-        s2=stack_or_none("s2"),
+        sentinel2=stack_or_none("sentinel2"),
         latlon=stack_or_none("latlon"),
         timestamps=stack_or_none("timestamps"),
     )
@@ -313,7 +312,7 @@ class HeliosDataset(Dataset):
         latlon_data = np.array([lat, lon])
         # TODO: Add normalization and better way of doing dtype
         return HeliosSample(
-            s2=(s2_data / 10000).astype(np.float32),  # make it a float
+            sentinel2=(s2_data / 10000).astype(np.float32),  # make it a float
             latlon=latlon_data,
             timestamps=time_data,
         )

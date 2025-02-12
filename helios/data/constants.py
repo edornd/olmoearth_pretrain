@@ -41,6 +41,8 @@ class BandSet:
     bands: Sequence[str]
 
     # Resolution is BASE_RESOLUTION * resolution_factor.
+    # If resolution == 0, this means the data
+    # does not vary in space (e.g. latlons)
     resolution_factor: int
 
     def __hash__(self) -> int:
@@ -59,6 +61,8 @@ class ModalitySpec:
     name: str
 
     # Resolution by which the grid is defined for this modality.
+    # If tile_resolution_factor == 0, this means the data
+    # does not vary in space (e.g. latlons)
     tile_resolution_factor: int
 
     # Band sets in this modality.
@@ -129,6 +133,13 @@ class Modality:
         is_multitemporal=False,
     )
 
+    LATLONS = ModalitySpec(
+        name="latlon",
+        tile_resolution_factor=0,
+        band_sets=[BandSet(["lat", "lon"], 0)],
+        is_multitemporal=False,
+    )
+
     OSM = ModalitySpec(
         name="openstreetmap",
         # OpenStreetMap is gridded at 10 m/pixel, but the data itself is rasterized at
@@ -182,6 +193,17 @@ class Modality:
             cls.S2,
             cls.NAIP,
         ]
+
+    @classmethod
+    def get_modality_from_name(cls, name: str) -> ModalitySpec:
+        """Return the ModalitySpec with name == name."""
+        for modality in cls.get_all_modalities():
+            if modality.name == name:
+                return modality
+        valid_modalities = [m.name for m in cls.get_all_modalities()]
+        raise ValueError(
+            f"Unmatched modality name {name}. Valid modalities: {valid_modalities}"
+        )
 
 
 ALL_MODALITIES = Modality.get_all_modalities()
