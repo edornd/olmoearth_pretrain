@@ -93,6 +93,7 @@ class ModalitySpec:
                 [modality_bands.index(b_name) for b_name in band_set.bands]
             )
         return band_specs_as_indices
+
     def get_band_names(self) -> list[str]:
         """Get the combinedband names."""
         return [band for band_set in self.band_sets for band in band_set.bands]
@@ -110,14 +111,14 @@ class Modality:
     )
 
     S1 = ModalitySpec(
-        name="s1",
+        name="sentinel1",
         tile_resolution_factor=16,
         band_sets=[BandSet(["VV", "VH"], 16)],
         is_multitemporal=True,
     )
 
     S2 = ModalitySpec(
-        name="s2",
+        name="sentinel2",
         tile_resolution_factor=16,
         band_sets=[
             # 10 m/pixel bands.
