@@ -98,6 +98,11 @@ class ModalitySpec:
         """Get the combinedband names."""
         return [band for band_set in self.band_sets for band in band_set.bands]
 
+    @property
+    def num_channels(self) -> int:
+        """Get the total number of channel across all band sets."""
+        return len(self.get_band_names())
+
 
 # Modalities supported by helios
 class Modality:

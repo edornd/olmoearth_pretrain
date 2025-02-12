@@ -91,6 +91,11 @@ class MaskedHeliosSample(NamedTuple):
         """Get the masked modality name."""
         return f"{modality}_mask"
 
+    @staticmethod
+    def get_unmasked_modality_name(modality_mask_name: str) -> str:
+        """Get the unmasked modality name."""
+        return modality_mask_name.replace("_mask", "")
+
     @classmethod
     def from_heliossample(
         cls,
@@ -105,7 +110,7 @@ class MaskedHeliosSample(NamedTuple):
             if key == "timestamps":
                 # lets assume timestamps is not None
                 masked_sample_dict[key] = t
-            elif key == "latlon" or key == "s2":
+            elif key == "latlon" or key == "sentinel2":
                 if t is None:
                     masked_sample_dict[key] = torch.empty(sample.shape(key))
                     masked_sample_dict[f"{key}_mask"] = (
@@ -175,7 +180,7 @@ class RandomMaskingStrategy(MaskingStrategy):
         flat_mask_tokens = rng.permuted(flat_mask_tokens, axis=0)
         static_mask = rearrange(flat_mask_tokens, "(b t) -> b t", b=b, t=num_band_sets)
         if return_tensor_device:
-            return torch.from_numpy(static_mask).to(return_tensor_device)
+            return torch.as_tensor(static_mask, device=return_tensor_device)
         else:
             return static_mask
 
@@ -187,12 +192,10 @@ class RandomMaskingStrategy(MaskingStrategy):
         t: int,
         encode_ratio: float,
         decode_ratio: float,
-        patch_size: int,
-        num_band_sets: int,
+        num_channels: int,
         return_tensor_device: torch.device | None = None,
     ) -> ArrayTensor:
-        h_p, w_p = int(h / patch_size), int(w / patch_size)
-        num_tokens_per_instance = int(h_p * w_p * t * num_band_sets)
+        num_tokens_per_instance = int(h * w * t * num_channels)
         num_encode_tokens = int(num_tokens_per_instance * encode_ratio)
         num_decode_tokens = int(num_tokens_per_instance * decode_ratio)
         num_target_encode_tokens = int(
@@ -212,26 +215,25 @@ class RandomMaskingStrategy(MaskingStrategy):
         # hopefully this will allow for reproducibility, since random is seeded
         rng = np.random.default_rng(random.randint(0, 100))
         b_flat_tokens = rng.permuted(b_flat_tokens, axis=1)
-        b_flat_tokens = rearrange(
+        space_time_mask = rearrange(
             b_flat_tokens,
             "b (h w t c) -> b h w t c",
-            h=h_p,
-            w=w_p,
+            h=h,
+            w=w,
             t=t,
-            c=num_band_sets,
+            c=num_channels,
         )
-        space_time_mask = np.repeat(
-            np.repeat(b_flat_tokens, repeats=patch_size, axis=1),
-            repeats=patch_size,
-            axis=2,
-        )
+
         if return_tensor_device:
-            return torch.from_numpy(space_time_mask).to(return_tensor_device)
+            return torch.as_tensor(space_time_mask, device=return_tensor_device)
         else:
             return space_time_mask
 
     def apply_mask(self, batch: HeliosSample, **kwargs: Any) -> MaskedHeliosSample:
         """Apply random masking to the input data.
+
+        All Masking happens in unpatchified form and not grouped across bandsets
+        as the modality data is unpatchified and not grouped across bandsets
 
         The mask created for the space-time varying modality will be different than
         for the static modality.
@@ -249,22 +251,13 @@ class RandomMaskingStrategy(MaskingStrategy):
             MaskedHeliosSample containing the masked data and mask
         """
         # should these not be kwargs but instead be explicitly
-        # in the function signature?
-        patch_size: int = kwargs["patch_size"]
         encode_ratio: float = kwargs["encode_ratio"]
         decode_ratio: float = kwargs["decode_ratio"]
-
-        if (batch.h % patch_size != 0) or (batch.w % patch_size != 0):
-            raise ValueError(
-                f"h {batch.h} or w {batch.w} not divisible by patch size {patch_size}"
-            )
 
         output_dict = {}
         for modality_name in batch._fields:
             # TODO: remove this later after integrating S1 and WorldCover into MaskedHelios
-            if modality_name == "s1" or modality_name == "worldcover":
-                continue
-            if modality_name == "latlon":
+            if modality_name == "sentinel1" or modality_name == "worldcover":
                 continue
             modality = getattr(batch, modality_name)
             if modality_name == "timestamps":
@@ -275,10 +268,11 @@ class RandomMaskingStrategy(MaskingStrategy):
                 return_device: torch.device | None = modality.device
             else:
                 return_device = None
+            logger.info(f"Modality name: {modality_name} shape: {modality.shape}")
+            # TODO: Make this decions based on modlaity spec
+            num_channels = Modality.get_modality_from_name(modality_name).num_channels
             if len(modality.shape) == 5:
-                b, _, t, h, w = (
-                    modality.shape
-                )  # here we still assume the (B, C, T, H, W) shape
+                b, h, w, t, c = modality.shape
 
                 mask = self._create_mask_per_space_time_modality(
                     b,
@@ -287,8 +281,7 @@ class RandomMaskingStrategy(MaskingStrategy):
                     t,
                     encode_ratio,
                     decode_ratio,
-                    patch_size,
-                    len(Modality.get_modality_from_name(modality_name).band_sets),
+                    num_channels,
                     return_device,
                 )
             elif len(modality.shape) == 2:
@@ -297,22 +290,18 @@ class RandomMaskingStrategy(MaskingStrategy):
                     b,
                     encode_ratio,
                     decode_ratio,
-                    len(Modality.get_modality_from_name(modality_name).band_sets),
+                    num_channels,
                     return_device,
                 )
             else:
                 raise ValueError(f"Unsupported modality shape {modality.shape}")
-            modality = rearrange(modality, "b c t h w -> b h w t c")
             output_dict[modality_name] = modality
-            # TODO:Channels for mask are already in channel groups but not for tokens
-            output_dict[f"{modality_name}_mask"] = mask
+            output_dict[MaskedHeliosSample.get_masked_modality_name(modality_name)] = (
+                mask
+            )
             logger.info(
                 f" After maskingModality: {modality_name} shape: {modality.shape} mask shape: {mask.shape}"
             )
-
-        # TODO: Temporary internal hack for not dealing with lat lons yet
-        output_dict["latlon"] = None
-        output_dict["latlon_mask"] = None
         return MaskedHeliosSample(**output_dict)
 
 
