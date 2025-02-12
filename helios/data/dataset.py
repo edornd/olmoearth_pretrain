@@ -75,6 +75,7 @@ class HeliosSample(NamedTuple):
             if MODALITIES.get(attribute).is_multitemporal:
                 return_shape += [self.sentinel2.shape[-2]]  # number of timesteps
             if not mask:
+                # TODO: change it to num_bands instead
                 return_shape += [len(MODALITIES.get(attribute).get_band_names())]  # number of bands
             else:
                 return_shape += [len(MODALITIES.get(attribute).band_sets)]

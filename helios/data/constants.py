@@ -123,7 +123,8 @@ class Modality:
                 [modality_bands.index(b_name) for b_name in band_set.bands]
             )
         return band_specs_as_indices
-
+    
+    # TODO: We can modify this to directly return the number of bands
     def get_band_names(self) -> list[str]:
         """Get the combined band names."""
         band_names = []
