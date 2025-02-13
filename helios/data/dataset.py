@@ -24,6 +24,7 @@ from helios.data.constants import (
     TIMESTAMPS,
     Modality,
 )
+from helios.data.normalize import Normalizer, Strategy
 from helios.dataset.parse import ModalityTile, TimeSpan
 from helios.dataset.sample import SampleInformation, load_image_for_sample
 from helios.types import ArrayTensor
@@ -73,19 +74,17 @@ class HeliosSample(NamedTuple):
                 raise ValueError("Sentinel2 is not present in the sample")
             attribute_shape = []
             if Modality.get(attribute).get_tile_resolution() > 0:
-                attribute_shape += self.sentinel2.shape[
-                    :-2
-                ]  # add batch size (if has), height, width
+                # Add batch size (if has), height, width
+                attribute_shape += self.sentinel2.shape[:-2]
             if Modality.get(attribute).is_multitemporal:
-                attribute_shape += [self.sentinel2.shape[-2]]  # add number of timesteps
+                # Add number of timesteps
+                attribute_shape += [self.sentinel2.shape[-2]]
             if not mask:
-                attribute_shape += [
-                    Modality.get(attribute).num_bands
-                ]  # add number of bands
+                # Add number of bands
+                attribute_shape += [Modality.get(attribute).num_bands]
             else:
-                attribute_shape += [
-                    Modality.get(attribute).num_band_sets
-                ]  # add number of band sets
+                # Add number of band sets
+                attribute_shape += [Modality.get(attribute).num_band_sets]
             return attribute_shape
 
     @staticmethod
@@ -308,12 +307,15 @@ class HeliosDataset(Dataset):
                 continue
             sample_modality = sample.modalities[modality]
             image = self.load_sample(sample_modality, sample, self.dtype)
-            sample_dict[modality.name] = image
-            # TODO: Add function to transform Sentinel1 data as mentioned in the EE
-            # Get latlon and timestamps from s2
+            # According to the EE, we need to convert Sentinel1 data to dB using 10*log10(x)
+            # https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD#description
+            if modality == Modality.SENTINEL1:
+                image = 10 * np.log10(image)
+            # Normalize the data
+            normalizer = Normalizer(modality, Strategy.PREDEFINED)
+            sample_dict[modality.name] = normalizer.normalize(image)
+            # Get latlon and timestamps from Sentinel2 data
             if modality == Modality.SENTINEL2:
                 sample_dict["latlon"] = self._get_latlon(sample)
                 sample_dict["timestamps"] = self._get_timestamps(sample)
-        # TODO: Add normalization and better way of doing dtype
-        # OK, maybe a good starting point is to have a predefined set of normalization
         return HeliosSample(**sample_dict)

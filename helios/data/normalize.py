@@ -1,31 +1,108 @@
-"""Normalize the data."""
+"""Normalizer for the Helios dataset."""
+
+import json
+from enum import Enum
 
 import numpy as np
 
 from helios.data.constants import ModalitySpec
 
-# With predefined, we should be able to get the min & max values for each band
-# With computed, we will be getting the mean & std values for each band
 
-# For value large values, do we need to cut them off?
+class Strategy(Enum):
+    """The strategy to use for normalization."""
+
+    # Whether to use predefined or computed values for normalization
+    PREDEFINED = "predefined"
+    COMPUTED = "computed"
 
 
 class Normalizer:
     """Normalize the data."""
 
-    def __init__(self, modality: ModalitySpec, computed_values: bool = True) -> None:
+    def __init__(
+        self,
+        modality: ModalitySpec,
+        strategy: Strategy,
+        std_multiplier: float | None = 2,
+    ) -> None:
         """Initialize the normalizer.
 
         Args:
             modality: The modality to normalize.
-            computed_values: Whether to use computed values or predefined values.
+            strategy: The strategy to use for normalization (predefined or computed).
+            std_multiplier: The multiplier for the standard deviation when using computed values.
 
         Returns:
             None
         """
         self.modality = modality
-        self.computed_values = computed_values
+        self.strategy = strategy
+        self.std_multiplier = std_multiplier
+        self.norm_config = self._load_config()
 
-    def _normalize(self, data: np.ndarray) -> np.ndarray:
-        """Normalize the data."""
-        pass
+    def _load_config(self) -> dict:
+        """Load the appropriate config based on the modality strategy."""
+        if self.strategy == Strategy.PREDEFINED:
+            return self._load_predefined_config()
+        elif self.strategy == Strategy.COMPUTED:
+            return self._load_computed_config()
+        else:
+            raise ValueError(f"Invalid strategy: {self.strategy}")
+
+    def _load_predefined_config(self) -> dict:
+        """Load the predefined config."""
+        with open("data/norm_configs/predefined.json") as f:
+            return json.load(f)
+
+    def _load_computed_config(self) -> dict:
+        """Load the computed config."""
+        with open("data/norm_configs/computed.json") as f:
+            return json.load(f)
+
+    def normalize(self, data: np.ndarray) -> np.ndarray:
+        """Normalize the data.
+
+        Args:
+            data: The data to normalize.
+
+        Returns:
+            The normalized data.
+        """
+        modality_bands = self.modality.band_order
+        modality_norm_values = self.norm_config[self.modality.name]
+        # When using predefined values, we have the min and max values for each band
+        if self.strategy == Strategy.PREDEFINED:
+            min_vals = []
+            max_vals = []
+            for band in modality_bands:
+                if band not in modality_norm_values:
+                    raise ValueError(f"Band {band} not found in config")
+                min_val = modality_norm_values[band]["min"]
+                max_val = modality_norm_values[band]["max"]
+                if (max_val - min_val) == 0:
+                    raise ValueError(f"The range of band {band} is 0!")
+                min_vals.append(min_val)
+                max_vals.append(max_val)
+            # The last dimension of data is always the number of bands (channels)
+            return (data - np.array(min_vals)) / (
+                np.array(max_vals) - np.array(min_vals)
+            )
+        # When using computed values, we need to compute the mean and std of each band
+        # Then convert the values to min and max values that cover 99.7% of the data
+        elif self.strategy == Strategy.COMPUTED:
+            mean_vals = []
+            std_vals = []
+            for band in modality_bands:
+                if band not in modality_norm_values:
+                    raise ValueError(f"Band {band} not found in config")
+                mean_val = modality_norm_values[band]["mean"]
+                std_val = modality_norm_values[band]["std"]
+                if std_val == 0:
+                    raise ValueError(f"The std of band {band} is 0!")
+                mean_vals.append(mean_val)
+                std_vals.append(std_val)
+            min_vals = np.array(mean_vals) - self.std_multiplier * np.array(std_vals)
+            max_vals = np.array(mean_vals) + self.std_multiplier * np.array(std_vals)
+            return (data - min_vals) / (max_vals - min_vals)  # type: ignore
+        else:
+            raise ValueError(f"Invalid strategy: {self.strategy}")
