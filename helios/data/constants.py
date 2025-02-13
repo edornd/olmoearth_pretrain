@@ -92,7 +92,7 @@ class ModalitySpec:
         return len(self.band_sets)
 
     @property
-    def num_channels(self) -> int:
+    def num_bands(self) -> int:
         """Get the number of channels.
 
         The number of channels is the sum of the number of bands in all the band sets.

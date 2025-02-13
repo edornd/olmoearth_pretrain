@@ -80,7 +80,7 @@ class HeliosSample(NamedTuple):
                 attribute_shape += [self.sentinel2.shape[-2]]  # add number of timesteps
             if not mask:
                 attribute_shape += [
-                    Modality.get(attribute).num_channels
+                    Modality.get(attribute).num_bands
                 ]  # add number of bands
             else:
                 attribute_shape += [
@@ -89,12 +89,12 @@ class HeliosSample(NamedTuple):
             return attribute_shape
 
     @staticmethod
-    def num_channels(attribute: str) -> int:
+    def num_bands(attribute: str) -> int:
         """Get the number of channels for a given attribute."""
         if attribute == "timestamps":
             return len(TIMESTAMPS)
         else:
-            return Modality.get(attribute).num_channels
+            return Modality.get(attribute).num_bands
 
     def as_dict(self, ignore_nones: bool = True) -> dict[str, ArrayTensor | None]:
         """Convert the namedtuple to a dictionary.
@@ -123,16 +123,15 @@ class HeliosSample(NamedTuple):
         Returns:
             A new HeliosSample with all tensors moved to the specified device.
         """
+
+        def maybe_move_to_device(tensor: torch.Tensor | None) -> torch.Tensor | None:
+            """Move the tensor to the specified device if it is not None."""
+            if tensor is None:
+                return None
+            return tensor.to(device)
+
         return HeliosSample(
-            sentinel2=self.sentinel2.to(device) if self.sentinel2 is not None else None,
-            sentinel1=self.sentinel1.to(device) if self.sentinel1 is not None else None,
-            worldcover=(
-                self.worldcover.to(device) if self.worldcover is not None else None
-            ),
-            latlon=self.latlon.to(device) if self.latlon is not None else None,
-            timestamps=(
-                self.timestamps.to(device) if self.timestamps is not None else None
-            ),
+            **{key: maybe_move_to_device(val) for key, val in self.as_dict().items()}
         )
 
 

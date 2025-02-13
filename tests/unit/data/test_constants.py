@@ -41,10 +41,10 @@ def test_modality_spec_band_order() -> None:
     assert Modality.LANDSAT.band_order == expected_band_order_landsat
 
 
-def test_modality_spec_num_channels() -> None:
+def test_modality_spec_num_bands() -> None:
     """Test that the number of channels is correct."""
-    assert Modality.SENTINEL2.num_channels == 13
-    assert Modality.LANDSAT.num_channels == 11
+    assert Modality.SENTINEL2.num_bands == 13
+    assert Modality.LANDSAT.num_bands == 11
 
 
 def test_band_sets_as_indices() -> None:
