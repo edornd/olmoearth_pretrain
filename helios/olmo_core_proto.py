@@ -21,8 +21,6 @@ from upath import UPath
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoader
 from helios.data.dataset import HeliosDataset, collate_helios
-from helios.dataset.parse import parse_helios_dataset
-from helios.dataset.sample import image_tiles_to_samples
 from helios.latent_predictor import LatentMIMStyle
 from helios.nn.flexihelios import Encoder, Predictor
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
@@ -123,19 +121,9 @@ if __name__ == "__main__":
     dp_process_group = train_module.dp_process_group
 
     # Prepare samples from Helios dataset
-    tile_path = UPath("/weka/dfive-default/helios/dataset/20250212/")
-
-    tiles = parse_helios_dataset(tile_path, supported_modalities=supported_modalities)
-
-    logger.info(f"Tiles: {len(tiles)}")
-    samples = image_tiles_to_samples(tiles, supported_modalities=supported_modalities)
-    logger.info(f"Samples: {len(samples)}")
-    # Create HeliosDataLoader
     dataloader = HeliosDataLoader(
         dataset=HeliosDataset(
-            *samples,
-            path=tile_path,
-            supported_modalities=supported_modalities,
+            tile_path=UPath("/weka/dfive-default/helios/dataset/20250212/"),
             dtype=np.dtype("float32"),
         ),
         collator=collate_helios,

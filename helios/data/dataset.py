@@ -294,8 +294,12 @@ class HeliosDataset(Dataset):
     def __init__(
         self,
         *samples: SampleInformation | None,
+<<<<<<< HEAD
         path: UPath,
         supported_modalities: list[ModalitySpec],
+=======
+        tile_path: UPath,
+>>>>>>> mypy
         dtype: np.dtype = np.float32,
     ):
         """Initialize the dataset.
@@ -307,18 +311,23 @@ class HeliosDataset(Dataset):
 
         Args:
             samples: The samples to include in the dataset.
-            path: The path to the raw dataset (tile directory).
+            tile_path: The path to the raw dataset (image tile directory).
             dtype: The dtype of the data.
         """
-        # Check if samples are directly provided, if not, get from tile directory
-        if samples is None:
-            samples = self._get_samples()
+        self.tile_path = tile_path
+        # If no samples are provided, get them from the tile directory
+        if not samples:
+            samples = self._get_samples()  # type: ignore
         if len(samples) == 0:
             raise ValueError("No samples provided")
         self.samples = self._filter_samples(samples)  # type: ignore
+<<<<<<< HEAD
         self.supported_modalities = supported_modalities
         self.path = path
+=======
+>>>>>>> mypy
         self.dtype = dtype
+
         # Initialize both normalizers for different modalities
         self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
         self.normalizer_computed = Normalizer(Strategy.COMPUTED)
@@ -336,7 +345,7 @@ class HeliosDataset(Dataset):
         """Can be used to identify/compare a dataset."""
         sha256_hash = hashlib.sha256()
         sha256_hash.update(
-            f"path={self.path},"
+            f"tile_path={self.tile_path},"
             f"sample_size={len(self.samples)},"
             f"dtype={self.dtype}".encode()
         )
@@ -376,9 +385,8 @@ class HeliosDataset(Dataset):
         len(self)
 
     def _get_samples(self) -> list[SampleInformation]:
-        """Get the samples from the raw dataset (tile directory)."""
-        # Parse the tile directory
-        tiles = parse_helios_dataset(self.path)
+        """Get the samples from the raw dataset (image tile directory)."""
+        tiles = parse_helios_dataset(self.tile_path)
         logger.info(f"Total tiles: {len(tiles)}")
         samples = image_tiles_to_samples(tiles)
         logger.info(f"Total samples: {len(samples)}")
@@ -503,7 +511,7 @@ class HeliosDatasetConfig(Config):
     """Configuration for the HeliosDataset."""
 
     samples: list[SampleInformation]
-    path: UPath
+    tile_path: UPath
     dtype: np.dtype = np.float32
 
     def validate(self) -> None:
@@ -512,9 +520,9 @@ class HeliosDatasetConfig(Config):
         Raises:
             ValueError: If the configuration is invalid.
         """
-        if self.path is None:
+        if self.tile_path is None:
             raise ValueError("Tile directory is not set")
 
     def build(self) -> "HeliosDataset":
         """Build the dataset."""
-        return HeliosDataset(*self.samples, path=self.path, dtype=self.dtype)
+        return HeliosDataset(*self.samples, tile_path=self.tile_path, dtype=self.dtype)
