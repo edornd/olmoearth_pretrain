@@ -14,7 +14,7 @@ from torch import Tensor
 
 from helios.data.constants import Modality, ModalitySpec
 from helios.nn.flexihelios import TokensAndMasks
-from helios.train.masking import MaskedHeliosSample, MaskValue
+from helios.train.masking import MaskValue
 
 logger = logging.getLogger(__name__)
 
