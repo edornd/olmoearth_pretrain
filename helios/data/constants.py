@@ -221,17 +221,20 @@ class Modality:
         return modalities
 
 
-# TODO: change this to other name to avoid confusion
+# Modalities to ingest image tiles
 SUPPORTED_MODALITIES = [
     Modality.SENTINEL1,
     Modality.SENTINEL2,
     Modality.WORLDCOVER,
 ]
+
+# Normalization strategy for each modality
 NORMALIZE_STRATEGY = {
     Modality.SENTINEL1: Strategy.PREDEFINED,
     Modality.SENTINEL2: Strategy.PREDEFINED,
     Modality.WORLDCOVER: Strategy.PREDEFINED,
-    Modality.LATLON: Strategy.PREDEFINED,
 }
+
+# Latlon and timestamps
 LATLON = ["lat", "lon"]
 TIMESTAMPS = ["day", "month", "year"]

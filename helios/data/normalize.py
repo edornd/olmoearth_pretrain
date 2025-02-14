@@ -85,7 +85,7 @@ class Normalizer:
             return (data - np.array(min_vals)) / (
                 np.array(max_vals) - np.array(min_vals)
             )
-        # When using computed values, we need to compute the mean and std of each band
+        # When using computed values, we compute the mean and std of each band in advance
         # Then convert the values to min and max values that cover 99.7% of the data
         elif self.strategy == Strategy.COMPUTED:
             mean_vals = []
