@@ -302,13 +302,14 @@ class HeliosDataset(Dataset):
         modality_data = rearrange(image, "t c h w -> h w t c")
         return modality_data
 
-    @classmethod
     def normalize_image(self, modality: ModalitySpec, image: np.ndarray) -> np.ndarray:
         """Normalize the image."""
         if NORMALIZE_STRATEGY[modality] == Strategy.PREDEFINED:
             return self.normalizer_predefined.normalize(modality, image)
-        else:
+        elif NORMALIZE_STRATEGY[modality] == Strategy.COMPUTED:
             return self.normalizer_computed.normalize(modality, image)
+        else:
+            raise ValueError("Unknown normalization strategy!")
 
     def __getitem__(self, index: int) -> HeliosSample:
         """Get the item at the given index."""
