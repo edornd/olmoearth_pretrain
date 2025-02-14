@@ -23,6 +23,7 @@ from helios.data.constants import (
     SUPPORTED_MODALITIES,
     TIMESTAMPS,
     Modality,
+    ModalitySpec,
 )
 from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
 from helios.data.utils import convert_to_db
@@ -301,6 +302,14 @@ class HeliosDataset(Dataset):
         modality_data = rearrange(image, "t c h w -> h w t c")
         return modality_data
 
+    @classmethod
+    def normalize_image(self, modality: ModalitySpec, image: np.ndarray) -> np.ndarray:
+        """Normalize the image."""
+        if NORMALIZE_STRATEGY[modality] == Strategy.PREDEFINED:
+            return self.normalizer_predefined.normalize(modality, image)
+        else:
+            return self.normalizer_computed.normalize(modality, image)
+
     def __getitem__(self, index: int) -> HeliosSample:
         """Get the item at the given index."""
         sample = self.samples[index]
@@ -314,15 +323,9 @@ class HeliosDataset(Dataset):
             # Convert Sentinel1 data to dB
             if modality == Modality.SENTINEL1:
                 image = convert_to_db(image)
-            # Normalize data using predefined or computed values
-            if NORMALIZE_STRATEGY[modality] == Strategy.PREDEFINED:
-                sample_dict[modality.name] = self.normalizer_predefined.normalize(
-                    modality, image
-                ).astype(self.dtype)
-            elif NORMALIZE_STRATEGY[modality] == Strategy.COMPUTED:
-                sample_dict[modality.name] = self.normalizer_computed.normalize(
-                    modality, image
-                ).astype(self.dtype)
+            # Normalize data
+            image = self.normalize_image(modality, image).astype(self.dtype)
+            sample_dict[modality.name] = image
             # Get latlon and timestamps from Sentinel2 data
             if modality == Modality.SENTINEL2:
                 sample_dict["latlon"] = self._get_latlon(sample).astype(self.dtype)
