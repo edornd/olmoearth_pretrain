@@ -76,6 +76,7 @@ def convert_to_db(data: np.ndarray) -> np.ndarray:
     Returns:
         The data in decibels.
     """
-    safe_data = np.where(data > 0, data, np.finfo(float).eps)
-    result = 10 * np.log10(safe_data)
+    # clip data to 1e-10 to avoid log(0)
+    data = np.clip(data, 1e-10, None)
+    result = 10 * np.log10(data)
     return result

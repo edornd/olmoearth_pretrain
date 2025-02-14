@@ -294,12 +294,12 @@ class HeliosDataset(Dataset):
 
     @classmethod
     def load_sample(
-        self, sample_modality: ModalityTile, sample: SampleInformation, dtype: np.dtype
+        self, sample_modality: ModalityTile, sample: SampleInformation
     ) -> np.ndarray:
         """Load the sample."""
         image = load_image_for_sample(sample_modality, sample)
         modality_data = rearrange(image, "t c h w -> h w t c")
-        return modality_data.astype(dtype)
+        return modality_data
 
     def __getitem__(self, index: int) -> HeliosSample:
         """Get the item at the given index."""
@@ -310,7 +310,7 @@ class HeliosDataset(Dataset):
             if modality not in SUPPORTED_MODALITIES:
                 continue
             sample_modality = sample.modalities[modality]
-            image = self.load_sample(sample_modality, sample, self.dtype)
+            image = self.load_sample(sample_modality, sample)
             # Convert Sentinel1 data to dB
             if modality == Modality.SENTINEL1:
                 image = convert_to_db(image)
@@ -318,14 +318,14 @@ class HeliosDataset(Dataset):
             if NORMALIZE_STRATEGY[modality] == Strategy.PREDEFINED:
                 sample_dict[modality.name] = self.normalizer_predefined.normalize(
                     modality, image
-                )
+                ).astype(self.dtype)
             elif NORMALIZE_STRATEGY[modality] == Strategy.COMPUTED:
                 sample_dict[modality.name] = self.normalizer_computed.normalize(
                     modality, image
-                )
+                ).astype(self.dtype)
             # Get latlon and timestamps from Sentinel2 data
             if modality == Modality.SENTINEL2:
-                sample_dict["latlon"] = self._get_latlon(sample)
+                sample_dict["latlon"] = self._get_latlon(sample).astype(self.dtype)
                 sample_dict["timestamps"] = self._get_timestamps(sample)
 
         return HeliosSample(**sample_dict)
