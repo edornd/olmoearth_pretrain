@@ -10,11 +10,11 @@ import numpy as np
 import pytest
 import rasterio
 import torch
-from rasterio.transform import from_origin
-
-from helios.data.constants import BandSet, Modality
-from helios.dataset.parse import GridTile, ModalityImage, ModalityTile, TimeSpan
+from helios.data.constants import BandSet, Modality, ModalitySpec
+from helios.dataset.parse import (GridTile, ModalityImage, ModalityTile,
+                                  TimeSpan)
 from helios.dataset.sample import SampleInformation
+from rasterio.transform import from_origin
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -59,8 +59,12 @@ def create_geotiff(
 
 
 @pytest.fixture
-def prepare_samples() -> Callable[[Path], list[SampleInformation]]:
-    """Function to create samples in a directory."""
+def prepare_samples_and_supported_modalities() -> (
+    tuple[Callable[[Path], list[SampleInformation]], list[ModalitySpec]]
+):
+    """Function to create samples in a directory.
+
+    and also returns what modalities are supported in these samples"""
 
     def prepare_samples_func(data_path: Path) -> list[SampleInformation]:
         """Prepare the dataset."""
@@ -104,7 +108,8 @@ def prepare_samples() -> Callable[[Path], list[SampleInformation]]:
                             / "s2_10m.tif",
                             BandSet(
                                 ["B05", "B06", "B07", "B8A", "B11", "B12"], 32
-                            ): data_path / "s2_20m.tif",
+                            ): data_path
+                            / "s2_20m.tif",
                             BandSet(["B01", "B09", "B10"], 64): data_path
                             / "s2_40m.tif",
                         },
@@ -127,19 +132,14 @@ def prepare_samples() -> Callable[[Path], list[SampleInformation]]:
                         center_time=datetime(2020, 6, 30),
                         band_sets={BandSet(["B1"], 16): data_path / "worldcover.tif"},
                     ),
-                    Modality.LATLON: ModalityTile(
-                        grid_tile=GridTile(
-                            crs=crs, resolution_factor=16, col=165, row=-1968
-                        ),
-                        images=[],
-                        center_time=datetime(2020, 6, 30),
-                        band_sets={
-                            BandSet(["lat", "lon"], 16): data_path / "latlon.tif"
-                        },
-                    ),
                 },
             )
         ]
         return samples
 
-    return prepare_samples_func
+    return prepare_samples_func, [
+        Modality.SENTINEL2,
+        Modality.SENTINEL1,
+        Modality.WORLDCOVER,
+        Modality.LATLON,  # We want to include latlon even though it is not a read in modality
+    ]

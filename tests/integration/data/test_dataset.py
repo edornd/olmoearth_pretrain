@@ -5,7 +5,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
-
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosDataset, HeliosSample
 from helios.dataset.parse import ModalityTile
@@ -19,7 +18,16 @@ def test_helios_dataset(
 ) -> None:
     """Test the HeliosDataset class."""
     samples = prepare_samples(tmp_path)
-    dataset = HeliosDataset(*samples, path=tmp_path)
+    dataset = HeliosDataset(
+        *samples,
+        path=tmp_path,
+        supported_modalities=[
+            Modality.SENTINEL2,
+            Modality.SENTINEL1,
+            Modality.WORLDCOVER,
+            Modality.LATLON,
+        ],
+    )
     dataset.prepare()
 
     assert len(dataset) == 1
@@ -39,6 +47,7 @@ class TestHeliosDataset:
     ) -> None:
         """Test the load_sample method."""
         samples = prepare_samples(tmp_path)
+        logger.info(f"samples: {len(samples)}")
         sample: SampleInformation = samples[0]
         sample_modality: ModalityTile = sample.modalities[Modality.SENTINEL2]
         image = HeliosDataset.load_sample(sample_modality, sample, dtype=np.uint16)

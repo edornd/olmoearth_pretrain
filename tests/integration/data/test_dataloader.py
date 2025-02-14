@@ -3,19 +3,22 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from torch.utils.data import default_collate
-
+from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoader
 from helios.data.dataset import HeliosDataset
 from helios.dataset.sample import SampleInformation
+from torch.utils.data import default_collate
 
 
 def test_helios_dataloader(
-    tmp_path: Path, prepare_samples: Callable[[Path], list[SampleInformation]]
+    tmp_path: Path, prepare_samples_and_supported_modalities: tuple
 ) -> None:
     """Test the HeliosDataloader class."""
+    prepare_samples, supported_modalities = prepare_samples_and_supported_modalities
     samples = prepare_samples(tmp_path)
-    dataset = HeliosDataset(*samples, path=tmp_path)
+    dataset = HeliosDataset(
+        *samples, path=tmp_path, supported_modalities=supported_modalities
+    )
     assert isinstance(dataset, HeliosDataset)
     dataloader = HeliosDataLoader(
         dataset=dataset,

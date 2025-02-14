@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from helios.data.constants import BandSet, Modality, ModalitySpec
 from helios.data.dataset import HeliosSample
-from helios.dataset.parse import GridTile, ModalityImage, ModalityTile, TimeSpan
+from helios.dataset.parse import (GridTile, ModalityImage, ModalityTile,
+                                  TimeSpan)
 from helios.dataset.sample import image_tiles_to_samples
 
 CRS = "EPSG:32610"
@@ -120,3 +120,13 @@ def test_image_tiles_to_samples_only_sentinel1(
     )
     assert samples[0].time_span == TimeSpan.YEAR
     assert samples[0].modalities.keys() == {Modality.SENTINEL1}
+
+
+def test_supporting_latlon(tmp_path: Path, create_image_tiles: Callable) -> None:
+    """Test that latlon is supported."""
+    image_tiles = create_image_tiles(tmp_path)
+    supported_modalities = [Modality.LATLON, Modality.SENTINEL2]
+    # Latlon should not change anything
+    samples = image_tiles_to_samples(image_tiles, supported_modalities)
+    assert len(samples) == 1
+    assert samples[0].modalities.keys() == {Modality.SENTINEL2}
