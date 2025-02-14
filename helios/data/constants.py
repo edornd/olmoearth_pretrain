@@ -6,8 +6,6 @@ Warning: this is only developed for raster data currently.
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from helios.data.normalize import Strategy
-
 # The highest resolution that we are working at.
 # Everything else is a factor (which is a power of 2) coarser than this resolution.
 BASE_RESOLUTION = 0.625
@@ -227,13 +225,6 @@ SUPPORTED_MODALITIES = [
     Modality.SENTINEL2,
     Modality.WORLDCOVER,
 ]
-
-# Normalization strategy for each modality
-NORMALIZE_STRATEGY = {
-    Modality.SENTINEL1: Strategy.PREDEFINED,
-    Modality.SENTINEL2: Strategy.PREDEFINED,
-    Modality.WORLDCOVER: Strategy.PREDEFINED,
-}
 
 # Latlon and timestamps
 LATLON = ["lat", "lon"]

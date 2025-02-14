@@ -20,12 +20,11 @@ from upath import UPath
 from helios.data.constants import (
     BASE_RESOLUTION,
     IMAGE_TILE_SIZE,
-    NORMALIZE_STRATEGY,
     SUPPORTED_MODALITIES,
     TIMESTAMPS,
     Modality,
 )
-from helios.data.normalize import Normalizer, Strategy
+from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
 from helios.data.utils import convert_to_db
 from helios.dataset.parse import ModalityTile, TimeSpan
 from helios.dataset.sample import SampleInformation, load_image_for_sample
