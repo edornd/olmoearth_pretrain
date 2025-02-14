@@ -36,7 +36,8 @@ class Normalizer:
 
         Args:
             strategy: The strategy to use for normalization (predefined or computed).
-            std_multiplier: The multiplier for the standard deviation when using computed values.
+            std_multiplier: Optional, only for strategy COMPUTED.
+                            The multiplier for the standard deviation when using computed values.
 
         Returns:
             None
