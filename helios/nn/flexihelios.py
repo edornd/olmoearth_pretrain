@@ -210,7 +210,6 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         embedding_size: int,
         supported_modalities: list[str],
         max_sequence_length: int,
-        base_patch_size: int,
         use_channel_embs: bool = True,
     ):
         """Initialize the composite encodings.
@@ -220,14 +219,12 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             supported_modalities: Which modalities from Modality this model
                 instantiation supports
             max_sequence_length: Maximum sequence length
-            base_patch_size: Base patch size
             use_channel_embs: Whether to use learnable channel embeddings
         """
         super().__init__()
         self.embedding_size = embedding_size
         self.supported_modalities = supported_modalities
         self.embedding_size = embedding_size
-        self.base_patch_size = base_patch_size
         self.max_sequence_length = (
             max_sequence_length  # This max sequence length is a time dim thing
         )
@@ -408,8 +405,8 @@ class FlexiHeliosBase(nn.Module):
     def __init__(
         self,
         embedding_size: int,
+        max_patch_size: int,
         max_sequence_length: int,
-        base_patch_size: int,
         use_channel_embs: bool,
         num_heads: int,
         mlp_ratio: float,
@@ -425,8 +422,8 @@ class FlexiHeliosBase(nn.Module):
         logger.info(f"modalities being used by model: {supported_modalities}")
 
         self.max_sequence_length = max_sequence_length
-        self.base_patch_size = base_patch_size
         self.use_channel_embs = use_channel_embs
+        self.max_patch_size = max_patch_size
 
         self.blocks = nn.ModuleList(
             [
@@ -447,7 +444,6 @@ class FlexiHeliosBase(nn.Module):
             embedding_size,
             supported_modalities,
             max_sequence_length,
-            base_patch_size,
             use_channel_embs,
         )
         self.apply(self._init_weights)
@@ -558,7 +554,6 @@ class Encoder(FlexiHeliosBase):
         drop_path: float,
         supported_modalities: list[str],
         max_sequence_length: int,
-        base_patch_size: int,
         use_channel_embs: bool = True,
     ):
         """Initialize the encoder.
@@ -572,16 +567,15 @@ class Encoder(FlexiHeliosBase):
             drop_path: Drop path rate
             supported_modalities: list documenting supported models of this model instantiation
             max_sequence_length: Maximum sequence length
-            base_patch_size: Base patch size
             use_channel_embs: Whether to use learnable channel embeddings
         """
         super().__init__(
             embedding_size=embedding_size,
+            max_patch_size=max_patch_size,
             depth=depth,
             mlp_ratio=mlp_ratio,
             num_heads=num_heads,
             max_sequence_length=max_sequence_length,
-            base_patch_size=base_patch_size,
             use_channel_embs=use_channel_embs,
             drop_path=drop_path,
             supported_modalities=supported_modalities,
@@ -894,7 +888,7 @@ class Predictor(FlexiHeliosBase):
             mlp_ratio=mlp_ratio,
             num_heads=num_heads,
             max_sequence_length=max_sequence_length,
-            base_patch_size=max_patch_size,
+            max_patch_size=max_patch_size,
             use_channel_embs=learnable_channel_embeddings,
             drop_path=drop_path,
             supported_modalities=supported_modalities,

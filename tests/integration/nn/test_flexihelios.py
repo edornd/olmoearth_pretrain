@@ -125,7 +125,6 @@ class TestEncoder:
             drop_path=0.1,
             supported_modalities=supported_modalities,
             max_sequence_length=12,
-            base_patch_size=4,
             use_channel_embs=True,
         )
 
@@ -622,7 +621,6 @@ def test_end_to_end_with_exit_config(
         num_heads=NUM_HEADS,
         mlp_ratio=MLP_RATIO,
         max_sequence_length=MAX_SEQ_LENGTH,
-        base_patch_size=4,
         use_channel_embs=True,
         depth=DEPTH,
         drop_path=DROP_PATH,

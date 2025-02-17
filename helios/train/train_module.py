@@ -369,11 +369,10 @@ class HeliosTrainModule(TrainModule):
 
         # Move tensors to the right device.
         # we may want to modify this
-        max_patch_size = 8
         token_budget = 1500
         h_w_to_sample = list(range(1, 13))
 
-        patch_size = np.random.choice(max_patch_size)
+        patch_size = np.random.choice(self.model.encoder.max_patch_size)
         subsampled_batch = batch.subset(patch_size, token_budget, h_w_to_sample)
 
         subsampled_batch = subsampled_batch.to_device(self.device)

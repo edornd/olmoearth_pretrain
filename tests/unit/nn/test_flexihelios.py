@@ -18,6 +18,7 @@ class TestFlexiHeliosBase:
     def flexi_helios_base(self, supported_modalities: list[str]) -> FlexiHeliosBase:
         """Create encoder fixture for testing."""
         flexi_helios_base = FlexiHeliosBase(
+            max_patch_size=8,
             embedding_size=8,
             num_heads=2,
             mlp_ratio=4.0,
@@ -25,7 +26,6 @@ class TestFlexiHeliosBase:
             drop_path=0.1,
             supported_modalities=supported_modalities,
             max_sequence_length=12,
-            base_patch_size=4,
             use_channel_embs=True,
         )
         return flexi_helios_base
@@ -108,7 +108,6 @@ class TestEncoder:
             drop_path=0.1,
             supported_modalities=supported_modalities,
             max_sequence_length=12,
-            base_patch_size=4,
             use_channel_embs=True,
         )
 
