@@ -21,8 +21,8 @@ from upath import UPath
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
-from helios.latent_predictor import LatentMIMStyle
-from helios.nn.flexihelios import Encoder, Predictor
+from helios.nn.flexihelios import EncoderConfig, PredictorConfig
+from helios.nn.latent_predictor import LatentPredictorConfig
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -51,6 +51,12 @@ if __name__ == "__main__":
     CANCEL_CHECK_INTERVAL = 1
     SAVE_FOLDER = workdir / "save_folder"
     LOAD_STRATEGY = LoadStrategy.if_available
+    SUPPORTED_MODALITIES = [
+        Modality.SENTINEL2,
+        Modality.LATLON,
+        Modality.SENTINEL1,
+        # Modality.WORLDCOVER,
+    ]
 
     dp_config = None
     # for distributed training use torchrun
@@ -65,13 +71,8 @@ if __name__ == "__main__":
     logger.info("Starting Helios training")
 
     #################### Configs for model ####################
-    supported_modalities = [
-        Modality.SENTINEL2,
-        Modality.LATLON,
-        Modality.SENTINEL1,
-        # Modality.WORLDCOVER,
-    ]
-    encoder = Encoder(
+    encoder_config = EncoderConfig(
+        supported_modalities=SUPPORTED_MODALITIES,
         embedding_size=16,
         max_patch_size=8,
         num_heads=2,
@@ -80,9 +81,10 @@ if __name__ == "__main__":
         drop_path=0.1,
         max_sequence_length=12,
         use_channel_embs=True,
-        supported_modalities=supported_modalities,
     )
-    decoder = Predictor(
+    # Build the encoder for later evaluation
+    encoder = encoder_config.build()
+    decoder_config = PredictorConfig(
         encoder_embedding_size=16,
         decoder_embedding_size=16,
         depth=2,
@@ -90,9 +92,14 @@ if __name__ == "__main__":
         num_heads=2,
         max_sequence_length=12,
         max_patch_size=8,
-        supported_modalities=supported_modalities,
+        supported_modalities=SUPPORTED_MODALITIES,
     )
-    model = LatentMIMStyle(encoder, decoder)
+    model_config = LatentPredictorConfig(
+        encoder_config=encoder_config,
+        decoder_config=decoder_config,
+    )
+    model_config.validate()
+    model = model_config.build()
 
     device = get_default_device()
     logger.info(f"Using device: {device}")
