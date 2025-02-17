@@ -199,7 +199,7 @@ class HeliosSample(NamedTuple):
         max_t_within_budget = remaining_tokens / time_multiply_tokens
         if max_t_within_budget < 1:
             raise ValueError("patch_size too small for this sample and budget")
-        return max(floor(max_t_within_budget), self.time)
+        return min(floor(max_t_within_budget), self.time)
 
     def subset(
         self, patch_size: int, max_tokens_per_instance: int, hw_to_sample: list[int]
@@ -233,11 +233,9 @@ class HeliosSample(NamedTuple):
         max_t = self._t_from_hw(sampled_hw_p, max_tokens_per_instance)
         sampled_hw = sampled_hw_p * patch_size
 
-        start_h = np.random.choice(
-            (self.height - min(sampled_hw, max_height_width)) + 1
-        )
-        start_w = np.random.choice((self.width - min(sampled_hw, max_height_width)) + 1)
-        start_t = np.random.choice((self.time - min(self.time, max_t)) + 1)
+        start_h = np.random.choice(self.height - sampled_hw_p + 1)
+        start_w = np.random.choice(self.width - sampled_hw_p + 1)
+        start_t = np.random.choice(self.time - max_t + 1)
 
         new_data_dict: dict[str, ArrayTensor] = {}
         for attribute, modality in self.as_dict(ignore_nones=True).items():
