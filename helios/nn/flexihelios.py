@@ -150,6 +150,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         modality_tokens, modality_masks = [], []
         for idx, channel_set_indices in enumerate(modality_spec.bandsets_as_indices()):
             modality_specific_kwargs = {}
+            # TODO: update to use the modlaity spec property here
             if modality_spec.get_tile_resolution() == 0:
                 # static in time
                 token_mask = modality_mask[..., idx]
@@ -209,7 +210,6 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         output_dict = {}
         modalities_to_process = self._get_modalities_to_process(input_data)
         for modality in modalities_to_process:
-            logger.debug(f"Processing modality {modality}")
             modality_tokens, modality_masks = self.apply_embedding_to_modality(
                 modality, input_data, patch_size
             )
@@ -369,7 +369,6 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             # )
         elif modality_tokens.ndim == 6:
             b, h, w, t, b_s, _ = modality_tokens.shape
-            logger.info(f"Modality {modality} has 6 dimensions: {modality_tokens.shape}")
 
             # Channel embeddings
             modality_channel_embed = self.per_modality_channel_embeddings[modality]
@@ -400,7 +399,12 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             )
             spatial_embed = rearrange(spatial_embed, "b (h w) d -> b h w d", h=h, w=w)
             spatial_embed = repeat(
-                spatial_embed, "b h w d -> b h w t b_s d", b_s=b_s, t=t, h=h, w=w # Adding to handle uneven dims
+                spatial_embed,
+                "b h w d -> b h w t b_s d",
+                b_s=b_s,
+                t=t,
+                h=h,
+                w=w,  # Adding to handle uneven dims
             )
 
             # Combine all encodings
@@ -691,7 +695,6 @@ class Encoder(FlexiHeliosBase):
             updated_mask: [B, T]
             where T is the max number of unmasked tokens for an instance
         """
-        logger.info(f"Removing masked tokens from {x.shape} and {mask.shape}")
         org_mask_dtype = mask.dtype
         mask = mask.bool()
         # At this point when we flip the mask 1 means keep 0 means remove
@@ -777,8 +780,6 @@ class Encoder(FlexiHeliosBase):
             exit_ids_per_modality = self.create_token_exit_ids(
                 tokens_only_dict, token_exit_cfg
             )
-            logger.info(f"exit_ids_per_modality: {exit_ids_per_modality}")
-            logger.info(f"mask_only_dict: {mask_only_dict}")
             mask_only_dict.update(exit_ids_per_modality)
             exit_ids_per_modality = mask_only_dict
             # Exit ids seqs tells us which layer to exit each token
@@ -815,6 +816,7 @@ class Encoder(FlexiHeliosBase):
             input_res,
         )
         x.update(tokens_dict)
+
         x, mask = self.collapse_and_combine_hwtc(x)
 
         new_mask = mask >= MaskValue.TARGET_ENCODER_ONLY.value
