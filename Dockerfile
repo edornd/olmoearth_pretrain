@@ -19,3 +19,4 @@ RUN pip install --no-cache-dir git+https://github.com/allenai/rslearn.git@master
 # Copy the folder `scripts` to `scripts/`
 # You might need multiple of these statements to copy all the folders you need for your experiment.
 COPY helios/ /stage/helios/
+ENV PYTHONPATH="${PYTHONPATH}:/stage/"
