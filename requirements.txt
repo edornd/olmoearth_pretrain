@@ -11,8 +11,5 @@ pytest
 rasterio
 rioxarray
 torch>=2.5
-# rslearn needs to be installed before running pip install -r requirements.txt
-# since there are conflicts with the torch version.
-# rslearn @ git+https://github.com/allenai/rslearn.git@master
 universal_pathlib>=0.2.5
 wandb>=0.19.0
