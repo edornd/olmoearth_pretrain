@@ -103,8 +103,8 @@ class PatchDiscriminationLoss(Loss):
         all_masks = self._flatten_tokens_or_masks(predictions, is_masks=True)
         all_targets = self._flatten_tokens_or_masks(targets)
 
-        pred = all_preds[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
-        target = all_targets[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
+        pred = all_preds[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
+        target = all_targets[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
         bs, nt, _ = pred.shape
 
         if self.pred2unit:
@@ -162,8 +162,8 @@ class L1Loss(Loss):
         all_preds = self._flatten_tokens_or_masks(predictions)
         all_masks = self._flatten_tokens_or_masks(predictions, is_masks=True)
         all_targets = self._flatten_tokens_or_masks(targets)
-        pred = all_preds[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
-        target = all_targets[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
+        pred = all_preds[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
+        target = all_targets[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
 
         return F.l1_loss(pred, target)
 
@@ -188,8 +188,8 @@ class L2Loss(Loss):
         all_preds = self._flatten_tokens_or_masks(predictions)
         all_masks = self._flatten_tokens_or_masks(predictions, is_masks=True)
         all_targets = self._flatten_tokens_or_masks(targets)
-        pred = all_preds[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
-        target = all_targets[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
+        pred = all_preds[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
+        target = all_targets[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
 
         return F.mse_loss(pred, target)
 

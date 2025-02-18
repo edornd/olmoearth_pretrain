@@ -1,7 +1,6 @@
 """Masking module."""
 
 import logging
-import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -25,13 +24,13 @@ class MaskValue(Enum):
 
     ONLINE_ENCODER: The token is seen by the online encoder
     TARGET_ENCODER_ONLY: The token is seen by the target encoder only
-    DECODER_ONLY: The token is seen by the decoder only
+    DECODER: The token is seen by the decoder only
     MISSING: The token is missing
     """
 
     ONLINE_ENCODER = 0
     TARGET_ENCODER_ONLY = 1
-    DECODER_ONLY = 2
+    DECODER = 2
     MISSING = 3
 
 
@@ -73,6 +72,24 @@ class MaskedHeliosSample(NamedTuple):
                 if val is not None:
                     return_dict[field] = val
         return return_dict
+
+    def unmask(self) -> "MaskedHeliosSample":
+        """Return an unmasked MaskedHelioSample.
+
+        All mask values are MaskValue.ONLINE_ENCODER except for MaskValue.MISSING,
+        which remain MISSING.
+        """
+        return_dict: dict[str, ArrayTensor] = {}
+        for key, val in self.as_dict().items():
+            if val is None:
+                continue
+            if key.endswith("mask"):
+                # 1s where it is missing, 0 elsewhere
+                all_but_missing = val == MaskValue.MISSING
+                return_dict[key] = val * all_but_missing
+            else:
+                return_dict[key] = val
+        return MaskedHeliosSample(**return_dict)
 
     @property
     def modalities(self) -> list[str]:
@@ -181,8 +198,13 @@ MASKING_STRATEGY_REGISTRY = ClassRegistry[MaskingStrategy]()
 class RandomMaskingStrategy(MaskingStrategy):
     """Randomly masks the input data."""
 
-    @staticmethod
+    def __init__(self) -> None:
+        """Create a new RandomMaskingStrategy."""
+        # Use fixed seed for reproducibility.
+        self.generator = np.random.default_rng(0)
+
     def _create_mask_per_static_modality(
+        self,
         b: int,
         encode_ratio: float,
         decode_ratio: float,
@@ -205,17 +227,15 @@ class RandomMaskingStrategy(MaskingStrategy):
                 np.zeros(num_encode_tokens, dtype=np.int_),
             )
         )
-        # hopefully this will allow for reproducibility, since random is seeded
-        rng = np.random.default_rng(random.randint(0, 100))
-        flat_mask_tokens = rng.permuted(flat_mask_tokens, axis=0)
+        flat_mask_tokens = self.generator.permuted(flat_mask_tokens, axis=0)
         static_mask = rearrange(flat_mask_tokens, "(b t) -> b t", b=b, t=num_band_sets)
         if return_tensor_device:
             return torch.as_tensor(static_mask, device=return_tensor_device)
         else:
             return static_mask
 
-    @staticmethod
     def _create_mask_per_space_time_modality(
+        self,
         b: int,
         h: int,
         w: int,
@@ -242,9 +262,7 @@ class RandomMaskingStrategy(MaskingStrategy):
             )
         )
         b_flat_tokens = repeat(flat_mask_tokens, "t -> b t", b=b)
-        # hopefully this will allow for reproducibility, since random is seeded
-        rng = np.random.default_rng(random.randint(0, 100))
-        b_flat_tokens = rng.permuted(b_flat_tokens, axis=1)
+        b_flat_tokens = self.generator.permuted(b_flat_tokens, axis=1)
         space_time_mask = rearrange(
             b_flat_tokens,
             "b (h w t c) -> b h w t c",
@@ -260,8 +278,8 @@ class RandomMaskingStrategy(MaskingStrategy):
             return space_time_mask
 
     # TODO: We should be able to do this agnostic of dimensionality
-    @staticmethod
     def _create_mask_per_space_modality(
+        self,
         b: int,
         h: int,
         w: int,
@@ -288,9 +306,7 @@ class RandomMaskingStrategy(MaskingStrategy):
             )
         )
         b_flat_tokens = repeat(flat_mask_tokens, "t -> b t", b=b)
-        # hopefully this will allow for reproducibility, since random is seeded
-        rng = np.random.default_rng(random.randint(0, 100))
-        b_flat_tokens = rng.permuted(b_flat_tokens, axis=1)
+        b_flat_tokens = self.generator.permuted(b_flat_tokens, axis=1)
         space_time_mask = rearrange(
             b_flat_tokens,
             "b (h w c) -> b h w c",
