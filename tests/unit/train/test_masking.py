@@ -60,4 +60,5 @@ def test_random_masking_and_unmask() -> None:
     for modality_name in unmasked_sample._fields:
         if modality_name.endswith("mask"):
             mask = getattr(unmasked_sample, modality_name)
-            assert (mask == 0).all()
+            if mask is not None:
+                assert (mask == 0).all()

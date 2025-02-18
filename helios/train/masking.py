@@ -82,6 +82,8 @@ class MaskedHeliosSample(NamedTuple):
         """
         return_dict: dict[str, ArrayTensor] = {}
         for key, val in self.as_dict().items():
+            if val is None:
+                continue
             if key.endswith("mask"):
                 # 1s where it is missing, 0 elsewhere
                 all_but_missing = val == MaskValue.MISSING
