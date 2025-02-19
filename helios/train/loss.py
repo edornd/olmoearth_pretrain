@@ -43,7 +43,6 @@ class Loss(ABC):
                 if is_masks:
                     attr = attr.unsqueeze(dim=-1)
                 flattened_attr = cls._flatten(attr)
-                logger.info(f"flattened_attr: {flattened_attr.shape} for {attr_name}")
                 flattened_attrs.append(flattened_attr)
 
         flattened_x = torch.cat(flattened_attrs, dim=1)

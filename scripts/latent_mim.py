@@ -52,8 +52,8 @@ if __name__ == "__main__":
     SUPPORTED_MODALITIES = [
         Modality.SENTINEL2,
         Modality.LATLON,
-        Modality.SENTINEL1,
-        # Modality.WORLDCOVER,
+        # Modality.SENTINEL1,
+        Modality.WORLDCOVER,
     ]
     MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
     ENCODE_RATIO = 0.5
