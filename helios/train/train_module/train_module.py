@@ -124,7 +124,6 @@ class HeliosTrainModule(TrainModule):
         float8_config: Float8 configuration for the model.
         dp_config: Data parallel configuration for the model.
         ac_config: Activation checkpointing configuration for the model.
-        loss_fn: Loss function to use.
         compile_loss: Whether to compile the loss function.
         autocast_precision: Enable AMP with this data type.
         max_grad_norm: Clip gradient norms to this value.

@@ -9,7 +9,11 @@ from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_s
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import ConstantWithWarmup
 from olmo_core.train import prepare_training_environment, teardown_training_environment
-from olmo_core.train.callbacks import GPUMemoryMonitorCallback, WandBCallback
+from olmo_core.train.callbacks import (
+    CheckpointerCallback,
+    GPUMemoryMonitorCallback,
+    WandBCallback,
+)
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
@@ -188,11 +192,18 @@ if __name__ == "__main__":
             cancel_check_interval=CANCEL_CHECK_INTERVAL,
             metrics_collect_interval=METRICS_COLLECT_INTERVAL,
             max_duration=MAX_DURATION,
-            checkpointer=checkpointer_config,
+            # checkpointer=checkpointer_config,
         )
         .with_callback("wandb", wandb_callback)
         .with_callback("speed_monitor", HeliosSpeedMonitorCallback())
         .with_callback("gpu_memory_monitor", GPUMemoryMonitorCallback())
+        .with_callback(
+            "checkpoint",
+            CheckpointerCallback(
+                save_interval=10,
+                ephemeral_save_interval=5,
+            ),
+        )
         # .with_callback("profiler", ProfilerCallback())
     )
     trainer = trainer_config.build(
