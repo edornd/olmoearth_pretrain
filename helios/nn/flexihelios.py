@@ -2,14 +2,15 @@
 
 import logging
 import math
+from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
+from olmo_core.config import Config
 from torch import Tensor, nn
 
-from helios.constants import BASE_GSD
 from helios.data.constants import Modality, ModalitySpec
 from helios.nn.attention import Block
 from helios.nn.encodings import (
@@ -40,6 +41,10 @@ def return_modalities_from_dict(
     return [
         key for key in per_modality_input_tokens.keys() if not key.endswith("_mask")
     ]
+
+
+# Resolution of the input data in meters
+BASE_GSD = 10
 
 
 class TokensAndMasks(NamedTuple):
@@ -498,7 +503,6 @@ class FlexiHeliosBase(nn.Module):
     def __init__(
         self,
         embedding_size: int,
-        max_patch_size: int,
         max_sequence_length: int,
         use_channel_embs: bool,
         num_heads: int,
@@ -506,7 +510,7 @@ class FlexiHeliosBase(nn.Module):
         depth: int,
         drop_path: float,
         supported_modalities: list[ModalitySpec],
-    ):
+    ) -> None:
         """Initialize the FlexiHeliosBase class."""
         super().__init__()
 
@@ -516,7 +520,6 @@ class FlexiHeliosBase(nn.Module):
 
         self.max_sequence_length = max_sequence_length
         self.use_channel_embs = use_channel_embs
-        self.max_patch_size = max_patch_size
 
         self.blocks = nn.ModuleList(
             [
@@ -688,7 +691,6 @@ class Encoder(FlexiHeliosBase):
         """
         super().__init__(
             embedding_size=embedding_size,
-            max_patch_size=max_patch_size,
             depth=depth,
             mlp_ratio=mlp_ratio,
             num_heads=num_heads,
@@ -697,12 +699,14 @@ class Encoder(FlexiHeliosBase):
             drop_path=drop_path,
             supported_modalities=supported_modalities,
         )
+        self.max_patch_size = max_patch_size
+        self.embedding_size = embedding_size
         self.patch_embeddings = FlexiHeliosPatchEmbeddings(
             self.supported_modality_names,
-            max_patch_size,
-            embedding_size,
+            self.max_patch_size,
+            self.embedding_size,
         )
-        self.norm = nn.LayerNorm(embedding_size)
+        self.norm = nn.LayerNorm(self.embedding_size)
         self.apply(self._init_weights)
 
     def create_token_exit_ids(
@@ -970,7 +974,6 @@ class Predictor(FlexiHeliosBase):
         mlp_ratio: float = 2.0,
         num_heads: int = 8,
         max_sequence_length: int = 24,
-        max_patch_size: int = 8,
         drop_path: float = 0.0,
         learnable_channel_embeddings: bool = False,
         output_embedding_size: int | None = None,
@@ -985,7 +988,6 @@ class Predictor(FlexiHeliosBase):
             mlp_ratio: Ratio for MLP hidden dimension
             num_heads: Number of attention heads
             max_sequence_length: Maximum sequence length
-            max_patch_size: Maximum patch size
             drop_path: Drop path rate
             learnable_channel_embeddings: Whether to use learnable channel embeddings
             output_embedding_size: Size of output embeddings
@@ -996,9 +998,8 @@ class Predictor(FlexiHeliosBase):
             mlp_ratio=mlp_ratio,
             num_heads=num_heads,
             max_sequence_length=max_sequence_length,
-            max_patch_size=max_patch_size,
-            use_channel_embs=learnable_channel_embeddings,
             drop_path=drop_path,
+            use_channel_embs=learnable_channel_embeddings,
             supported_modalities=supported_modalities,
         )
         self.learnable_channel_embeddings = learnable_channel_embeddings
@@ -1015,7 +1016,6 @@ class Predictor(FlexiHeliosBase):
         # THIS is the learnable mask token
         self.mask_token = nn.Parameter(torch.zeros(decoder_embedding_size))
 
-        self.max_patch_size = max_patch_size
         self.input_norm = nn.LayerNorm(encoder_embedding_size)
         self.norm = nn.LayerNorm(decoder_embedding_size)
         self.apply(self._init_weights)
@@ -1245,3 +1245,87 @@ class Predictor(FlexiHeliosBase):
             output_dict[modality] = torch.stack(per_modality_output_tokens, dim=-2)
             output_dict[masked_modality_name] = modality_mask
         return TokensAndMasks(**output_dict)
+
+
+@dataclass
+class EncoderConfig(Config):
+    """Configuration for the Encoder."""
+
+    supported_modalities: list[ModalitySpec]
+    embedding_size: int = 16
+    # This is the base patch size for the patch embedder
+    max_patch_size: int = 8
+    num_heads: int = 2
+    mlp_ratio: float = 1.0
+    depth: int = 2
+    drop_path: float = 0.1
+    max_sequence_length: int = 12
+    use_channel_embs: bool = True
+
+    def validate(self) -> None:
+        """Validate the configuration."""
+        if len(self.supported_modalities) == 0:
+            raise ValueError("At least one modality must be added!")
+        else:
+            for modality in self.supported_modalities:
+                if modality not in Modality.values():
+                    raise ValueError(f"Modality {modality} is not supported")
+
+    def build(self) -> "Encoder":
+        """Build the encoder."""
+        self.validate()
+        return Encoder(
+            embedding_size=self.embedding_size,
+            max_patch_size=self.max_patch_size,
+            num_heads=self.num_heads,
+            depth=self.depth,
+            mlp_ratio=self.mlp_ratio,
+            drop_path=self.drop_path,
+            supported_modalities=self.supported_modalities,
+            max_sequence_length=self.max_sequence_length,
+            use_channel_embs=self.use_channel_embs,
+        )
+
+
+@dataclass
+class PredictorConfig(Config):
+    """Configuration for the Predictor."""
+
+    supported_modalities: list[ModalitySpec]
+    encoder_embedding_size: int = 16
+    decoder_embedding_size: int = 16
+    depth: int = 2
+    mlp_ratio: float = 1.0
+    num_heads: int = 2
+    max_sequence_length: int = 12
+    drop_path: float = 0.0
+    learnable_channel_embeddings: bool = False
+    output_embedding_size: int | None = None
+
+    def validate(self) -> None:
+        """Validate the configuration."""
+        if len(self.supported_modalities) == 0:
+            raise ValueError("At least one modality must be added!")
+        else:
+            for modality in self.supported_modalities:
+                if modality not in Modality.values():
+                    raise ValueError(f"Modality {modality} is not supported")
+
+    def build(self) -> "Predictor":
+        """Build the predictor."""
+        self.validate()
+        return Predictor(
+            encoder_embedding_size=self.encoder_embedding_size,
+            decoder_embedding_size=self.decoder_embedding_size,
+            depth=self.depth,
+            mlp_ratio=self.mlp_ratio,
+            num_heads=self.num_heads,
+            max_sequence_length=self.max_sequence_length,
+            drop_path=self.drop_path,
+            learnable_channel_embeddings=self.learnable_channel_embeddings,
+            output_embedding_size=self.output_embedding_size,
+            supported_modalities=self.supported_modalities,
+        )
+
+
+# TODO: add multiple combo of variables for encoder and predictor, and being able to build them directly, no need to specify each parameter, e.g., encoder_tiny, encoder_small, encoder_base, encoder_large, etc.
