@@ -27,7 +27,7 @@ from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
-from helios.train.train_module import HeliosTrainModuleConfig
+from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ if __name__ == "__main__":
             "type": "patch_discrimination",
         }
     )
-    train_module_config = HeliosTrainModuleConfig(
+    train_module_config = LatentMIMTrainModuleConfig(
         optim=optim_config,
         masking_config=masking_config,
         loss_config=loss_config,
