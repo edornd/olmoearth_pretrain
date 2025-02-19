@@ -4,9 +4,10 @@ import logging
 
 import torch
 from einops import rearrange
-from helios.nn.flexihelios import Encoder, TokensAndMasks
-from helios.train.masking import MaskedHeliosSample
 from torch.utils.data import DataLoader
+
+from helios.nn.flexihelios import Encoder
+from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
 
