@@ -8,10 +8,7 @@ import numpy as np
 from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_size
 from olmo_core.optim import AdamWConfig
 from olmo_core.train import prepare_training_environment, teardown_training_environment
-from olmo_core.train.callbacks import (
-    GPUMemoryMonitorCallback,
-    WandBCallback,
-)
+from olmo_core.train.callbacks import GPUMemoryMonitorCallback, WandBCallback
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
@@ -39,12 +36,11 @@ if __name__ == "__main__":
 
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios-debug"
-
-    # Experiment Variables
-    GLOBAL_BATCH_SIZE = 1
-    RANK_BATCH_SIZE = 1
+    # PER EXPERIMENT Variables
+    GLOBAL_BATCH_SIZE = 32
+    RANK_BATCH_SIZE = 32
     MAX_DURATION = Duration.epochs(10)
-    NUM_WORKERS = 0
+    NUM_WORKERS = 8
     NUM_THREADS = 0
     METRICS_COLLECT_INTERVAL = 1
     CANCEL_CHECK_INTERVAL = 1
@@ -166,7 +162,7 @@ if __name__ == "__main__":
         name=run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
-        enabled=False,  # set to False to avoid wandb errors
+        enabled=True,  # set to False to avoid wandb errors
     )
     # Let us not use garbage collector fallback
     trainer_config = (
@@ -210,10 +206,10 @@ if __name__ == "__main__":
         collate_fn=GeobenchDataset.collate_fn,
     )
     train_embeddings, train_labels = get_embeddings(
-        data_loader=train_loader, model=model.target_encoder
+        data_loader=train_loader, model=model.target_encoder, patch_size=MAX_PATCH_SIZE
     )
     val_embeddings, test_labels = get_embeddings(
-        data_loader=val_loader, model=model.target_encoder
+        data_loader=val_loader, model=model.target_encoder, patch_size=MAX_PATCH_SIZE
     )
     val_result = run_knn(
         eval_type="KNN-20",

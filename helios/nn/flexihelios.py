@@ -3,7 +3,7 @@
 import logging
 import math
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import torch
 import torch.nn.functional as F
@@ -22,6 +22,25 @@ from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)
+
+
+def get_modalities_to_process(
+    available_modalities: list[str], supported_modality_names: list[str]
+) -> list[str]:
+    """Get the modalities to process."""
+    modalities_to_process = set(supported_modality_names).intersection(
+        set(available_modalities)
+    )
+    return list(modalities_to_process)
+
+
+def return_modalities_from_dict(
+    per_modality_input_tokens: dict[str, Tensor],
+) -> list[str]:
+    """Return the modalities from a dictionary of per modality input tokens."""
+    return [
+        key for key in per_modality_input_tokens.keys() if not key.endswith("_mask")
+    ]
 
 
 # Resolution of the input data in meters
@@ -64,6 +83,22 @@ class TokensAndMasks(NamedTuple):
     def get_masked_modality_name(cls, modality: str) -> str:
         """Get the masked modality name."""
         return f"{modality}_mask"
+
+    def as_dict(self, return_none: bool = True) -> dict[str, Any]:
+        """Convert the namedtuple to a dictionary.
+
+        Returns:
+            Dictionary representation of the namedtuple.
+        """
+        return_dict = {}
+        for field in self._fields:
+            val = getattr(self, field)
+            if return_none:
+                return_dict[field] = val
+            else:
+                if val is not None:
+                    return_dict[field] = val
+        return return_dict
 
     @property
     def modalities(self) -> list[str]:
@@ -190,14 +225,6 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         """Check if any data is seen by the encoder."""
         return modality_mask.min() == MaskValue.ONLINE_ENCODER.value
 
-    def _get_modalities_to_process(self, input_data: MaskedHeliosSample) -> list[str]:
-        """Get the modalities to process."""
-        available_modalities = input_data.modalities
-        modalities_to_process = set(self.supported_modality_names).intersection(
-            set(available_modalities)
-        )
-        return list(modalities_to_process)
-
     def forward(
         self,
         input_data: MaskedHeliosSample,
@@ -216,7 +243,9 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         for the H, W dimensions
         """
         output_dict = {}
-        modalities_to_process = self._get_modalities_to_process(input_data)
+        modalities_to_process = get_modalities_to_process(
+            input_data.modalities, self.supported_modality_names
+        )
         for modality in modalities_to_process:
             modality_tokens, modality_masks = self.apply_embedding_to_modality(
                 modality, input_data, patch_size
@@ -451,7 +480,11 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             Tokens only for each modality
         """
         output_dict = {}
-        for modality in self.supported_modality_names:
+        available_modalities = return_modalities_from_dict(per_modality_input_tokens)
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        for modality in modalities_to_process:
             output_dict[modality] = self._apply_encodings_per_modality(
                 modality,
                 per_modality_input_tokens[modality],
@@ -538,7 +571,11 @@ class FlexiHeliosBase(nn.Module):
     def collapse_and_combine_hwtc(self, x: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         """Collapse the tokens and masks, respectively, into two tensors."""
         tokens, masks = [], []
-        for modality in self.supported_modality_names:
+        available_modalities = return_modalities_from_dict(x)
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        for modality in modalities_to_process:
             masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
             x_modality = x[modality]
             x_modality_mask = x[masked_modality_name]
@@ -576,7 +613,11 @@ class FlexiHeliosBase(nn.Module):
         original_masks_dict = {}
         modalities_to_dims_dict = {}
         # TODO: Should I have a dict like object that has methods that can return a mask or atoken here?
-        for modality in self.supported_modality_names:
+        available_modalities = return_modalities_from_dict(x)
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        for modality in modalities_to_process:
             x_modality = x[modality]
             tokens_only_dict[modality] = x_modality
             modalities_to_dims_dict[modality] = x_modality.shape
@@ -676,7 +717,11 @@ class Encoder(FlexiHeliosBase):
         Assumes modality channel groups are in the second to last dimension of the tokens.
         """
         exit_ids_per_modality_dict = {}
-        for modality in self.supported_modality_names:
+        available_modalities = return_modalities_from_dict(x)
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        for modality in modalities_to_process:
             num_exit_layers = token_exit_cfg[modality]
             exit_seq_modality = torch.full_like(x[modality], fill_value=num_exit_layers)
             exit_ids_per_modality_dict[modality] = exit_seq_modality
@@ -912,13 +957,6 @@ class Encoder(FlexiHeliosBase):
                 exit_after_n_layers=exit_after_n_layers,
                 token_exit_cfg=token_exit_cfg,
             )
-        if any(
-            patchified_tokens_and_masks[modality] is None
-            for modality in self.supported_modality_names
-        ):
-            raise ValueError(
-                f"Some supported modalities are None {patchified_tokens_and_masks}"
-            )
         return TokensAndMasks(**patchified_tokens_and_masks)
 
 
@@ -989,7 +1027,11 @@ class Predictor(FlexiHeliosBase):
         is the embedding dimension matching self.mask_token's size.
         """
         output_dict = {}
-        for modality in self.supported_modality_names:
+        available_modalities = return_modalities_from_dict(x)
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        for modality in modalities_to_process:
             x_modality = x[modality]
             mask_modality = x[MaskedHeliosSample.get_masked_modality_name(modality)]
 
@@ -1149,7 +1191,11 @@ class Predictor(FlexiHeliosBase):
         """
         decoder_emedded_dict = x._asdict()
         # Apply Input Norms and encoder to decoder embeds to each modality
-        for modality in self.supported_modality_names:
+        available_modalities = x.modalities
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        for modality in modalities_to_process:
             x_modality = getattr(x, modality)
             x_modality = self.input_norm(x_modality)
             x_modality = self.encoder_to_decoder_embed(x_modality)
@@ -1167,7 +1213,11 @@ class Predictor(FlexiHeliosBase):
 
         # TODO: Factor this out into a more readable function
         output_dict = {}
-        for modality in self.supported_modality_names:
+        available_modalities = return_modalities_from_dict(tokens_and_masks)
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        for modality in modalities_to_process:
             masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
             modality_mask = tokens_and_masks[masked_modality_name]
             # patchify masked data

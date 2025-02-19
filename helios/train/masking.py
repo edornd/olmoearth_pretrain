@@ -34,7 +34,6 @@ class MaskValue(Enum):
     MISSING = 3
 
 
-# SHould be return type of masking strategy
 class MaskedHeliosSample(NamedTuple):
     """A masked sample of the data from the Helios dataset.
 
