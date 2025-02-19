@@ -14,21 +14,30 @@ import numpy as np
 import pandas as pd
 import torch
 from einops import rearrange
-from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
-                                   TIMESTAMPS, Modality, ModalitySpec,
-                                   TimeSpan)
-from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
-from helios.data.utils import convert_to_db
-from helios.dataset.parse import ModalityTile, parse_helios_dataset
-from helios.dataset.sample import (SampleInformation, image_tiles_to_samples,
-                                   load_image_for_sample)
-from helios.types import ArrayTensor
 from olmo_core.aliases import PathOrStr
 from olmo_core.config import Config
 from olmo_core.distributed.utils import get_fs_local_rank
 from pyproj import Transformer
 from torch.utils.data import Dataset
 from upath import UPath
+
+from helios.data.constants import (
+    BASE_RESOLUTION,
+    IMAGE_TILE_SIZE,
+    TIMESTAMPS,
+    Modality,
+    ModalitySpec,
+    TimeSpan,
+)
+from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
+from helios.data.utils import convert_to_db
+from helios.dataset.parse import ModalityTile, parse_helios_dataset
+from helios.dataset.sample import (
+    SampleInformation,
+    image_tiles_to_samples,
+    load_image_for_sample,
+)
+from helios.types import ArrayTensor
 
 logger = logging.getLogger(__name__)
 
@@ -370,8 +379,8 @@ class HeliosDataset(Dataset):
     def _log_modality_distribution(self, samples: list[SampleInformation]) -> None:
         """Log the modality distribution."""
         # Log modality distribution
-        modality_counts = {}
-        modality_combinations = {}
+        modality_counts: dict[str, int] = {}
+        modality_combinations: dict[frozenset[str], int] = {}
 
         for sample in samples:
             # Count individual modalities
@@ -387,9 +396,11 @@ class HeliosDataset(Dataset):
             )
 
         # Log individual modality counts
-        for modality, count in modality_counts.items():
+        for modality_name, count in modality_counts.items():
             percentage = (count / len(samples)) * 100
-            logger.info(f"Modality {modality}: {count} samples ({percentage:.1f}%)")
+            logger.info(
+                f"Modality {modality_name}: {count} samples ({percentage:.1f}%)"
+            )
 
         # Log modality combinations
         logger.info("\nModality combinations:")
@@ -405,7 +416,7 @@ class HeliosDataset(Dataset):
         logger.info(f"Total tiles: {len(tiles)}")
         samples = image_tiles_to_samples(tiles)
         logger.info(f"Total samples: {len(samples)}")
-        logger.info(f"Distribution of samples before filtering:\n")
+        logger.info("Distribution of samples before filtering:\n")
         self._log_modality_distribution(samples)
         return samples
 
@@ -457,7 +468,7 @@ class HeliosDataset(Dataset):
                 continue
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
-        logger.info(f"Distribution of samples after filtering:")
+        logger.info("Distribution of samples after filtering:")
         filtered_samples = filtered_samples[:2]
         self._log_modality_distribution(filtered_samples)
         return filtered_samples
