@@ -10,11 +10,9 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from helios.data.constants import Modality, ModalitySpec
 from helios.nn.attention import Block
-from helios.nn.encodings import (
-    get_1d_sincos_pos_encoding,
-    get_2d_sincos_pos_encoding_with_resolution,
-    get_month_encoding_table,
-)
+from helios.nn.encodings import (get_1d_sincos_pos_encoding,
+                                 get_2d_sincos_pos_encoding_with_resolution,
+                                 get_month_encoding_table)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
 from olmo_core.config import Config
@@ -1201,9 +1199,6 @@ class Predictor(FlexiHeliosBase):
         logger.info(f"Modalities to process: {modalities_to_process}")
         for modality in modalities_to_process:
             x_modality = getattr(x, modality)
-            if x_modality is None:
-                logger.warning(f"Modality {modality} is None")
-                raise ValueError(f"Modality {modality} is None")
             x_modality = self.input_norm(x_modality)
             x_modality = self.encoder_to_decoder_embed(x_modality)
             masked_modality_name = x.get_masked_modality_name(modality)

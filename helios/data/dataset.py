@@ -14,22 +14,14 @@ import numpy as np
 import pandas as pd
 import torch
 from einops import rearrange
-from helios.data.constants import (
-    BASE_RESOLUTION,
-    IMAGE_TILE_SIZE,
-    TIMESTAMPS,
-    Modality,
-    ModalitySpec,
-    TimeSpan,
-)
+from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
+                                   TIMESTAMPS, Modality, ModalitySpec,
+                                   TimeSpan)
 from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
 from helios.data.utils import convert_to_db
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
-from helios.dataset.sample import (
-    SampleInformation,
-    image_tiles_to_samples,
-    load_image_for_sample,
-)
+from helios.dataset.sample import (SampleInformation, image_tiles_to_samples,
+                                   load_image_for_sample)
 from helios.types import ArrayTensor
 from olmo_core.aliases import PathOrStr
 from olmo_core.config import Config
@@ -494,8 +486,6 @@ class HeliosDataset(Dataset):
             if modality == Modality.SENTINEL2:
                 sample_dict["latlon"] = self._get_latlon(sample).astype(self.dtype)
                 sample_dict["timestamps"] = self._get_timestamps(sample)
-        if sample_dict["sentinel1"] is None:
-            raise ValueError("Sentinel1 is not supported yet")
         return HeliosSample(**sample_dict)
 
 
