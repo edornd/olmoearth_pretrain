@@ -24,6 +24,7 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
+from helios.train.callbacks.evaluator_callback import DownstreamEvaluatorCallbackConfig
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -53,6 +54,7 @@ if __name__ == "__main__":
     CANCEL_CHECK_INTERVAL = 1
     SAVE_FOLDER = workdir / "save_folder"
     LOAD_STRATEGY = LoadStrategy.if_available
+
 
     TILE_PATH = UPath("/weka/dfive-default/helios/dataset/20250212/")
     DTYPE = np.dtype("float32")
@@ -179,7 +181,7 @@ if __name__ == "__main__":
         name=run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
-        enabled=True,  # set to False to avoid wandb errors
+        enabled=True,
     )
     # Let us not use garbage collector fallback
     trainer_config = (
@@ -196,6 +198,13 @@ if __name__ == "__main__":
         .with_callback("wandb", wandb_callback)
         .with_callback("speed_monitor", HeliosSpeedMonitorCallback())
         .with_callback("gpu_memory_monitor", GPUMemoryMonitorCallback())
+        .with_callback(
+            "downstream_evaluator",
+            DownstreamEvaluatorCallbackConfig(
+                tasks=["m-eurosat"],
+                eval_interval=50,
+            ),
+        )
     )
     trainer = trainer_config.build(
         train_module=train_module,

@@ -18,8 +18,8 @@ class Strategy(Enum):
 
 # Normalization strategy for each modality
 NORMALIZE_STRATEGY = {
-    Modality.SENTINEL1: Strategy.PREDEFINED,
-    Modality.SENTINEL2: Strategy.PREDEFINED,
+    Modality.SENTINEL1: Strategy.COMPUTED,
+    Modality.SENTINEL2: Strategy.COMPUTED,
     Modality.WORLDCOVER: Strategy.PREDEFINED,
 }
 
