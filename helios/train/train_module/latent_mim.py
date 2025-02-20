@@ -151,7 +151,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
         self.base_loss = loss_config.build()
         self.masking_strategy = masking_config.build()
 
-    # TODO: Do we always want tokens and masks?
     def loss_fn(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
         return self.base_loss.compute(pred, targets)
