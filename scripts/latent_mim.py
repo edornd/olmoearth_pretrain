@@ -4,12 +4,10 @@ import logging
 from os import environ
 
 import numpy as np
-from olmo_core.distributed.utils import (get_fs_local_rank, get_rank,
-                                         get_world_size)
+from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_size
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import ConstantWithWarmup
-from olmo_core.train import (prepare_training_environment,
-                             teardown_training_environment)
+from olmo_core.train import prepare_training_environment, teardown_training_environment
 from olmo_core.train.callbacks import GPUMemoryMonitorCallback, WandBCallback
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
