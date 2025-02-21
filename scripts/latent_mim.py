@@ -4,22 +4,6 @@ import logging
 from os import environ
 
 import numpy as np
-from olmo_core.distributed.parallel.data_parallel import (
-    DataParallelConfig,
-    DataParallelType,
-)
-from olmo_core.optim import AdamWConfig
-from olmo_core.optim.scheduler import ConstantWithWarmup
-from olmo_core.train.callbacks import (
-    ConfigSaverCallback,
-    GPUMemoryMonitorCallback,
-    WandBCallback,
-)
-from olmo_core.train.checkpoint import CheckpointerConfig
-from olmo_core.train.common import Duration, LoadStrategy
-from olmo_core.train.config import TrainerConfig
-from upath import UPath
-
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
@@ -30,60 +14,33 @@ from helios.train.callbacks import HeliosSpeedMonitorCallback
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
+from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
+                                                          DataParallelType)
+from olmo_core.optim import AdamWConfig
+from olmo_core.optim.scheduler import ConstantWithWarmup
+from olmo_core.train.callbacks import (ConfigSaverCallback,
+                                       GPUMemoryMonitorCallback, WandBCallback)
+from olmo_core.train.checkpoint import CheckpointerConfig
+from olmo_core.train.common import Duration, LoadStrategy
+from olmo_core.train.config import TrainerConfig
+from upath import UPath
 
 logger = logging.getLogger(__name__)
 
 
-# Variables to be changed per user
-workdir = UPath("/temp/helios/workdir")  # nosec
-# This allows pre-emptible jobs to save their workdir in the output folder
-if environ.get("USE_OUTPUT_FOLDER"):
-    workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
-
-WANDB_USERNAME = "eai-ai2"  # nosec
-WANDB_PROJECT = "helios-debug"
-# PLEASE CHANGE IF THIS IS A NEW EXPERIMENT
-run_name = "helios-test-new"
-# PER EXPERIMENT Variables
-LR = 0.0001
-GLOBAL_BATCH_SIZE = 32
-RANK_BATCH_SIZE = 32
-MAX_DURATION = Duration.epochs(50)
-NUM_WORKERS = 16
-NUM_THREADS = 0
-METRICS_COLLECT_INTERVAL = 1
-CANCEL_CHECK_INTERVAL = 1
-SAVE_FOLDER = workdir / "save_folder"
-LOAD_STRATEGY = LoadStrategy.if_available
-
-TILE_PATH = UPath("/weka/dfive-default/helios/dataset/20250212/")
-DTYPE = np.dtype("float32")
-SUPPORTED_MODALITIES = [
-    Modality.SENTINEL2,
-    Modality.LATLON,
-    Modality.SENTINEL1,
-    Modality.WORLDCOVER,
-]
-MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
-ENCODE_RATIO = 0.5
-DECODE_RATIO = 0.5
-TOKEN_BUDGET = 1500
-H_W_TO_SAMPLE_MIN = 2
-H_W_TO_SAMPLE_MAX = 13
-WARMUP_STEPS = 2
-ENCODER_EMBEDDING_SIZE = 256
-DECODER_EMBEDDING_SIZE = 256
-ENCODER_DEPTH = 4
-DECODER_DEPTH = 4
-ENCODER_NUM_HEADS = 8
-DECODER_NUM_HEADS = 8
-MLP_RATIO = 4.0
-
-
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
-    logger.info("Building model config")
-    logger.info(f"Common components: {common} not set up yet")
+    MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
+    TOKEN_BUDGET = 1500
+    H_W_TO_SAMPLE_MIN = 2
+    H_W_TO_SAMPLE_MAX = 13
+    ENCODER_EMBEDDING_SIZE = 256
+    DECODER_EMBEDDING_SIZE = 256
+    ENCODER_DEPTH = 4
+    DECODER_DEPTH = 4
+    ENCODER_NUM_HEADS = 8
+    DECODER_NUM_HEADS = 8
+    MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modalities=common.supported_modalities,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -102,7 +59,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         mlp_ratio=MLP_RATIO,
         num_heads=DECODER_NUM_HEADS,
         max_sequence_length=12,
-        supported_modalities=SUPPORTED_MODALITIES,
+        supported_modalities=common.supported_modalities,
         learnable_channel_embeddings=True,
     )
     model_config = LatentMIMConfig(
@@ -119,8 +76,12 @@ def build_train_module_config(
     common: CommonComponents,
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
-    logger.info("Building train module config")
-    logger.info(f"Common components: {common} not set up yet")
+    LR = 0.0001
+    RANK_BATCH_SIZE = (
+        16 # TODO: maybe this should be computed dynamically and not specified here
+    )
+    ENCODE_RATIO = 0.5
+    DECODE_RATIO = 0.5
     optim_config = AdamWConfig(lr=LR)
     masking_config = MaskingConfig(
         strategy_config={
@@ -134,6 +95,7 @@ def build_train_module_config(
             "type": "patch_discrimination",
         }
     )
+    WARMUP_STEPS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
     scheduler = ConstantWithWarmup(warmup_steps=WARMUP_STEPS)
     train_module_config = LatentMIMTrainModuleConfig(
@@ -153,6 +115,9 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: handle dp_process_group internally
     # TODO: Include collate function here
+    NUM_WORKERS = 0
+    NUM_THREADS = 0
+    GLOBAL_BATCH_SIZE = 16
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
         seed=3622,
@@ -166,6 +131,8 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
+    TILE_PATH = UPath("/weka/dfive-default/helios/dataset/20250212/")
+    DTYPE = np.dtype("float32")
     return HeliosDatasetConfig(
         tile_path=TILE_PATH,
         supported_modalities=common.supported_modalities,
@@ -175,9 +142,13 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
-    logger.info("Building trainer config")
-    logger.info(f"Common components: {common} not set up yet")
-    checkpointer_config = CheckpointerConfig(work_dir=workdir)
+    MAX_DURATION = Duration.epochs(50)
+    METRICS_COLLECT_INTERVAL = 1
+    CANCEL_CHECK_INTERVAL = 1
+    LOAD_STRATEGY = LoadStrategy.if_available
+    WANDB_USERNAME = "eai-ai2"  # nosec
+    WANDB_PROJECT = "helios-debug"
+    checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
     wandb_callback = WandBCallback(
         name=common.run_name,
         project=WANDB_PROJECT,
@@ -188,9 +159,9 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     # Let us not use garbage collector fallback
     trainer_config = (
         TrainerConfig(
-            work_dir=workdir,
+            work_dir=common.save_folder,
             load_strategy=LOAD_STRATEGY,
-            save_folder=SAVE_FOLDER,
+            save_folder=common.save_folder,
             cancel_check_interval=CANCEL_CHECK_INTERVAL,
             metrics_collect_interval=METRICS_COLLECT_INTERVAL,
             max_duration=MAX_DURATION,
@@ -207,7 +178,18 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
 
 def build_common_components() -> CommonComponents:
     """Build the common components for an experiment."""
+    run_name = "test_run"
+    # Variables to be changed per user
     workdir = UPath("/temp/helios/workdir")  # nosec
+    # This allows pre-emptible jobs to save their workdir in the output folder
+    SUPPORTED_MODALITIES = [
+        Modality.SENTINEL2,
+        Modality.LATLON,
+        Modality.SENTINEL1,
+        Modality.WORLDCOVER,
+    ]
+    if environ.get("USE_OUTPUT_FOLDER"):
+        workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
     return CommonComponents(
         run_name=run_name,
         save_folder=workdir,

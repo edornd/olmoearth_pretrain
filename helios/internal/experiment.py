@@ -5,20 +5,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
-from olmo_core.config import Config
-from olmo_core.train import (
-    TrainerConfig,
-    prepare_training_environment,
-    teardown_training_environment,
-)
-from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
-from olmo_core.utils import get_default_device, seed_all
-
 from helios.data.constants import ModalitySpec
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
+from olmo_core.config import Config
+from olmo_core.train import (TrainerConfig, prepare_training_environment,
+                             teardown_training_environment)
+from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
+from olmo_core.utils import get_default_device, seed_all
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +87,7 @@ def train(config: HeliosExperimentConfig) -> None:
     model = model.to(device)
     train_module = config.train_module.build(model)
     dataset = config.dataset.build()
+    # TODO: akward harcoding of the collator here
     data_loader = config.data_loader.build(
         dataset, collator=collate_helios, dp_process_group=train_module.dp_process_group
     )

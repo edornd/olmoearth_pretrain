@@ -4,13 +4,14 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 import torch.nn as nn
+from helios.nn.flexihelios import (EncoderConfig, PredictorConfig,
+                                   TokensAndMasks)
+from helios.nn.utils import DistributedMixins
+from helios.train.masking import MaskedHeliosSample
 from olmo_core.config import Config
 
-from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
-from helios.train.masking import MaskedHeliosSample
 
-
-class LatentMIM(nn.Module):
+class LatentMIM(nn.Module, DistributedMixins):
     """Latent MIM Style."""
 
     def __init__(
