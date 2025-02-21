@@ -9,7 +9,6 @@ from olmo_core.distributed.parallel.data_parallel import (
     DataParallelType,
 )
 from olmo_core.optim import AdamWConfig
-from olmo_core.optim.scheduler import ConstantWithWarmup,CosWithWarmup
 from olmo_core.optim.scheduler import CosWithWarmup
 from olmo_core.train.callbacks import (
     ConfigSaverCallback,
@@ -27,12 +26,18 @@ from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.experiment import CommonComponents, main
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
-from helios.train.callbacks import HeliosSpeedMonitorCallback
+from helios.train.callbacks import (
+    DownstreamEvaluatorCallbackConfig,
+    HeliosSpeedMonitorCallback,
+)
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 logger = logging.getLogger(__name__)
+# TODO: Need to use the dynamic computation from trainer for this
+STEPS_PER_EPOCH = 100
+
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
@@ -47,7 +52,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     ENCODER_NUM_HEADS = 8
     DECODER_NUM_HEADS = 8
     MLP_RATIO = 4.0
-
+    TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
         supported_modalities=common.supported_modalities,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -105,11 +110,10 @@ def build_train_module_config(
         }
     )
 
-    WARMUP_STEPS = 2
+    WARMUP_EPOCHS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
-
-    scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * steps_per_epoch)
+    scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * STEPS_PER_EPOCH)
     train_module_config = LatentMIMTrainModuleConfig(
         optim=optim_config,
         masking_config=masking_config,
@@ -120,6 +124,7 @@ def build_train_module_config(
         scheduler=scheduler,
     )
     return train_module_config
+
 
 def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     """Build the dataloader config for an experiment."""
@@ -167,7 +172,8 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         entity=WANDB_USERNAME,
         enabled=True,  # set to False to avoid wandb errors
     )
-
+    EVAL_INTERVAL_EPOCHS = 1
+    EVAL_TASKS = ["m-eurosat"]
     # Let us not use garbage collector fallback
     trainer_config = (
         TrainerConfig(
@@ -187,7 +193,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
                 tasks=EVAL_TASKS,
-                eval_interval=EVAL_INTERVAL_EPOCHS * steps_per_epoch,
+                eval_interval=EVAL_INTERVAL_EPOCHS * STEPS_PER_EPOCH,
             ),
         )
     )
