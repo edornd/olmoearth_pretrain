@@ -9,7 +9,8 @@ from olmo_core.distributed.parallel.data_parallel import (
     DataParallelType,
 )
 from olmo_core.optim import AdamWConfig
-from olmo_core.optim.scheduler import ConstantWithWarmup
+from olmo_core.optim.scheduler import ConstantWithWarmup,CosWithWarmup
+from olmo_core.optim.scheduler import CosWithWarmup
 from olmo_core.train.callbacks import (
     ConfigSaverCallback,
     GPUMemoryMonitorCallback,
@@ -33,7 +34,6 @@ from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 
-
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
     MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
@@ -47,6 +47,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     ENCODER_NUM_HEADS = 8
     DECODER_NUM_HEADS = 8
     MLP_RATIO = 4.0
+
     encoder_config = EncoderConfig(
         supported_modalities=common.supported_modalities,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -71,6 +72,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     model_config = LatentMIMConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
+        transform_type=TRANSFORM_TYPE,
         token_budget=TOKEN_BUDGET,
         h_w_to_sample_min=H_W_TO_SAMPLE_MIN,
         h_w_to_sample_max=H_W_TO_SAMPLE_MAX,
@@ -86,8 +88,9 @@ def build_train_module_config(
     RANK_BATCH_SIZE = (
         16  # TODO: maybe this should be computed dynamically and not specified here
     )
-    ENCODE_RATIO = 0.5
+    ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.5
+
     optim_config = AdamWConfig(lr=LR)
     masking_config = MaskingConfig(
         strategy_config={
@@ -101,9 +104,12 @@ def build_train_module_config(
             "type": "patch_discrimination",
         }
     )
+
     WARMUP_STEPS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
-    scheduler = ConstantWithWarmup(warmup_steps=WARMUP_STEPS)
+
+
+    scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * steps_per_epoch)
     train_module_config = LatentMIMTrainModuleConfig(
         optim=optim_config,
         masking_config=masking_config,
@@ -115,7 +121,6 @@ def build_train_module_config(
     )
     return train_module_config
 
-
 def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     """Build the dataloader config for an experiment."""
     # things should be set during building
@@ -124,6 +129,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     NUM_WORKERS = 0
     NUM_THREADS = 0
     GLOBAL_BATCH_SIZE = 16
+
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
         seed=3622,
@@ -177,7 +183,13 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         .with_callback("speed_monitor", HeliosSpeedMonitorCallback())
         .with_callback("gpu_memory_monitor", GPUMemoryMonitorCallback())
         .with_callback("config_saver", ConfigSaverCallback())
-        # .with_callback("profiler", ProfilerCallback())
+        .with_callback(
+            "downstream_evaluator",
+            DownstreamEvaluatorCallbackConfig(
+                tasks=EVAL_TASKS,
+                eval_interval=EVAL_INTERVAL_EPOCHS * steps_per_epoch,
+            ),
+        )
     )
     return trainer_config
 
