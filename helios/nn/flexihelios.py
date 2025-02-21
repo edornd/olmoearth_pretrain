@@ -122,12 +122,13 @@ class TokensAndMasks(NamedTuple):
         for attr_name in self.modalities:
             mask_attr_name = self.get_masked_modality_name(attr_name)
             attr = getattr(self, attr_name)
-            masked_attr = getattr(self, mask_attr_name).unsqueeze(dim=-1)
+            masked_attr = getattr(self, mask_attr_name)
             if attr is not None:
-                if masked_attr is not None:
+                if masked_attr is None:
                     raise ValueError(
                         f"Can't have present {attr_name} but None {mask_attr_name}"
                     )
+                masked_attr = masked_attr.unsqueeze(dim=-1)
                 flattened_x.append(self._flatten(attr))
                 flattened_masks.append(self._flatten(masked_attr))
 
@@ -142,9 +143,9 @@ class TokensAndMasks(NamedTuple):
         """
         x, mask = self.flatten_tokens_and_masks()
         # 1s for online encoder, 0s elsewhere
-        mask = mask == MaskValue.ONLINE_ENCODER
-        x_for_mean = x * (1 - mask.unsqueeze(-1))
-        return x_for_mean.sum(dim=1) / torch.sum(1 - mask, -1, keepdim=True)
+        mask = (mask == MaskValue.ONLINE_ENCODER.value).long()
+        x_for_mean = x * mask.unsqueeze(-1)
+        return x_for_mean.sum(dim=1) / torch.sum(mask, -1, keepdim=True)
 
 
 class FlexiHeliosPatchEmbeddings(nn.Module):
