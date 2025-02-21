@@ -7,7 +7,7 @@ from os import environ
 import numpy as np
 from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_size
 from olmo_core.optim import AdamWConfig
-from olmo_core.optim.scheduler import ConstantWithWarmup
+from olmo_core.optim.scheduler import CosWithWarmup
 from olmo_core.train import prepare_training_environment, teardown_training_environment
 from olmo_core.train.callbacks import (
     GPUMemoryMonitorCallback,
@@ -40,10 +40,6 @@ if __name__ == "__main__":
     if environ.get("USE_OUTPUT_FOLDER"):
         workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
 
-    WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "helios-debug"
-    run_name = f"helios-test-no-worldcover-2M-{str(uuid.uuid4())[:8]}"
-
     # PER EXPERIMENT Variables
     LR = 0.0001
     GLOBAL_BATCH_SIZE = 32
@@ -65,13 +61,13 @@ if __name__ == "__main__":
         Modality.WORLDCOVER,
     ]
     MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
-    ENCODE_RATIO = 0.5
-    DECODE_RATIO = 0.5
+    ENCODE_RATIO = 0.1
+    DECODE_RATIO = 0.75
     TOKEN_BUDGET = 1500
     H_W_TO_SAMPLE_MIN = 2
     H_W_TO_SAMPLE_MAX = 13
+    WARMUP_EPOCHS = MAX_DURATION.value // 10
     TRANSFORM_TYPE = "flip_and_rotate"
-    WARMUP_STEPS = 2
     ENCODER_EMBEDDING_SIZE = 256
     DECODER_EMBEDDING_SIZE = 256
     ENCODER_DEPTH = 4
@@ -85,8 +81,12 @@ if __name__ == "__main__":
 
     LOSS_TYPE = "patch_discrimination"
 
-    EVAL_INTERVAL = 20
+    EVAL_INTERVAL_EPOCHS = 1
     EVAL_TASKS = ["m-eurosat"]
+
+    WANDB_USERNAME = "eai-ai2"  # nosec
+    WANDB_PROJECT = "helios-debug"
+    run_name = f"helios-{LOSS_TYPE}-{MAX_DURATION.value}-{LR}-{str(uuid.uuid4())[:8]}"
 
     #################### Setup environment ####################
     dp_config = None
@@ -138,6 +138,15 @@ if __name__ == "__main__":
     # Ideally though this should be handled by the Model COnfig and build
     model = model.to(device)
 
+    ################### Configs for dataset ####################
+    dataset_config = HeliosDatasetConfig(
+        tile_path=TILE_PATH,
+        supported_modalities=SUPPORTED_MODALITIES,
+        dtype=DTYPE,
+    )
+    dataset = dataset_config.build()
+    steps_per_epoch = len(dataset) // GLOBAL_BATCH_SIZE
+
     #################### Configs for train module ####################
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
     optim_config = AdamWConfig(lr=LR)
@@ -153,7 +162,8 @@ if __name__ == "__main__":
             "type": LOSS_TYPE,
         }
     )
-    scheduler = ConstantWithWarmup(warmup_steps=WARMUP_STEPS)
+
+    scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * steps_per_epoch)
     train_module_config = LatentMIMTrainModuleConfig(
         optim=optim_config,
         masking_config=masking_config,
@@ -166,12 +176,6 @@ if __name__ == "__main__":
     dp_process_group = train_module.dp_process_group
 
     #################### Configs for dataloader ####################
-    dataset_config = HeliosDatasetConfig(
-        tile_path=TILE_PATH,
-        supported_modalities=SUPPORTED_MODALITIES,
-        dtype=DTYPE,
-    )
-    dataset = dataset_config.build()
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
         dp_world_size=get_world_size(dp_process_group),
@@ -212,7 +216,7 @@ if __name__ == "__main__":
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
                 tasks=EVAL_TASKS,
-                eval_interval=EVAL_INTERVAL,
+                eval_interval=EVAL_INTERVAL_EPOCHS * steps_per_epoch,
             ),
         )
     )

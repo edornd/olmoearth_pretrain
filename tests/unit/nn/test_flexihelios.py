@@ -5,7 +5,7 @@ import torch
 from einops import repeat
 
 from helios.data.constants import ModalitySpec
-from helios.nn.flexihelios import Encoder, FlexiHeliosBase, Predictor
+from helios.nn.flexihelios import Encoder, FlexiHeliosBase, Predictor, TokensAndMasks
 from helios.train.masking import MaskValue
 
 
@@ -329,6 +329,38 @@ class TestPredictor:
                 [[5, 6, 7, 8, 0, 0, 14, 15, 16], [5, 6, 7, 0, 0, 0, 0, 15, 16]]
             ).unsqueeze(-1),
         )
+
+
+class TestTokensAndMasks:
+    """Test TestTokensAndMasks."""
+
+    def test_flatten_tokens_and_masks(self) -> None:
+        """Test TokensAndMasks.flatten_tokens_and_masks."""
+        b, h, w, t, d = 2, 4, 4, 3, 128
+        sentinel_2 = torch.ones((b, h, w, t, d))
+        sentinel_2[0, 0, 0, 0, :] = 0  # set one "token" to 0s
+        sentinel_2_mask = torch.zeros((b, h, w, t)).long()
+        sentinel_2_mask[0, 0, 0, 0] = 1  # set the same token's mask to 1
+        t_and_m = TokensAndMasks(sentinel2=sentinel_2, sentinel2_mask=sentinel_2_mask)
+        x, mask = t_and_m.flatten_tokens_and_masks()
+
+        assert x.shape == (b, h * w * t, d)
+        assert mask.shape == (b, h * w * t)
+        assert (x[mask.bool()] == 0).all()
+        assert (x[(1 - mask).bool()] == 1).all()
+
+    def test_average_unmasked_tokens(self) -> None:
+        """Test TokensAndMasks.average_unmasked_tokens."""
+        b, h, w, t, d = 2, 4, 4, 3, 128
+        sentinel_2 = torch.ones((b, h, w, t, d))
+        sentinel_2[0, 0, 0, 0, :] = 0  # set one "token" to 0s
+        sentinel_2_mask = torch.zeros((b, h, w, t)).long()
+        sentinel_2_mask[0, 0, 0, 0] = 1  # set the same token's mask to 1
+        t_and_m = TokensAndMasks(sentinel2=sentinel_2, sentinel2_mask=sentinel_2_mask)
+        averaged = t_and_m.average_unmasked_tokens()
+
+        assert averaged.shape == (b, d)
+        assert (averaged == 1).all()  # check the 0 tokens have been ignored
 
 
 # TODO: write a unit test for the FlexiPatchEmbeddings
