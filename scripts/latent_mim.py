@@ -65,8 +65,8 @@ if __name__ == "__main__":
         Modality.WORLDCOVER,
     ]
     MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
-    ENCODE_RATIO = 0.5
-    DECODE_RATIO = 0.5
+    ENCODE_RATIO = 0.1
+    DECODE_RATIO = 0.75
     TOKEN_BUDGET = 1500
     H_W_TO_SAMPLE_MIN = 2
     H_W_TO_SAMPLE_MAX = 13
