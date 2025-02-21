@@ -292,6 +292,8 @@ def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
 class HeliosDataset(Dataset):
     """Helios dataset."""
 
+    PROJECTION_CRS = "EPSG:4326"
+
     def __init__(
         self,
         tile_path: UPath,
@@ -483,10 +485,19 @@ class HeliosDataset(Dataset):
             (sample.grid_tile.row + 0.5) * -grid_resolution * IMAGE_TILE_SIZE,
         )
         transformer = Transformer.from_crs(
-            sample.grid_tile.crs, "EPSG:4326", always_xy=True
+            sample.grid_tile.crs, self.PROJECTION_CRS, always_xy=True
         )
         lon, lat = transformer.transform(x, y)
         return np.array([lat, lon])
+
+    def get_geographic_distribution(self) -> list:
+        """Get the geographic distribution of the dataset."""
+        latlons = []
+        for sample in self.samples:
+            latlon = self._get_latlon(sample)
+            latlons.append(latlon)
+        latlons = np.concatenate(latlons, axis=0)
+        return latlons
 
     def _get_timestamps(self, sample: SampleInformation) -> np.ndarray:
         """Get the timestamps of the sample."""
