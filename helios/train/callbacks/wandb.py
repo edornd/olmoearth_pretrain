@@ -2,12 +2,10 @@
 
 import logging
 
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
-from olmo_core.train.callbacks.wandb import WandBCallback
-
 from helios.data.dataloader import HeliosDataLoader
+from helios.data.utils import plot_latlon_distribution
+from olmo_core.train.callbacks.wandb import WandBCallback
 
 logger = logging.getLogger(__name__)
 
@@ -25,29 +23,11 @@ class HeliosWandBCallback(WandBCallback):
             dataset = self.trainer.data_loader.dataset
             logger.info("Gathering locations of entire dataset")
             latlons = dataset.get_geographic_distribution()
+            # this should just be a general utility function
             logger.info(f"Uploading dataset distribution to wandb: {latlons.shape}")
-            # Create map using EPSG:4326 (WGS 84) projection
-            fig = plt.figure(figsize=(12, 8))
-            ax = fig.add_subplot(111, projection=ccrs.epsg("4326"))
-
-            # Add map features
-            ax.add_feature(cfeature.COASTLINE)
-            ax.add_feature(cfeature.LAND, alpha=0.1)
-            ax.add_feature(cfeature.OCEAN, alpha=0.1)
-
-            # Plot the data points
-            ax.scatter(
-                latlons[:, 1],
-                latlons[:, 0],
-                transform=ccrs.PlateCarree(),
-                alpha=0.5,
-                s=1,
+            fig = plot_latlon_distribution(
+                latlons, "Geographic Distribution of Dataset"
             )
-
-            ax.set_global()  # Show the entire globe
-            ax.gridlines()
-            ax.set_title("Geographic Distribution of Dataset")
-
             # Log to wandb
-            self.wandb.log({"dataset_distribution": self.wandb.Image(fig)})
+            self.wandb.log({"dataset/pretraining_geographic_distribution": self.wandb.Image(fig)})
             plt.close(fig)
