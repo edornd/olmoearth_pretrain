@@ -173,18 +173,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
         subsampled_batch = subsampled_batch.to_device(self.device)
         masked_batch = self.masking_strategy.apply_mask(subsampled_batch)
 
-        # Run Encoder and decoder on the augmented input
-        decoded, loss = self.model_forward(masked_batch, patch_size)
-
-        self.trainer.record_metric(
-            f"train/{self.base_loss.name}",
-            loss / get_world_size(self.dp_process_group),
-            ReduceType.mean,
-        )
-
-        # Backpropagate and optimize
-        if loss is not None:
-            loss.backward()
         # Update target encoder with EMA this should be a callback
         cur_ema_value = (
             self.start_ema
@@ -200,6 +188,19 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 target_param.data = (
                     cur_ema_value * target_param.data + (1 - cur_ema_value) * param.data
                 )
+
+        # Run Encoder and decoder on the augmented input
+        decoded, loss = self.model_forward(masked_batch, patch_size)
+
+        self.trainer.record_metric(
+            f"train/{self.base_loss.name}",
+            loss / get_world_size(self.dp_process_group),
+            ReduceType.mean,
+        )
+
+        # Backpropagate and optimize
+        if loss is not None:
+            loss.backward()
 
         del batch  # In case this helps with memory utilization.
         if dry_run:
