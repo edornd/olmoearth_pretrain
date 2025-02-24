@@ -105,6 +105,7 @@ class GeobenchDataset(Dataset):
 
         self.split = split
         self.partition = partition
+        self.norm_stats_from_pretrained = norm_stats_from_pretrained
 
         for task in geobench.task_iterator(
             benchmark_name=config.benchmark_name,
