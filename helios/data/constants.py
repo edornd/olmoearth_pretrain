@@ -203,6 +203,7 @@ class Modality:
             BandSet(["B01", "B09"], 64),
         ],
         is_multitemporal=True,
+        ignore_when_parsing=False,
     )
 
     LANDSAT = ModalitySpec(
