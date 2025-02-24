@@ -161,6 +161,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
 
     def train_batch(self, batch: HeliosSample, dry_run: bool = False) -> None:
         """Train a batch."""
+        self.model.train()
         # Set the maximum number of tokens
         token_budget = self.model.token_budget
         # Smallest h /w must be bigger than the smallest patch size
