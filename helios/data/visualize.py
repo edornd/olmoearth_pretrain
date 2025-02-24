@@ -20,6 +20,19 @@ from helios.data.dataset import HeliosDataset
 logger = logging.getLogger(__name__)
 
 # TODO: Instead of dim checks, we should use the modality spec properties
+WORLDCOVER_LEGEND = {
+    10: ("#006400", "Tree cover"),
+    20: ("#ffbb22", "Shrubland"),
+    30: ("#ffff4c", "Grassland"),
+    40: ("#f096ff", "Cropland"),
+    50: ("#fa0000", "Built-up"),
+    60: ("#b4b4b4", "Bare / sparse vegetation"),
+    70: ("#f0f0f0", "Snow and ice"),
+    80: ("#0064c8", "Permanent water bodies"),
+    90: ("#0096a0", "Herbaceous wetland"),
+    95: ("#00cf75", "Mangroves"),
+    100: ("#fae6a0", "Moss and lichen"),
+}
 
 
 def visualize_sample(
@@ -33,24 +46,8 @@ def visualize_sample(
     - If the modality is WORLDCOVER, use a discrete colormap and show a legend.
     Saves the resulting figure to a .png file.
     """
-    # -------------------------------
-    # 1. Setup the legend for WorldCover
-    # -------------------------------
-    worlcover_legend = {
-        10: ("#006400", "Tree cover"),
-        20: ("#ffbb22", "Shrubland"),
-        30: ("#ffff4c", "Grassland"),
-        40: ("#f096ff", "Cropland"),
-        50: ("#fa0000", "Built-up"),
-        60: ("#b4b4b4", "Bare / sparse vegetation"),
-        70: ("#f0f0f0", "Snow and ice"),
-        80: ("#0064c8", "Permanent water bodies"),
-        90: ("#0096a0", "Herbaceous wetland"),
-        95: ("#00cf75", "Mangroves"),
-        100: ("#fae6a0", "Moss and lichen"),
-    }
-    wc_classes_sorted = sorted(worlcover_legend.keys())  # [10, 20, 30, ...]
-    wc_colors = [worlcover_legend[val][0] for val in wc_classes_sorted]
+    wc_classes_sorted = sorted(WORLDCOVER_LEGEND.keys())  # [10, 20, 30, ...]
+    wc_colors = [WORLDCOVER_LEGEND[val][0] for val in wc_classes_sorted]
     # Construct a discrete colormap and corresponding norm
     wc_cmap = mcolors.ListedColormap(wc_colors)
     wc_bounds = wc_classes_sorted + [
@@ -58,9 +55,6 @@ def visualize_sample(
     ]  # e.g., up to 101 if last is 100
     wc_norm = mcolors.BoundaryNorm(wc_bounds, wc_cmap.N)
 
-    # -------------------------------
-    # 2. Fetch the sample
-    # -------------------------------
     sample = dataset.samples[sample_index]
     logger.info(f"Visualizing sample index: {sample_index}")
 
@@ -70,9 +64,6 @@ def visualize_sample(
         logger.warning("No modalities found in this sample.")
         return
 
-    # -------------------------------
-    # 3. Determine figure layout
-    # -------------------------------
     total_rows = len(modalities)
     # At least 1 column, but also handle the largest band_order among the modalities
     max_bands = 1
@@ -125,7 +116,7 @@ def visualize_sample(
         logger.info(f"Modality data shape (loaded): {modality_data.shape}")
 
         # If temporal [H, W, T, C], take first time step
-        if modality_data.ndim == 4:
+        if modality_spec.is_spacetime_varying:
             modality_data = modality_data[:, :, 0]
             logger.info(
                 f"Modality data shape after first time step: {modality_data.shape}"
@@ -147,7 +138,7 @@ def visualize_sample(
                 # Create legend patches
                 patches = []
                 for val in wc_classes_sorted:
-                    color_hex, label_txt = worlcover_legend[val]
+                    color_hex, label_txt = WORLDCOVER_LEGEND[val]
                     patch = mpatches.Patch(color=color_hex, label=label_txt)
                     patches.append(patch)
 
