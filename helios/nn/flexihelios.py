@@ -317,7 +317,9 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         super().__init__()
         self.embedding_size = embedding_size
         self.supported_modality = supported_modalities
-        self.supported_modality_names = [modality.name for modality in supported_modalities]
+        self.supported_modality_names = [
+            modality.name for modality in supported_modalities
+        ]
         self.embedding_size = embedding_size
         self.max_sequence_length = (
             max_sequence_length  # This max sequence length is a time dim thing
@@ -378,7 +380,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         """Apply the encodings to the patchified data based on modality type.
 
         Args:
-            modality: Name of the modality being processed
+            modality_name: Name of the modality being processed
             modality_tokens: Token embeddings for the modality
             timestamps: Optional timestamps for temporal encodings
             patch_size: Optional patch size for spatial encodings
