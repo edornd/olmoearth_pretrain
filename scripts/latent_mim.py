@@ -20,13 +20,14 @@ from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.experiment import CommonComponents, main
-from helios.nn.flexihelios import EncoderConfig, PredictorConfig
+from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
     HeliosSpeedMonitorCallback,
     HeliosWandBCallback,
 )
+from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
@@ -89,9 +90,8 @@ def build_train_module_config(
     LR = 0.0001
     RANK_MICROBATCH_SIZE = 8
     ENCODE_RATIO = 0.1
-    DECODE_RATIO = 0.5
+    DECODE_RATIO = 0.75
     WD = 0.02
-
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(
         strategy_config={
@@ -168,7 +168,15 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         enabled=True,  # set to False to avoid wandb errors
     )
     EVAL_INTERVAL_EPOCHS = 1
-    EVAL_TASKS = ["m-eurosat"]
+    EVAL_TASKS = [
+        DownstreamTaskConfig(
+            name="m-eurosat",
+            batch_size=128,
+            num_workers=8,
+            pooling_type=PoolingType.MAX,
+            norm_stats_from_pretrained=True,
+        ),
+    ]
     # Let us not use garbage collector fallback
     trainer_config = (
         TrainerConfig(
