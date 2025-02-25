@@ -405,8 +405,8 @@ class TestEncoder:
         latlon = torch.randn(B, latlon_num_bands)
         # Mask the entirety of each modality
         sentinel2_mask = torch.ones(B, H, W, T, C, dtype=torch.long)
-        # Make 1 token in 1 channel group in S2 visible
-        sentinel2_mask[0, 0, 0, 0, 0] = 0
+        # Make 1 token in all S2 channel groups
+        sentinel2_mask[0, 0, 0, 0, :] = 0
         latlon_mask = torch.ones(B, 2, dtype=torch.float32)
         days = torch.randint(0, 25, (B, T, 1), dtype=torch.long)
         months = torch.randint(0, 12, (B, T, 1), dtype=torch.long)
@@ -466,6 +466,23 @@ class TestEncoder:
                 1,
             )
         ), f"Expected output latlon_mask shape {latlon_mask.shape}, got {output.latlon_mask.shape}"
+
+        output.sentinel2.sum().backward()
+        for name, param in encoder.named_parameters():
+            # the composite_encodings is a bug which will be fixed now
+            if not (
+                any(
+                    ignore_param in name
+                    for ignore_param in [
+                        "pos_embed",
+                        "month_embed",
+                        "composite_encodings.per_modality_channel_embeddings.latlon",
+                        "patch_embeddings.per_modality_embeddings.latlon",
+                    ]
+                )
+                or ("block" in name)
+            ):
+                assert param.grad is not None, name
 
 
 class TestPredictor:
@@ -564,6 +581,17 @@ class TestPredictor:
             predictor.output_embedding_size,
         )
         assert output.latlon_mask.shape == (B, latlon_num_band_sets)
+        output.sentinel2.sum().backward()
+        for name, param in predictor.named_parameters():
+            if not any(
+                ignore_param in name
+                for ignore_param in [
+                    "pos_embed",
+                    "month_embed",
+                    "composite_encodings.per_modality_channel_embeddings.latlon",
+                ]
+            ):
+                assert param.grad is not None, name
 
     def test_predictor_forward(
         self,
@@ -641,6 +669,17 @@ class TestPredictor:
             predictor.output_embedding_size,
         )
         assert output.latlon_mask.shape == (B, latlon_num_band_sets)
+        output.sentinel2.sum().backward()
+        for name, param in predictor.named_parameters():
+            if not any(
+                ignore_param in name
+                for ignore_param in [
+                    "pos_embed",
+                    "month_embed",
+                    "composite_encodings.per_modality_channel_embeddings.latlon",
+                ]
+            ):
+                assert param.grad is not None, name
 
 
 def test_end_to_end_with_exit_config(
