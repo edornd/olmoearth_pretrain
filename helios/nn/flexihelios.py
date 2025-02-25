@@ -299,9 +299,10 @@ class FlexiHeliosCompositeEncodings(nn.Module):
     def __init__(
         self,
         embedding_size: int,
-        supported_modalities: list[str],
+        supported_modalities: list[ModalitySpec],
         max_sequence_length: int,
         use_channel_embs: bool = True,
+        random_channel_embs: bool = False,
     ):
         """Initialize the composite encodings.
 
@@ -311,10 +312,12 @@ class FlexiHeliosCompositeEncodings(nn.Module):
                 instantiation supports
             max_sequence_length: Maximum sequence length
             use_channel_embs: Whether to use learnable channel embeddings
+            random_channel_embs: Initialize channel embeddings randomly (zeros if False)
         """
         super().__init__()
         self.embedding_size = embedding_size
-        self.supported_modality_names = supported_modalities
+        self.supported_modality = supported_modalities
+        self.supported_modality_names = [modality.name for modality in supported_modalities]
         self.embedding_size = embedding_size
         self.max_sequence_length = (
             max_sequence_length  # This max sequence length is a time dim thing
@@ -340,18 +343,14 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         else:
             args = {"requires_grad": False}
 
-        self.per_modality_channel_embeddings = nn.ParameterDict(
-            {
-                modality: nn.Parameter(
-                    torch.zeros(
-                        len(Modality.get(modality).band_sets),
-                        self.embedding_dim_per_embedding_type,
-                    ),
-                    **args,
-                )
-                for modality in self.supported_modality_names
-            }
-        )
+        self.per_modality_channel_embeddings = nn.ParameterDict()
+        for modality in self.supported_modality:
+            shape = (len(modality.band_sets), self.embedding_dim_per_embedding_type)
+            if random_channel_embs:
+                channel_embeddings = nn.Parameter(torch.rand(shape), **args)
+            else:
+                channel_embeddings = nn.Parameter(torch.zeros(shape), **args)
+            self.per_modality_channel_embeddings[modality.name] = channel_embeddings
 
         self.apply(self._init_weights)
 
@@ -370,7 +369,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
 
     def _apply_encodings_per_modality(
         self,
-        modality: str,
+        modality_name: str,
         modality_tokens: Tensor,
         timestamps: Tensor | None = None,
         patch_size: int | None = None,
@@ -390,7 +389,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         """
         # TODO: Improve this implementation it is quite bad
 
-        modality_spec = Modality.get(modality)
+        modality = Modality.get(modality_name)
         logger.debug(f"Applying encodings to modality {modality}")
         d = self.embedding_dim_per_embedding_type
 
@@ -416,11 +415,11 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         modality_embed = torch.zeros(modality_tokens.shape)
 
         # Channel embeddings
-        channel_embed = self.per_modality_channel_embeddings[modality]
+        channel_embed = self.per_modality_channel_embeddings[modality.name]
         channel_embed = repeat(channel_embed, f"b_s d -> {ein_string}", **ein_dict)
         modality_embed[..., :d] += channel_embed
 
-        if modality_spec.is_time_varying:
+        if modality.is_time_varying:
             # Time position encodings
             time_embed = repeat(self.pos_embed[:t], f"t d -> {ein_string}", **ein_dict)
             modality_embed[..., d : d * 2] += time_embed
@@ -431,13 +430,12 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             month_embed = self.month_embed(months)
             month_embed = repeat(month_embed, f"b t d -> {ein_string}", **ein_dict)
             modality_embed[..., d * 2 : d * 3] += month_embed
-        if modality_spec.is_space_varying:
+        if modality.is_space_varying:
             # Spatial encodings
             assert input_res is not None
             assert patch_size is not None
             gsd_ratio = self.calculate_gsd_ratio(input_res, patch_size)
             current_device = modality_tokens.device
-            print (self.embedding_dim_per_embedding_type)
             spatial_embed = get_2d_sincos_pos_encoding_with_resolution(
                 grid_size=h,
                 res=torch.ones(b, device=current_device) * gsd_ratio,
@@ -475,10 +473,10 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         modalities_to_process = get_modalities_to_process(
             available_modalities, self.supported_modality_names
         )
-        for modality in modalities_to_process:
-            output_dict[modality] = self._apply_encodings_per_modality(
-                modality,
-                per_modality_input_tokens[modality],
+        for modality_name in modalities_to_process:
+            output_dict[modality_name] = self._apply_encodings_per_modality(
+                modality_name,
+                per_modality_input_tokens[modality_name],
                 timestamps=timestamps,
                 patch_size=patch_size,
                 input_res=input_res,
@@ -506,6 +504,7 @@ class FlexiHeliosBase(nn.Module):
         super().__init__()
 
         self.embedding_size = embedding_size
+        self.supported_modality = supported_modalities
         self.supported_modality_names = [x.name for x in supported_modalities]
         logger.info(f"modalities being used by model: {self.supported_modality_names}")
 
@@ -529,7 +528,7 @@ class FlexiHeliosBase(nn.Module):
 
         self.composite_encodings = FlexiHeliosCompositeEncodings(
             embedding_size,
-            self.supported_modality_names,
+            self.supported_modality,
             max_sequence_length,
             use_channel_embs,
         )
