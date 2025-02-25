@@ -112,6 +112,7 @@ def test_l2_loss() -> None:
     # MSE should be 4 since preds are 2, targets are 0
     assert loss_value == 4
 
+
 def test_cross_entropy_loss() -> None:
     """Just test that it runs as expected."""
     b, t, t_h, t_w, d = 3, 2, 4, 4, 2
