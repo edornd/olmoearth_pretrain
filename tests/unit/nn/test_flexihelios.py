@@ -5,9 +5,28 @@ import torch
 from einops import repeat
 
 from helios.data.constants import ModalitySpec
-from helios.nn.flexihelios import Encoder, FlexiHeliosBase, Predictor, TokensAndMasks
+from helios.nn.flexihelios import Encoder, FlexiHeliosBase, Predictor, TokensAndMasks, FlexiHeliosCompositeEncodings
+from torch.nn import ParameterDict
 from helios.train.masking import MaskValue
 
+def test_composite_encodings():
+    B, H, W, T, C, D = 1, 2, 2, 3, 3, 16
+    fhce = FlexiHeliosCompositeEncodings(
+            D,
+            ["worldcover","latlon","sentinel2"],
+            10,
+            True,
+        )
+    fhce.per_modality_channel_embeddings = ParameterDict({k: torch.rand(v.shape) for k,v in fhce.per_modality_channel_embeddings.items()})
+    sentinel2_tokens = torch.zeros(B, H, W, T, C, D)
+    timestamps = torch.tensor(
+        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]], dtype=torch.long
+    ).unsqueeze(0)
+    C = 1
+    worldcover_tokens = torch.zeros(B, H, W, C, D)
+    enc = fhce._apply_encodings_per_modality('sentinel2', sentinel2_tokens, timestamps, 4, 10)
+    assert not (enc == 0).all()
+    enc = fhce._apply_encodings_per_modality('worldcover', worldcover_tokens, None, 4, 10)
 
 # TODO: Add tests for when the inputs are completely masked or different dims or something
 class TestFlexiHeliosBase:
