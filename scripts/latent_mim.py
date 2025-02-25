@@ -177,7 +177,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             name="m-eurosat",
             batch_size=128,
             num_workers=8,
-            pooling_type=PoolingType.MAX,
+            pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
         ),
     ]
