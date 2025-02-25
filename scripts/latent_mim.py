@@ -208,7 +208,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
 
 def build_common_components() -> CommonComponents:
     """Build the common components for an experiment."""
-    run_name = "l2-with-batchwise-subsetting"
+    run_name = "test_run"
     # Variables to be changed per user
     workdir = UPath("./output")  # nosec
     # This allows pre-emptible jobs to save their workdir in the output folder

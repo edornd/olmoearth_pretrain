@@ -196,8 +196,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                # Gallileo does this subsetting at the microbatch level but that gives
-                # inconsistent results when microbatching
+                # Gallileo does this subsetting at the microbatch level so we follow that for now
                 # Smallest h /w must be bigger than the smallest patch size
 
                 patch_size = np.random.choice(
