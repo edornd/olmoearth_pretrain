@@ -105,6 +105,7 @@ class GeobenchDataset(Dataset):
         self.split = split
         self.partition = partition
         self.norm_stats_from_pretrained = norm_stats_from_pretrained
+        # If normalize with pretrained stats, we initialize the normalizer here
         if self.norm_stats_from_pretrained:
             from helios.data.normalize import Normalizer, Strategy
 
