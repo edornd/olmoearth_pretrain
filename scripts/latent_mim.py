@@ -214,7 +214,7 @@ def build_common_components() -> CommonComponents:
     """Build the common components for an experiment."""
     run_name = "test_run"
     # Variables to be changed per user
-    workdir = UPath("./output/v1")  # nosec
+    workdir = UPath("./output")  # nosec
     # This allows pre-emptible jobs to save their workdir in the output folder
     SUPPORTED_MODALITIES = [
         Modality.SENTINEL2_L2A,
