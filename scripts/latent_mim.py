@@ -117,7 +117,7 @@ def build_train_module_config(
     scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * STEPS_PER_EPOCH)
     train_module_config = LatentMIMTrainModuleConfig(
         # TODO: change name to optim config
-        optim=optim_config,
+        optim_config=optim_config,
         masking_config=masking_config,
         loss_config=loss_config,
         token_exit_cfg=token_exit_cfg,
