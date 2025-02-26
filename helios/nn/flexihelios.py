@@ -432,36 +432,36 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         else:
             raise ValueError(f"Unsupported tokens shape: {modality_tokens.shape}")
 
-        modality_embed = torch.zeros(modality_tokens.shape)
+        device = modality_tokens.device
+        modality_embed = torch.zeros(modality_tokens.shape, device=device)
         n = self.embedding_dim_per_embedding_type
 
         # Channel embeddings
         channel_embed = self.per_modality_channel_embeddings[modality.name]
-        channel_embed = repeat(channel_embed, f"b_s d -> {ein_string}", **ein_dict)
+        channel_embed = repeat(channel_embed, f"b_s d -> {ein_string}", **ein_dict).to(device)
         modality_embed[..., :n] += channel_embed
 
         if modality.is_multitemporal:
             # Time position encodings
             time_embed = repeat(self.pos_embed[:t], f"t d -> {ein_string}", **ein_dict)
-            modality_embed[..., n : n * 2] += time_embed
+            modality_embed[..., n : n * 2] += time_embed.to(device)
 
             # Month encodings
             assert timestamps is not None
             months = timestamps[:, :, 1]
             month_embed = self.month_embed(months)
             month_embed = repeat(month_embed, f"b t d -> {ein_string}", **ein_dict)
-            modality_embed[..., n * 2 : n * 3] += month_embed
+            modality_embed[..., n * 2 : n * 3] += month_embed.to(device)
         if modality.is_spatial:
             # Spatial encodings
             assert input_res is not None
             assert patch_size is not None
             gsd_ratio = self.calculate_gsd_ratio(input_res, patch_size)
-            current_device = modality_tokens.device
             spatial_embed = get_2d_sincos_pos_encoding_with_resolution(
                 grid_size=h,
-                res=torch.ones(b, device=current_device) * gsd_ratio,
+                res=torch.ones(b, device=device) * gsd_ratio,
                 encoding_dim=self.embedding_dim_per_embedding_type,
-                device=current_device,
+                device=device,
             )
             spatial_embed = rearrange(spatial_embed, "b (h w) d -> b h w d", h=h, w=w)
             spatial_embed = repeat(
