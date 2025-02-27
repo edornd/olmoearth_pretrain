@@ -68,13 +68,12 @@ def build_launch_config(
             # BeakerEnvSecret(name="WEKA_ENDPOINT_URL", secret="WEKA_ENDPOINT_URL"),
             # BeakerEnvSecret(name="SLACK_WEBHOOK_URL", secret="SLACK_WEBHOOK_URL"),
         ],
-        # TODO: I don't want this secret to be able to be exposed while logging
         setup_steps=[
             # Clone private repo.
             "conda install gh --channel conda-forge",
-            # assumes that conda is installed, which is true for our beaker images. # TODO: add to image
+            # assumes that conda is installed, which is true for our beaker images.
             "gh auth status",
-            'gh repo clone "$REPO_URL" .',
+            'gh repo clone allenai/helios .',
             'git checkout "$GIT_REF"',
             "git submodule update --init --recursive",
             # Setup python environment.
