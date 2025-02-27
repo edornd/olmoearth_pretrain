@@ -1,12 +1,17 @@
 """Common utiities for laucnhing experiments on beaker."""
 
+import logging
+
 from olmo_core.internal.common import get_beaker_username
 from olmo_core.io import is_url
 from olmo_core.launch.beaker import (BeakerEnvSecret, BeakerEnvVar,
-                                     BeakerLaunchConfig, BeakerPriority,
-                                     BeakerWekaBucket, OLMoCoreBeakerImage)
+                                     BeakerPriority, BeakerWekaBucket,
+                                     OLMoCoreBeakerImage)
 from olmo_core.utils import generate_uuid
 
+from helios.internal.beaker import HeliosBeakerLaunchConfig
+
+logger = logging.getLogger(__name__)
 BUDGET = "ai2/d5"
 WORKSPACE = "ai2/earth-systems"
 
@@ -24,6 +29,14 @@ def get_root_dir(cluster: str) -> str:
     return root_dir
 
 
+def get_current_branch() -> str:
+    """Get the current branch name."""
+    import git
+
+    repo = git.Repo(".")
+    return repo.active_branch.name
+
+
 def build_launch_config(
     *,
     name: str,
@@ -34,15 +47,16 @@ def build_launch_config(
     workspace: str = WORKSPACE,
     budget: str = BUDGET,
     nccl_debug: bool = False,
-) -> BeakerLaunchConfig:
+) -> HeliosBeakerLaunchConfig:
     weka_buckets: list[BeakerWekaBucket] = []
     if root_dir.startswith("/weka/"):
         # I am pretty sure we check this cuz it might be augusta or something
         weka_buckets.append(DEFAULT_HELIOS_WEKA_BUCKET)
 
     beaker_user = get_beaker_username()
+    logger.info("Using branch %s", get_current_branch())
 
-    return BeakerLaunchConfig(
+    return HeliosBeakerLaunchConfig(
         name=f"{name}-{generate_uuid()[:8]}",
         budget=budget,
         cmd=cmd,
@@ -75,6 +89,7 @@ def build_launch_config(
             # assumes that conda is installed, which is true for our beaker images.
             "gh auth status",
             "gh repo clone $REPO_URL .",
+            f"git fetch origin {get_current_branch()}",
             'git checkout "$GIT_REF"',
             "git submodule update --init --recursive",
             # Setup python environment.

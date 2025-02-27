@@ -10,19 +10,18 @@ import numpy as np
 from olmo_core.config import Config, StrEnum
 from olmo_core.distributed.utils import get_local_rank
 from olmo_core.launch.beaker import BeakerLaunchConfig
-from olmo_core.train import (
-    TrainerConfig,
-    prepare_training_environment,
-    teardown_training_environment,
-)
+from olmo_core.train import (TrainerConfig, prepare_training_environment,
+                             teardown_training_environment)
 from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
-from olmo_core.utils import get_default_device, prepare_cli_environment, seed_all
+from olmo_core.utils import (get_default_device, prepare_cli_environment,
+                             seed_all)
 
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.data.normalize import Normalizer, Strategy
 from helios.data.visualize import visualize_sample
+from helios.internal.beaker import HeliosBeakerLaunchConfig
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
@@ -42,7 +41,7 @@ class CommonComponents(Config):
     run_name: str
     save_folder: str
     supported_modality_names: list[str]
-    launch: BeakerLaunchConfig
+    launch: HeliosBeakerLaunchConfig
     # callbacks: dict[str, Callback]
 
     def validate(self) -> None:
@@ -72,7 +71,7 @@ class HeliosExperimentConfig(Config):
     """Configuration for a Helios experiment."""
 
     run_name: str
-    launch: BeakerLaunchConfig
+    launch: HeliosBeakerLaunchConfig
     model: LatentMIMConfig  # TODO: make this agnostic to training setup
     dataset: HeliosDatasetConfig  # will likely be fixed for us
     data_loader: HeliosDataLoaderConfig  # will likely be fixed for us
