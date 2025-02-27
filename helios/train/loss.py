@@ -23,7 +23,7 @@ class Loss(ABC):
     name: str
 
     @abstractmethod
-    def compute(self, predictions: Any, targets: Any, **kwargs: Any) -> float:
+    def compute(self, predictions: Any, targets: Any, **kwargs: Any) -> Tensor:
         """Compute the loss between predictions and targets."""
         pass
 
@@ -68,7 +68,7 @@ class PatchDiscriminationLoss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute patch discrimination loss between predictions and targets.
 
         Args:
@@ -79,7 +79,6 @@ class PatchDiscriminationLoss(Loss):
         Returns:
             The computed loss value.
         """
-        # TODO: write a function that deals with this
         all_preds, all_masks = predictions.flatten_tokens_and_masks()
         all_targets = targets.flatten_tokens_and_masks()[0]
 
@@ -131,7 +130,7 @@ class L1Loss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute L1 loss between predictions and targets.
 
         Args:
@@ -173,7 +172,6 @@ class L2Loss(Loss):
         all_targets = targets.flatten_tokens_and_masks()[0]
         pred = all_preds[all_masks == MaskValue.DECODER.value]
         target = all_targets[all_masks == MaskValue.DECODER.value]
-
         return F.mse_loss(pred, target)
 
 
@@ -185,7 +183,7 @@ class CrossEntropyLoss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute cross entropy between predictions and targets.
 
         Args:
