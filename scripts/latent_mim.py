@@ -231,15 +231,12 @@ def build_common_components(
     if environ.get("USE_OUTPUT_FOLDER"):
         workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
 
-    # This is not quite correct
-    # TODO: we probably don't need this root dir if we wont train on augusta
     cmd_to_launch = SubCmd.train
     if cmd == SubCmd.launch_prep:
         cmd_to_launch = SubCmd.prep
 
     launch_config = build_launch_config(
         name=f"{run_name}-{cmd_to_launch}",
-        root_dir=get_root_dir(cluster),
         cmd=[script, cmd_to_launch, run_name, cluster, *overrides],
         clusters=cluster,
         nccl_debug=False,

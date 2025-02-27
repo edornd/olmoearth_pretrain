@@ -16,21 +16,9 @@ WORKSPACE = "ai2/earth-systems"
 DEFAULT_HELIOS_WEKA_BUCKET = BeakerWekaBucket("dfive-default", "/weka/dfive-default")
 
 
-def get_root_dir(cluster: str) -> str:
-    root_dir: str = f"weka://{DEFAULT_HELIOS_WEKA_BUCKET.bucket}"
-    if "jupiter" in cluster:
-        root_dir = f"/weka/{DEFAULT_HELIOS_WEKA_BUCKET.bucket}"
-    elif "augusta" in cluster:
-        raise NotImplementedError("Augusta not supported yet")
-    elif "local" in cluster:
-        raise NotImplementedError("Local not supported yet")
-    return root_dir
-
-
 def build_launch_config(
     *,
     name: str,
-    root_dir: str,
     cmd: list[str],
     clusters: list[str] | str,
     task_name: str = "train",
@@ -39,11 +27,6 @@ def build_launch_config(
     nccl_debug: bool = False,
 ) -> BeakerLaunchConfig:
     weka_buckets: list[BeakerWekaBucket] = [DEFAULT_HELIOS_WEKA_BUCKET]
-    if root_dir.startswith("/weka/"):
-        # I am pretty sure we check this cuz it might be augusta or something
-        weka_buckets.append(DEFAULT_HELIOS_WEKA_BUCKET)
-
-    beaker_user = get_beaker_username()
 
     return BeakerLaunchConfig(
         name=f"{name}-{generate_uuid()[:8]}",
@@ -56,20 +39,15 @@ def build_launch_config(
         beaker_image=OLMoCoreBeakerImage.stable,
         num_nodes=1,
         num_gpus=1,
-        shared_filesystem=not is_url(root_dir),
+        shared_filesystem=True,  # We only use Weka for now
         allow_dirty=False,
         priority=BeakerPriority.high,
         env_vars=[
             BeakerEnvVar(name="NCCL_DEBUG", value="INFO" if nccl_debug else "WARN")
         ],
-        # TODO: These EnvSecrets might be pretty annoying to make EVERYONE  to se tup but worht standardizing
         env_secrets=[
-            BeakerEnvSecret(name="BEAKER_TOKEN", secret=f"{beaker_user}_BEAKER_TOKEN"),
-            # TODO: Update to match the convention of name first
             BeakerEnvSecret(name="WANDB_API_KEY", secret="WANDB_API_KEY"),
             BeakerEnvSecret(name="GITHUB_TOKEN", secret="GITHUB_TOKEN"),
-            # BeakerEnvSecret(name="WEKA_ENDPOINT_URL", secret="WEKA_ENDPOINT_URL"),
-            # BeakerEnvSecret(name="SLACK_WEBHOOK_URL", secret="SLACK_WEBHOOK_URL"),
         ],
         setup_steps=[
             # Clone private repo.
