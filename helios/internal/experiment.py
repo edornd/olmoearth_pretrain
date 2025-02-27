@@ -311,8 +311,9 @@ def main(
         rich.get_console().print(usage, highlight=False)
         sys.exit(1)
 
-    script_name, cmd, *overrides = sys.argv
-    common = common_components_builder()
+    script, cmd, run_name, cluster, *overrides = sys.argv
+    # TODO: we should probably have a single common components builder that can be used for all experiments
+    common = common_components_builder(script, cmd, run_name, cluster, overrides)
 
     cmd = SubCmd(cmd)
     cmd.prepare_environment()

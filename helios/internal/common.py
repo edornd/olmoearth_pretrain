@@ -29,14 +29,6 @@ def get_root_dir(cluster: str) -> str:
     return root_dir
 
 
-def get_current_branch() -> str:
-    """Get the current branch name."""
-    import git
-
-    repo = git.Repo(".")
-    return repo.active_branch.name
-
-
 def build_launch_config(
     *,
     name: str,
@@ -54,7 +46,6 @@ def build_launch_config(
         weka_buckets.append(DEFAULT_HELIOS_WEKA_BUCKET)
 
     beaker_user = get_beaker_username()
-    logger.info("Using branch %s", get_current_branch())
 
     return HeliosBeakerLaunchConfig(
         name=f"{name}-{generate_uuid()[:8]}",
@@ -87,10 +78,8 @@ def build_launch_config(
             # Clone private repo.
             "conda install gh --channel conda-forge",
             # assumes that conda is installed, which is true for our beaker images.
-            # "gh auth setup-git",
             "gh auth status",
             "gh repo clone $REPO_URL .",
-            # f"git fetch origin {get_current_branch()}",
             'git checkout "$GIT_REF"',
             "git submodule update --init --recursive",
             # Setup python environment.

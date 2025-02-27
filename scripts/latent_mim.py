@@ -21,7 +21,7 @@ from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
 from helios.internal.common import build_launch_config, get_root_dir
 from helios.internal.experiment import (CommonComponents,
-                                        HeliosVisualizeConfig, main)
+                                        HeliosVisualizeConfig, SubCmd, main)
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks import (DownstreamEvaluatorCallbackConfig,
@@ -209,9 +209,16 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     return trainer_config
 
 
-def build_common_components() -> CommonComponents:
+# TODO: Allow submission of multiple clusters
+def build_common_components(
+    script: str,
+    cmd: SubCmd,
+    run_name: str,
+    cluster: str,
+    overrides: list[str],
+) -> CommonComponents:
     """Build the common components for an experiment."""
-    run_name = "test_run"
+
     # Variables to be changed per user
     workdir = UPath("./output")  # nosec
     # This allows pre-emptible jobs to save their workdir in the output folder
@@ -226,17 +233,16 @@ def build_common_components() -> CommonComponents:
 
     # This is not quite correct
     # TODO: we probably don't need this root dir if we wont train on augusta
+    cmd_to_launch = SubCmd.train
+    if cmd == SubCmd.launch_prep:
+        cmd_to_launch = SubCmd.prep
 
-    cluster = "ai2/jupiter-cirrascale-2"
     launch_config = build_launch_config(
-        name=run_name,
+        name=f"{run_name}-{cmd_to_launch}",
         root_dir=get_root_dir(cluster),
-        cmd=[],
-        clusters=[
-            # "ai2/jupiter-cirrascale-2",
-            "ai2/saturn-cirrascale",
-            "ai2/ceres-cirrascale",
-        ],
+        cmd=[script, cmd_to_launch, run_name, cluster, *overrides],
+        cluster=cluster,
+        nccl_debug=False,
     )
     return CommonComponents(
         run_name=run_name,
