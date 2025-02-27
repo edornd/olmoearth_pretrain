@@ -40,7 +40,7 @@ def build_launch_config(
     budget: str = BUDGET,
     nccl_debug: bool = False,
 ) -> HeliosBeakerLaunchConfig:
-    weka_buckets: list[BeakerWekaBucket] = []
+    weka_buckets: list[BeakerWekaBucket] = [DEFAULT_HELIOS_WEKA_BUCKET]
     if root_dir.startswith("/weka/"):
         # I am pretty sure we check this cuz it might be augusta or something
         weka_buckets.append(DEFAULT_HELIOS_WEKA_BUCKET)
@@ -70,7 +70,6 @@ def build_launch_config(
             # TODO: Update to match the convention of name first
             BeakerEnvSecret(name="WANDB_API_KEY", secret="WANDB_API_KEY"),
             BeakerEnvSecret(name="GITHUB_TOKEN", secret="GITHUB_TOKEN"),
-            # BeakerEnvSecret(name="R2_ENDPOINT_URL", secret="R2_ENDPOINT_URL"),
             # BeakerEnvSecret(name="WEKA_ENDPOINT_URL", secret="WEKA_ENDPOINT_URL"),
             # BeakerEnvSecret(name="SLACK_WEBHOOK_URL", secret="SLACK_WEBHOOK_URL"),
         ],
