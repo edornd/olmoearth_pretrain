@@ -9,6 +9,7 @@ from typing import cast
 import numpy as np
 from olmo_core.config import Config, StrEnum
 from olmo_core.distributed.utils import get_local_rank
+from olmo_core.launch.beaker import BeakerLaunchConfig
 from olmo_core.train import (
     TrainerConfig,
     prepare_training_environment,
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 # TODO: Add support for overrides
 
 
+# maybe this build common components can be the same function for every experiment
 @dataclass
 class CommonComponents(Config):
     """Any configurable items that are common to all experiments."""
@@ -40,6 +42,7 @@ class CommonComponents(Config):
     run_name: str
     save_folder: str
     supported_modality_names: list[str]
+    launch: BeakerLaunchConfig
     # callbacks: dict[str, Callback]
 
     def validate(self) -> None:
@@ -69,7 +72,7 @@ class HeliosExperimentConfig(Config):
     """Configuration for a Helios experiment."""
 
     run_name: str
-    # launch: BeakerLaunchConfig # we should use this as well
+    launch: BeakerLaunchConfig
     model: LatentMIMConfig  # TODO: make this agnostic to training setup
     dataset: HeliosDatasetConfig  # will likely be fixed for us
     data_loader: HeliosDataLoaderConfig  # will likely be fixed for us
@@ -129,6 +132,7 @@ def build_config(
         train_module=train_module_config,
         trainer=trainer_config,
         visualize_config=visualize_config,
+        launch=common.launch,
     )
     logger.info("Overrides: %s", overrides)
     if len(overrides) > 0:
@@ -184,6 +188,13 @@ def visualize(config: HeliosExperimentConfig) -> None:
     logger.info("Done visualizing the dataset")
 
 
+def launch(config: HeliosExperimentConfig) -> None:
+    """Launch an experiment."""
+    logger.info("Launching the experiment")
+    logger.info(config)
+    config.launch.launch(follow=True)
+
+
 class SubCmd(StrEnum):
     """Subcommands for Helios experiments.
 
@@ -227,7 +238,7 @@ class SubCmd(StrEnum):
             # )
 
         if self == SubCmd.launch:
-            raise NotImplementedError
+            launch(config)
         elif self == SubCmd.dry_run:
             pass
         elif self == SubCmd.visualize:

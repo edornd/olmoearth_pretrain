@@ -20,6 +20,7 @@ from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
+from helios.internal.common import build_launch_config, get_root_dir
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
@@ -224,10 +225,22 @@ def build_common_components() -> CommonComponents:
     ]
     if environ.get("USE_OUTPUT_FOLDER"):
         workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
+
+    # This is not quite correct
+    # TODO: we probably don't need this root dir if we wont train on augusta
+
+    cluster = "ai2/jupiter-cirrascale-2"
+    launch_config = build_launch_config(
+        name=run_name,
+        root_dir=get_root_dir(cluster),
+        cmd=[],
+        cluster="ai2/jupiter-cirrascale-2",
+    )
     return CommonComponents(
         run_name=run_name,
         save_folder=workdir,
         supported_modality_names=SUPPORTED_MODALITIES,
+        launch=launch_config,
     )
 
 
