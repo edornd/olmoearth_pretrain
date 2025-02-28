@@ -111,7 +111,7 @@ def build_train_module_config(
     )
     loss_config = LossConfig(
         loss_config={
-            "type": "patch_discrimination",  # Should be registered via enum names
+            "type": "patch_discrimination",  # TODO: Should be registered via enum names
         }
     )
     token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
