@@ -35,7 +35,7 @@ from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 # TODO: Need to use the dynamic computation from trainer for this
-STEPS_PER_EPOCH = 100
+STEPS_PER_EPOCH = 25
 
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
