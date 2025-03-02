@@ -54,6 +54,9 @@ def is_window_pending(window: Window) -> bool:
         if layer_name not in layer_datas:
             # Not prepared, so doesn't need ingestion.
             continue
+        layer_data = layer_datas[layer_name]
+        if len(layer_data.serialized_item_groups) == 0:
+            continue
         if not window.is_layer_completed(layer_name):
             return True
     return False
@@ -100,7 +103,9 @@ def launch_job(
             cluster=clusters,
             command=command,
             datasets=[weka_mount],
-            resources={"gpuCount": 0},
+            # Set one GPU, otherwise we might have hundreds of jobs scheduled on the
+            # same machine.
+            resources={"gpuCount": 1},
             preemptible=True,
         )
         beaker.experiment.create(experiment_name, experiment_spec)
