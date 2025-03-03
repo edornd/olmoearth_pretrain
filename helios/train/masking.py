@@ -285,16 +285,13 @@ class TimeMaskingStrategy(MaskingStrategy):
         mask = torch.as_tensor(mask, device=device)
         return mask
 
-    def apply_mask(
-        self, batch: HeliosSample, patch_size: int = 1, **kwargs: Any
-    ) -> MaskedHeliosSample:
+    def apply_mask(self, batch: HeliosSample, **kwargs: Any) -> MaskedHeliosSample:
         """Apply random masking to the input data.
 
-        Masking happens in patchified form, with whole patches having the same mask. Masking currently doesn't work on non-spatial data.
+        Masking happens temporally, with whole time steps having the same mask. Non-temporal data is randomly masked.
 
         Args:
             batch: Input data of type HeliosSample
-            patch_size: patch size applied to sample
             **kwargs: Additional arguments for maskings
 
         Returns:

@@ -229,7 +229,9 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 subsampled_batch = subsampled_batch.to_device(self.device)
                 # Each microbatch should have about the same number of encoded tokens if
                 # we mask here
-                masked_batch = self.masking_strategy.apply_mask(subsampled_batch)
+                masked_batch = self.masking_strategy.apply_mask(
+                    subsampled_batch, patch_size=patch_size
+                )
 
                 # Run Encoder and decoder on the augmented input
                 decoded, target_output = self.model_forward(
