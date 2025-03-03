@@ -96,14 +96,14 @@ Now we convert the data to Helios format.
 These conversions yield individual metadata CSV files for each window. Concatenate them
 into the per-modality CSVs:
 
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality landsat --time_span two_week
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality landsat --time_span year
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality naip
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality openstreetmap
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality sentinel1 --time_span two_week
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality sentinel1 --time_span year
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality sentinel2 --time_span two_week
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality sentinel2 --time_span year
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality sentinel2_l2a --time_span two_week
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality sentinel2_l2a --time_span year
-    python make_meta_summary.py --helios_path gs://ai2-helios/data/.../ --modality worldcover
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality landsat --time_span two_week
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality landsat --time_span year
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality naip
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality openstreetmap
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality sentinel1 --time_span two_week
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality sentinel1 --time_span year
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality sentinel2 --time_span two_week
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality sentinel2 --time_span year
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality sentinel2_l2a --time_span two_week
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality sentinel2_l2a --time_span year
+    python -m helios.dataset_creation.make_meta_summary --helios_path gs://ai2-helios/data/.../ --modality worldcover
