@@ -452,12 +452,6 @@ class HeliosDataset(Dataset):
                 if not modality.ignore_when_parsing
             ):
                 continue
-            if not all(
-                modality in sample.modalities
-                for modality in self.supported_modalities
-                if modality != Modality.LATLON
-            ):
-                continue
             # check if sample modalities have s1 and s2
             has_s1 = Modality.SENTINEL1 in sample.modalities
             has_s2 = Modality.SENTINEL2_L2A in sample.modalities
