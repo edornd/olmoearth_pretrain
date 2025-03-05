@@ -9,10 +9,6 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 
-GRID_PATH = "esa_grid_granular.csv"
-SUBSAMPLED_GRID_PATH = "esa_grid_subsampled.csv"
-SUBSAMPLED_GLOBAL_GRID_PATH = "esa_grid_subsampled_global.csv"
-
 
 def _find_clusters(
     tile_data: pd.DataFrame, target_tile: str, num_clusters_per_tile: int
