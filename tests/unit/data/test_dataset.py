@@ -53,7 +53,6 @@ def test_collate_helios_missing_modalities(
     samples_with_missing_modalities: list[HeliosSample],
 ):
     """Test the collate_helios_missing_modalities function."""
-
     collated_sample = collate_helios_missing_modalities(
         samples_with_missing_modalities,
         [
@@ -101,6 +100,7 @@ class TestHeliosSample:
         hw_to_sample = list(range(4, 13))
         patch_size = 2
         max_tokens_per_instance = 100
+        missing_modalities_masks = collated_sample.missing_modalities_masks
         subset_sample = collated_sample.subset(
             patch_size=patch_size,
             max_tokens_per_instance=max_tokens_per_instance,
@@ -109,6 +109,13 @@ class TestHeliosSample:
         assert subset_sample.sentinel2_l2a.shape[0] == 3
         assert subset_sample.sentinel1.shape[0] == 3
         assert subset_sample.worldcover.shape[0] == 3
+        for attribute in collated_sample.missing_modalities_masks.keys():
+            if attribute == "missing_modalities_masks":
+                continue
+            assert torch.equal(
+                subset_sample.missing_modalities_masks[attribute],
+                missing_modalities_masks[attribute],
+            )
 
     # Next step will be to write the masking code
     # Then to modify the patch encoders
