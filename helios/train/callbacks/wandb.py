@@ -72,3 +72,14 @@ class HeliosWandBCallback(WandBCallback):
                     }
                 )
                 plt.close(fig)
+                logger.info("Gathering data distribution of the dataset")
+                data_distribution = dataset.get_data_distribution()
+                for modality in data_distribution:
+                    for band in data_distribution[modality]:
+                        self.wandb.log(
+                            {
+                                f"dataset/pretraining_{modality}_{band}": self.wandb.Histogram(
+                                    data_distribution[modality][band]
+                                )
+                            }
+                        )

@@ -57,7 +57,7 @@ class HeliosSample(NamedTuple):
     latlon: ArrayTensor | None = None  # [B, 2]
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     sentinel1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
-    worldcover: ArrayTensor | None = None  # [B, H, W, len(WC_bands)]
+    worldcover: ArrayTensor | None = None  # [B, H, W, 1, len(WC_bands)]
 
     # TODO: Add unit tests for this
     def shape(self, attribute: str, mask: bool = False) -> Sequence[int]:
@@ -434,7 +434,6 @@ class HeliosDataset(Dataset):
     def _get_samples(self) -> list[SampleInformation]:
         """Get the samples from the raw dataset (image tile directory)."""
         tiles = parse_helios_dataset(self.tile_path, self.supported_modalities)
-        logger.info(f"Total tiles: {len(tiles)}")
         samples = image_tiles_to_samples(tiles, self.supported_modalities)
         logger.info(f"Total samples: {len(samples)}")
         logger.info("Distribution of samples before filtering:\n")
@@ -521,6 +520,41 @@ class HeliosDataset(Dataset):
         latlons = np.vstack(latlons)
         return latlons
 
+    def get_data_distribution(self, num_samples: int = 100) -> dict[str, Any]:
+        """Get the data distribution per modality.
+
+        Args:
+            num_samples: The number of samples to sample from the dataset.
+
+        Returns:
+            dict: A dictionary containing the data distribution per modality.
+        """
+        if num_samples > len(self):
+            raise ValueError(
+                f"num_samples {num_samples} is greater than the number of samples in the dataset {len(self)}"
+            )
+        indices_to_sample = random.sample(list(range(len(self))), k=num_samples)
+        data_distribution: dict[str, Any] = {}
+
+        # Assume samples could include different modalities and bands
+        for i in tqdm(indices_to_sample):
+            sample = self[i]
+            for modality in sample.modalities:
+                if modality == "timestamps" or modality == "latlon":
+                    continue
+                modality_data = sample.as_dict(ignore_nones=True)[modality]
+                modality_spec = Modality.get(modality)
+                modality_bands = modality_spec.band_order
+                if modality not in data_distribution:
+                    data_distribution[modality] = {band: [] for band in modality_bands}
+                # for each band, flatten the data and extend the list
+                for idx, band in enumerate(modality_bands):
+                    data_distribution[modality][band].extend(
+                        modality_data[:, :, :, idx].flatten().tolist()  # type: ignore
+                    )
+
+        return data_distribution
+
     def _get_timestamps(self, sample: SampleInformation) -> np.ndarray:
         """Get the timestamps of the sample."""
         sample_sentinel2_l2a = sample.modalities[Modality.SENTINEL2_L2A]
@@ -574,19 +608,12 @@ class HeliosDataset(Dataset):
                         }
                 # Compute the normalization stats for the modality
                 for idx, band in enumerate(modality_bands):
-                    modality_band_data = modality_data[:, :, :, idx]
-                    if modality_spec.is_space_only_varying:
-                        band_data_count = (
-                            modality_band_data.shape[-2] * modality_band_data.shape[-1]
-                        )
-                    elif modality_spec.is_time_only_varying:
-                        band_data_count = modality_band_data.shape[-1]
-                    else:
-                        band_data_count = (
-                            modality_band_data.shape[-3]
-                            * modality_band_data.shape[-2]
-                            * modality_band_data.shape[-1]
-                        )
+                    modality_band_data = modality_data[:, :, :, idx]  # (H, W, T, C)
+                    band_data_count = (
+                        modality_band_data.shape[-3]
+                        * modality_band_data.shape[-2]
+                        * modality_band_data.shape[-1]
+                    )
                     current_count, current_mean, current_var = (
                         norm_dict[modality][band]["count"],
                         norm_dict[modality][band]["mean"],
