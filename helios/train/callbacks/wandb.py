@@ -75,17 +75,6 @@ class HeliosWandBCallback(WandBCallback):
                 logger.info("Gathering normalized data distribution")
                 data_distribution = dataset.get_data_distribution()
                 for modality, modality_data in data_distribution.items():
-                    for band, values in modality_data.items():
-                        import random
-
-                        self.wandb.log(
-                            {
-                                f"dataset/{modality}/{band}_hist": self.wandb.Histogram(
-                                    random.sample(values, 1000)
-                                )
-                            }
-                        )
-                for modality, modality_data in data_distribution.items():
                     fig = plot_modality_data_distribution(modality, modality_data)
                     self.wandb.log(
                         {
