@@ -51,7 +51,13 @@ BASE_COMMAND = (
     "--train_module.optim_config.weight_decay={wd} "
     "--train_module.warmup_duration.value={warmup} "
     "--train_module.warmup_duration.unit=epochs "
-    "--trainer.callbacks.downstream_evaluator.tasks=[{name: m-eurosat, pooling_type: PoolingType.MAX}, {name: m-brick-kiln, pooling_type: PoolingType.MAX}] "
+    "--trainer.callbacks.downstream_evaluator.tasks="
+    + "["
+    + "{"
+    + "name: m-eurosat, pooling_type: PoolingType.MAX}, {"
+    + "name: m-brick-kiln, pooling_type: PoolingType.MAX}"
+    + "}"
+    + "]"
     + token_exit_args
 )
 
