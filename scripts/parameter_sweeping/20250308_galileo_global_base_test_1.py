@@ -51,14 +51,7 @@ BASE_COMMAND = (
     "--train_module.optim_config.weight_decay={wd} "
     "--train_module.warmup_duration.value={warmup} "
     "--train_module.warmup_duration.unit=epochs "
-    "--trainer.callbacks.downstream_evaluator.tasks="
-    + "["
-    + "{"
-    + "name: m-eurosat, pooling_type: PoolingType.MAX}, {"
-    + "name: m-brick-kiln, pooling_type: PoolingType.MAX}"
-    + "}"
-    + "]"
-    + token_exit_args
+    "--trainer.callbacks.downstream_evaluator.tasks=" + token_exit_args
 )
 
 # Iterate over all combinations of hyperparameters
@@ -67,19 +60,22 @@ for lr, wd, warmup in itertools.product(LEARNING_RATES, WEIGHT_DECAYS, WARMUP_EP
     run_name = f"galileo_global_base_test_1_lr_{lr}_wd_{wd}_warmup_{warmup}"
 
     # Construct full command
-    command = BASE_COMMAND.format(
-        run_name=run_name,
-        encoder_embedding_size=ENCODER_EMBEDDING_SIZE,
-        decoder_embedding_size=DECODER_EMBEDDING_SIZE,
-        encoder_depth=ENCODER_DEPTH,
-        decoder_depth=DECODER_DEPTH,
-        encoder_num_heads=ENCODER_NUM_HEADS,
-        decoder_num_heads=DECODER_NUM_HEADS,
-        mlp_ratio=MLP_RATIO,
-        num_workers=NUM_WORKERS,
-        lr=lr,
-        wd=wd,
-        warmup=warmup,
+    command = (
+        BASE_COMMAND.format(
+            run_name=run_name,
+            encoder_embedding_size=ENCODER_EMBEDDING_SIZE,
+            decoder_embedding_size=DECODER_EMBEDDING_SIZE,
+            encoder_depth=ENCODER_DEPTH,
+            decoder_depth=DECODER_DEPTH,
+            encoder_num_heads=ENCODER_NUM_HEADS,
+            decoder_num_heads=DECODER_NUM_HEADS,
+            mlp_ratio=MLP_RATIO,
+            num_workers=NUM_WORKERS,
+            lr=lr,
+            wd=wd,
+            warmup=warmup,
+        )
+        + " --trainer.callbacks.downstream_evaluator.tasks=[{name: m-eurosat, pooling_type: PoolingType.MAX}, {name: m-brick-kiln, pooling_type: PoolingType.MAX}]"
     )
 
     print(f"Launching: {command}")
