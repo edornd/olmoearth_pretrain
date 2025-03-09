@@ -34,7 +34,7 @@ WARMUP_EPOCHS = [2, 10]
 
 # Base command template
 BASE_COMMAND = (
-    "python3 scripts/latent_mim.py launch {run_name} ai2/jupiter-cirrascale-2 "
+    "python3 scripts/latent_mim.py launch {run_name} ai2/saturn-cirrascale "
     "--model.encoder_config.embedding_size={encoder_embedding_size} "
     "--model.encoder_config.depth={encoder_depth} "
     "--model.encoder_config.num_heads={encoder_num_heads} "
