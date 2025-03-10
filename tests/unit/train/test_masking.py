@@ -227,6 +227,14 @@ def test_band_mask_and_unmask() -> None:
             assert unique_per_instance.size(1) == 1
             mask_per_modality.append(unique_per_instance)
 
+            assert (
+                mask.shape
+                == getattr(
+                    batch,
+                    masked_sample.get_unmasked_modality_name(modality_name),
+                ).shape
+            ), f"{modality_name} has incorrect shape"
+
     # shape [b, num_modalities]
     total_mask = torch.concat(mask_per_modality, dim=-1)
     total_elements = total_mask.numel()
