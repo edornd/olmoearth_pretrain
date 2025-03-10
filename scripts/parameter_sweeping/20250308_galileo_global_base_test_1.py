@@ -1,4 +1,4 @@
-"""This script is used to sweep the hyperparameters for the Galileo local tiny model."""
+"""This script is used to sweep the hyperparameters for the Galileo global base model."""
 
 # Test 1: disable token exit, use max pooling
 

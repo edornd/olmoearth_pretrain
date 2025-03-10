@@ -1,4 +1,4 @@
-"""This script is used to sweep the hyperparameters for the Galileo local tiny model."""
+"""This script is used to sweep the hyperparameters for the Galileo global tiny model."""
 
 import itertools
 import subprocess  # nosec

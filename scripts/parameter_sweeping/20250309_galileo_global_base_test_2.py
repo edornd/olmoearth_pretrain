@@ -1,5 +1,7 @@
 """This script is used to sweep the hyperparameters for the Galileo local tiny model."""
 
+# Test 2: test out skip bad batches
+
 import itertools
 import subprocess  # nosec
 
