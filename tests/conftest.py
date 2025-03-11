@@ -15,6 +15,7 @@ from rasterio.transform import from_origin
 from helios.data.constants import BandSet, Modality, ModalitySpec
 from helios.dataset.parse import GridTile, ModalityImage, ModalityTile, TimeSpan
 from helios.dataset.sample import SampleInformation
+from helios.train.masking import MaskValue
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -146,3 +147,53 @@ def prepare_samples_and_supported_modalities() -> (
             Modality.LATLON,  # We want to include latlon even though it is not a read in modality
         ],
     )
+
+
+@pytest.fixture
+def masked_sample_dict(
+    modality_band_set_len_and_total_bands: dict[str, tuple[int, int]],
+) -> dict[str, torch.Tensor]:
+    """Get a masked sample dictionary."""
+    sentinel2_l2a_num_bands = modality_band_set_len_and_total_bands["sentinel2_l2a"][1]
+    latlon_num_bands = modality_band_set_len_and_total_bands["latlon"][1]
+    B, H, W, T, C = (
+        4,
+        4,
+        4,
+        2,
+        sentinel2_l2a_num_bands,
+    )
+    # Create dummy sentinel2_l2a data: shape (B, H, W, T, C)
+    sentinel2_l2a = torch.randn(B, H, W, T, C)
+    # Here we assume 0 (ONLINE_ENCODER) means the token is visible.
+    sentinel2_l2a_mask = torch.full(
+        (B, H, W, T, C), fill_value=MaskValue.ONLINE_ENCODER.value, dtype=torch.long
+    )
+    # Dummy latitude-longitude data.
+    latlon = torch.randn(B, latlon_num_bands)
+    latlon_mask = torch.full(
+        (B, latlon_num_bands), fill_value=MaskValue.DECODER.value, dtype=torch.float32
+    )
+    worldcover = torch.randn(B, H, W, 1, 1)
+    worldcover_mask = torch.full(
+        (B, H, W, 1, 1), fill_value=MaskValue.DECODER.value, dtype=torch.float32
+    )
+    # Generate valid timestamps:
+    # - days: range 1..31,
+    # - months: range 1..13,
+    # - years: e.g. 2018-2019.
+    days = torch.randint(0, 25, (B, T, 1), dtype=torch.long)
+    months = torch.randint(0, 12, (B, T, 1), dtype=torch.long)
+    years = torch.randint(2018, 2020, (B, T, 1), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
+
+    masked_sample_dict = {
+        "sentinel2_l2a": sentinel2_l2a,
+        "sentinel2_l2a_mask": sentinel2_l2a_mask,
+        "latlon": latlon,
+        "latlon_mask": latlon_mask,
+        "worldcover": worldcover,
+        "worldcover_mask": worldcover_mask,
+        "timestamps": timestamps,
+    }
+    return masked_sample_dict

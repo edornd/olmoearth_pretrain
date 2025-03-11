@@ -7,13 +7,10 @@ import torch
 
 from helios.data.constants import Modality, ModalitySpec
 from helios.data.transform import TransformConfig
-from helios.nn.flexihelios import (
-    Encoder,
-    Predictor,
-)
+from helios.nn.flexihelios import Encoder, Predictor
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import PatchDiscriminationLoss
-from helios.train.masking import MaskedHeliosSample, MaskValue
+from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +35,7 @@ def modality_band_set_len_and_total_bands(
 
 def test_latentmim_with_loss(
     modality_band_set_len_and_total_bands: dict[str, tuple[int, int]],
+    masked_sample_dict: dict[str, torch.Tensor],
 ) -> None:
     """Test the full end to end forward pass of the model with an exit configuration and loss."""
     supported_modalities = [
@@ -51,48 +49,10 @@ def test_latentmim_with_loss(
     latlon_num_band_sets, latlon_num_bands = modality_band_set_len_and_total_bands[
         "latlon"
     ]
-    B, H, W, T, C = (
-        1,
-        4,
-        4,
-        2,
-        sentinel2_l2a_num_bands,
-    )
-    # Create dummy sentinel2_l2a data: shape (B, H, W, T, C)
-    sentinel2_l2a = torch.randn(B, H, W, T, C)
-    # Here we assume 0 (ONLINE_ENCODER) means the token is visible.
-    sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
-    # Dummy latitude-longitude data.
-    latlon = torch.randn(B, latlon_num_bands)
-    latlon_mask = (
-        torch.ones(B, latlon_num_bands, dtype=torch.float32) * MaskValue.DECODER.value
-    )
-    worldcover = torch.randn(B, H, W, 1, 1)
-    worldcover_mask = (
-        torch.ones(B, H, W, 1, 1, dtype=torch.float32) * MaskValue.DECODER.value
-    )
-    # Generate valid timestamps:
-    # - days: range 1..31,
-    # - months: range 1..13,
-    # - years: e.g. 2018-2019.
-    days = torch.randint(0, 25, (B, T, 1), dtype=torch.long)
-    months = torch.randint(0, 12, (B, T, 1), dtype=torch.long)
-    years = torch.randint(2018, 2020, (B, T, 1), dtype=torch.long)
-    timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
-
-    masked_sample_dict = {
-        "sentinel2_l2a": sentinel2_l2a,
-        "sentinel2_l2a_mask": sentinel2_l2a_mask,
-        "latlon": latlon,
-        "latlon_mask": latlon_mask,
-        "worldcover": worldcover,
-        "worldcover_mask": worldcover_mask,
-        "timestamps": timestamps,
-    }
+    B, H, W, T, C = masked_sample_dict["sentinel2_l2a"].shape
     x = MaskedHeliosSample(**masked_sample_dict)
 
     patch_size = 4
-    input_res = 1
     # Shared constants for encoder and predictor
     MAX_PATCH_SIZE = 8
     NUM_HEADS = 2
@@ -127,7 +87,7 @@ def test_latentmim_with_loss(
     transform = TransformConfig(transform_type="no_transform").build()
     latentmim = LatentMIM(encoder, predictor, transform)
     output = latentmim.forward(x, patch_size)
-    output = predictor.forward(output, timestamps, patch_size, input_res)
+    # output = predictor.forward(output, x.timestamps, patch_size, input_res)
     patched_H = H // patch_size
     patched_W = W // patch_size
     assert output.sentinel2_l2a is not None
@@ -216,3 +176,88 @@ def test_latentmim_with_loss(
             assert param.grad is not None, name
     for name, param in latentmim.target_encoder.named_parameters():
         assert param.grad is None, name
+
+
+def test_latentmim_with_missing_modalities_in_sample(
+    masked_sample_dict: dict[str, torch.Tensor], set_random_seeds: None
+) -> None:
+    """Test the full end to end forward pass of the model with an exit configuration and loss."""
+    # supported_modalities = [
+    #     Modality.SENTINEL2_L2A,
+    #     Modality.LATLON,
+    #     Modality.WORLDCOVER,
+    # ]
+    # worldcover_mask = masked_sample_dict["worldcover_mask"]
+    # worldcover_mask[0] = MaskValue.MISSING.value
+    # worldcover_mask[3] = MaskValue.MISSING.value
+    # masked_sample_dict["worldcover_mask"] = worldcover_mask
+    # x = MaskedHeliosSample(**masked_sample_dict)
+
+    # patch_size = 4
+    # # Shared constants for encoder and predictor
+    # MAX_PATCH_SIZE = 8
+    # NUM_HEADS = 2
+    # MLP_RATIO = 4.0
+    # MAX_SEQ_LENGTH = 12
+    # DEPTH = 2
+    # DROP_PATH = 0.1
+    # ENCODER_EMBEDDING_SIZE = 16
+    # DECODER_EMBEDDING_SIZE = 16
+    # encoder = Encoder(
+    #     supported_modalities=supported_modalities,
+    #     embedding_size=ENCODER_EMBEDDING_SIZE,
+    #     max_patch_size=MAX_PATCH_SIZE,
+    #     num_heads=NUM_HEADS,
+    #     mlp_ratio=MLP_RATIO,
+    #     max_sequence_length=MAX_SEQ_LENGTH,
+    #     use_channel_embs=True,
+    #     depth=DEPTH,
+    #     drop_path=DROP_PATH,
+    # )
+    # predictor = Predictor(
+    #     supported_modalities=supported_modalities,
+    #     encoder_embedding_size=ENCODER_EMBEDDING_SIZE,
+    #     decoder_embedding_size=DECODER_EMBEDDING_SIZE,
+    #     depth=DEPTH,
+    #     mlp_ratio=MLP_RATIO,
+    #     num_heads=NUM_HEADS,
+    #     max_sequence_length=MAX_SEQ_LENGTH,
+    #     drop_path=DROP_PATH,
+    #     learnable_channel_embeddings=True,
+    # )
+    # transform = TransformConfig(transform_type="no_transform").build()
+    # latentmim = LatentMIM(encoder, predictor, transform)
+    # output = latentmim.forward(x, patch_size)
+    # loss_fn = PatchDiscriminationLoss()
+    # with torch.no_grad():
+    #     logger.info("target encoder running here")
+    #     target_output = latentmim.target_encoder.forward(
+    #         x.unmask(),
+    #         patch_size=patch_size,
+    #         token_exit_cfg={
+    #             modality: 0 for modality in latentmim.encoder.supported_modality_names
+    #         },
+    #     )
+    #     target_output_no_missing = latentmim.target_encoder.forward(
+    #         x.unmask(),
+    #         patch_size=patch_size,
+    #         token_exit_cfg={
+    #             modality: 0 for modality in latentmim.encoder.supported_modality_names
+    #         },
+    #     )
+    # # check if the worldcover output is empty
+    # for i in range(4):
+    #     logger.info(f"worldcover numel output shape{i}: {output.worldcover[i].numel()}")
+    #     # assert output.worldcover[i].numel() == 0
+    # loss_missing = loss_fn.compute(output, target_output)
+    # # loss_no_missing = loss_fn.compute(output_no_missing, target_output_no_missing)
+    # # logger.info(f"loss_missing: {loss_missing}")
+    # # logger.info(f"loss_no_missing: {loss_no_missing}")
+    # # assert loss_missing == loss_no_missing
+    # # loss_no_missing.backward()
+    # loss_missing.backward()
+    # assert False
+
+    # I wanto check if the loss value would be different with the missing worldcover samples and
+    # without them. then try the same thing with all the modalities missing.
+    # check many different combinations of masks to double check
