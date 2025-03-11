@@ -374,7 +374,14 @@ class TestPredictor:
 
     def test_add_masks(self, predictor: Predictor) -> None:
         """Test adding masks to tokens."""
-        B, H, W, T, C, D = 1, 2, 2, 1, 2, 16
+        B, H, W, T, C, D = (
+            1,
+            2,
+            2,
+            1,
+            2,
+            8,
+        )  # Changed D from 16 to 8 to match predictor's embedding size
         sentinel2_l2a_tokens = torch.randn(B, H, W, T, C, D)
         sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.float32)
         # Set one pixel to be decoded (mask value 2)
