@@ -21,23 +21,14 @@ from pyproj import Transformer
 from torch.utils.data import Dataset
 from upath import UPath
 
-from helios.data.constants import (
-    BASE_RESOLUTION,
-    IMAGE_TILE_SIZE,
-    PROJECTION_CRS,
-    TIMESTAMPS,
-    Modality,
-    ModalitySpec,
-    TimeSpan,
-)
+from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
+                                   PROJECTION_CRS, TIMESTAMPS, Modality,
+                                   ModalitySpec, TimeSpan)
 from helios.data.normalize import Normalizer, Strategy
 from helios.data.utils import convert_to_db
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
-from helios.dataset.sample import (
-    SampleInformation,
-    image_tiles_to_samples,
-    load_image_for_sample,
-)
+from helios.dataset.sample import (SampleInformation, image_tiles_to_samples,
+                                   load_image_for_sample)
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.types import ArrayTensor
 
@@ -162,6 +153,8 @@ class HeliosSample(NamedTuple):
             """Move the tensor to the specified device if it is not None."""
             if tensor is None:
                 return None
+            if isinstance(tensor, dict):
+                return {k: v.to(device) for k, v in tensor.items()}
             return tensor.to(device)
 
         # Add type annotation to make the type checker happy
@@ -263,6 +256,7 @@ class HeliosSample(NamedTuple):
                 "max height/width allowed by sample smaller than values in hw_to_sample"
             )
         sampled_hw_p = choice(hw_to_sample)
+        logger.info(f"sampled_hw_p: {sampled_hw_p}")
         max_t = self._get_max_t_within_token_budget(
             sampled_hw_p, max_tokens_per_instance
         )
@@ -270,6 +264,7 @@ class HeliosSample(NamedTuple):
         start_h = np.random.choice(self.height - sampled_hw + 1)
         start_w = np.random.choice(self.width - sampled_hw + 1)
         start_t = np.random.choice(self.time - max_t + 1)
+        logger.info(f"start_h: {start_h}, start_w: {start_w}, start_t: {start_t}")
         new_data_dict: dict[str, ArrayTensor] = {}
         for attribute, modality in self.as_dict(ignore_nones=True).items():
             assert modality is not None

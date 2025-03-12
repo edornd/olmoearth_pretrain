@@ -260,15 +260,9 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
             # Now apply the embedding to
             if self.is_any_data_seen_by_encoder(token_mask):
                 patchified_data = modality_data[..., channel_set_indices]
-                if modality == "worldcover":
-                    logger.info(f"patchified_data wordlcover: {patchified_data}")
                 patchified_data = self.per_modality_embeddings[modality][
                     self._get_embedding_module_name(modality, idx)
                 ](patchified_data, **modality_specific_kwargs)
-                if modality == "worldcover":
-                    logger.info(
-                        f"patchified_data wordlcover after embedding: {patchified_data}"
-                    )
             else:
                 logger.info(f"modality {modality} is not seen by encoder")
                 patchified_data = torch.empty(
@@ -604,6 +598,7 @@ class FlexiHeliosBase(nn.Module):
             masks.append(rearrange(x_modality_mask, "b ... -> b (...)"))
         tokens = torch.cat(tokens, dim=1)
         masks = torch.cat(masks, dim=1)
+
         return tokens, masks
 
     @staticmethod
@@ -700,6 +695,12 @@ class FlexiHeliosBase(nn.Module):
 
         # Create binary masks for each category
         binarized_missing_mask = sorted_mask == MaskValue.MISSING.value
+        binarized_target_encoder_only_mask = (
+            sorted_mask == MaskValue.TARGET_ENCODER_ONLY.value
+        )
+        logger.info(
+            f"binarized_target_encoder_only_mask: {binarized_target_encoder_only_mask.sum()}"
+        )
         binarized_decoder_mask = sorted_mask == MaskValue.DECODER.value
         binarized_online_encoder_mask = sorted_mask == MaskValue.ONLINE_ENCODER.value
 
@@ -709,9 +710,9 @@ class FlexiHeliosBase(nn.Module):
         encoder_counts = binarized_online_encoder_mask.sum(dim=1)  # [B]
 
         # Get maximum lengths for each category across the batch
-        max_length_to_be_decoded = decoder_counts.max().item()
-        max_length_of_unmasked_tokens = encoder_counts.max().item()
-        max_length_of_missing_tokens = missing_counts.max().item()
+        max_length_to_be_decoded = decoder_counts.max()
+        max_length_of_unmasked_tokens = encoder_counts.max()
+        max_length_of_missing_tokens = missing_counts.max()
 
         # Create padded tensors for each category
         B, T, D = tokens.shape
@@ -743,49 +744,49 @@ class FlexiHeliosBase(nn.Module):
             dtype=org_mask_dtype,
         )
 
-        # Use a hybrid approach - vectorized preparation but loop for filling
-        # This is still more efficient than the original implementation
         for b in range(B):
-            # Get masks for this batch
-            b_missing_mask = binarized_missing_mask[b]
-            b_decoder_mask = binarized_decoder_mask[b]
-            b_encoder_mask = binarized_online_encoder_mask[b]
-
             # Get counts for this batch
-            missing_count = missing_counts[b].item()
-            decoder_count = decoder_counts[b].item()
-            encoder_count = encoder_counts[b].item()
+            missing_count = missing_counts[b]
+            decoder_count = decoder_counts[b]
+            encoder_count = encoder_counts[b]
 
-            # Fill z (missing tokens)
+            # Since we sorted in descending order, MISSING tokens come first
             if missing_count > 0:
-                missing_indices = torch.where(b_missing_mask)[0]
-                z[b, :missing_count] = tokens[b, missing_indices]
+                z[b, :missing_count] = tokens[b, :missing_count]
                 z_mask[b, :missing_count] = 1
 
-            # Fill x (decoder tokens)
+            # Count TARGET_ENCODER_ONLY tokens
+            target_encoder_only_count = (
+                sorted_mask[b] == MaskValue.TARGET_ENCODER_ONLY.value
+            ).sum()
+
+            # DECODER tokens start after MISSING and TARGET_ENCODER_ONLY tokens
+            decoder_start = missing_count + target_encoder_only_count
+
             if decoder_count > 0:
-                decoder_indices = torch.where(b_decoder_mask)[0]
-                x[b, :decoder_count] = tokens[b, decoder_indices]
+                x[b, :decoder_count] = tokens[
+                    b, decoder_start : decoder_start + decoder_count
+                ]
                 x_mask[b, :decoder_count] = 1
 
-            # Fill y (encoder tokens)
+            # ONLINE_ENCODER tokens are at the end after sorting in descending order
+            encoder_start = T - encoder_count
             if encoder_count > 0:
-                encoder_indices = torch.where(b_encoder_mask)[0]
-                y[b, :encoder_count] = tokens[b, encoder_indices]
+                y[b, :encoder_count] = tokens[
+                    b, encoder_start : encoder_start + encoder_count
+                ]
                 y_mask[b, :encoder_count] = 1
 
         return x, y, z, x_mask, y_mask, z_mask, indices
 
     @staticmethod
-    def split_x_y_fixed_counts(
+    def split_x_y_no_missing_values_in_mask(
         tokens: Tensor, mask: Tensor
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         """Fully vectorized split_x_y for the case with fixed token counts and no missing tokens.
 
         This specialized version is used when:
         1. There are no missing tokens (MaskValue.MISSING) in any batch
-        2. All batches have the same number of decoder tokens (MaskValue.DECODER)
-        3. All batches have the same number of encoder tokens (MaskValue.ONLINE_ENCODER)
 
         In this case, we can use direct slicing operations which are fully vectorized.
 
@@ -802,34 +803,36 @@ class FlexiHeliosBase(nn.Module):
             z_mask: Empty tensor of shape [B, 0] (no missing tokens).
             indices: Indices for restoring the original token ordering of shape [B, T].
         """
-        B, T, D = tokens.shape
-
-        # Sort tokens by mask value (descending order)
+        B, _, D = tokens.shape
+        org_mask_dtype = mask.dtype
+        # https://stackoverflow.com/a/68621610/2332296
+        # move all non-masked values to the front of their rows
+        # and all masked values to be decoded to the end of their rows
         sorted_mask, indices = torch.sort(
             mask.int(), dim=1, descending=True, stable=True
         )
         tokens = tokens.gather(1, indices[:, :, None].expand_as(tokens))
-
-        # Create binary masks for each category
         binarized_decoder_mask = sorted_mask == MaskValue.DECODER.value
         binarized_online_encoder_mask = sorted_mask == MaskValue.ONLINE_ENCODER.value
+        # cut off to the length of the longest sequence
+        max_length_to_be_decoded = binarized_decoder_mask.sum(-1).max()
+        max_length_of_unmasked_tokens = binarized_online_encoder_mask.sum(-1).max()
+        # x will be the query tokens, and y will be the key / value tokens
+        x = tokens[:, :max_length_to_be_decoded]
+        y = tokens[:, -max_length_of_unmasked_tokens:]
 
-        # Calculate counts (should be the same for all batches)
-        decoder_count = binarized_decoder_mask.sum(dim=1)[
-            0
-        ].item()  # Take from first batch
-        encoder_count = binarized_online_encoder_mask.sum(dim=1)[0].item()
-
-        # Since we know exactly where the tokens are in the sorted tensor,
-        # we can directly slice them out
-        x = tokens[:, :decoder_count]
-        y = tokens[:, decoder_count : decoder_count + encoder_count]
-
-        # Create masks (all ones since all tokens are valid)
-        x_mask = torch.ones((B, decoder_count), device=tokens.device, dtype=mask.dtype)
-        y_mask = torch.ones((B, encoder_count), device=tokens.device, dtype=mask.dtype)
-
-        # No z tokens or z_mask needed since there are no missing tokens
+        # the x_mask is just going to be used in the reconstruction, to know which
+        # x tokens to add back into the token list. TODO is this even necessary? it could
+        # get padded with noise tokens since we don't care about reconstruction at all
+        # for a whole bunch of tokens
+        x_mask = binarized_decoder_mask[:, :max_length_to_be_decoded].to(
+            dtype=org_mask_dtype
+        )
+        # the y mask is going to be used to determine which of the y values take. True values
+        # take part in the attention (we don't take the inverse here, unlike in the decoder)
+        y_mask = binarized_online_encoder_mask[:, -max_length_of_unmasked_tokens:].to(
+            dtype=org_mask_dtype
+        )
         z = tokens.new_zeros((B, 0, D))  # Empty tensor
         z_mask = mask.new_zeros((B, 0))  # Empty tensor
 
@@ -870,11 +873,7 @@ class FlexiHeliosBase(nn.Module):
         """
         # Get dimensions
         B, T = indices.shape[0], indices.shape[1]
-        D = (
-            x.shape[-1]
-            if x.shape[1] > 0
-            else (y.shape[-1] if y.shape[1] > 0 else z.shape[-1])
-        )
+        D = x.shape[-1]
 
         # Create empty tensor to hold all tokens
         tokens = torch.zeros((B, T, D), dtype=x.dtype, device=x.device)
@@ -1280,9 +1279,6 @@ class Encoder(FlexiHeliosBase):
         """
         # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
-        logger.info(
-            f"patchified_tokens_and_masks keys: {list(patchified_tokens_and_masks.keys())}"
-        )
         if (exit_after_n_layers is None) or (exit_after_n_layers > 0):
             patchified_tokens_and_masks = self.apply_attn(
                 x=patchified_tokens_and_masks,
@@ -1409,6 +1405,7 @@ class Predictor(FlexiHeliosBase):
     def apply_attn(
         self,
         x: dict[str, Tensor],
+        # THESE ARE NOT USED
         timestamps: Tensor,
         patch_size: int,
         input_res: int,
@@ -1426,9 +1423,14 @@ class Predictor(FlexiHeliosBase):
             # true values for values we want to take part in attention
             x = blk(x=x, y=y, attn_mask=y_mask.bool())
         x = self.combine_x_y(x, y, z, x_mask, y_mask, z_mask, indices)
+        logger.info(f"x shape after combine_x_y {x.shape}")
+        logger.info(f"x mask sum: {x_mask.sum()}")
+        logger.info(f"y mask sum: {y_mask.sum()}")
+        logger.info(f"z mask sum: {z_mask.sum()}")
         tokens_per_modality_dict = self.split_and_expand_per_modality(
             x, modalities_to_dims_dict
         )
+        tokens_per_modality_dict.update(original_masks_dict)
         return tokens_per_modality_dict
 
     def is_any_data_to_be_decoded(self, modality_mask: Tensor) -> bool:
@@ -1493,7 +1495,7 @@ class Predictor(FlexiHeliosBase):
                     modality_data.shape[
                         :-1
                     ],  # all dimensions except the last (embedding)
-                    dtype=torch.float32,
+                    dtype=torch.float32,  # should be configurable
                     device=modality_data.device,
                     requires_grad=modality_data.requires_grad,
                 )
@@ -1599,6 +1601,17 @@ class PredictorConfig(Config):
         """Get the supported modalities."""
         return get_modality_specs_from_names(self.supported_modality_names)
 
+    def build(self) -> "Predictor":
+        """Build the predictor."""
+        self.validate()
+        kwargs = self.as_dict(exclude_none=True, recurse=False)
+        # supported_modality_names is replaced by supported_modalities
+        kwargs.pop("supported_modality_names")
+        kwargs["supported_modalities"] = self.supported_modalities
+        logger.info(f"Predictor kwargs: {kwargs}")
+        return Predictor(**kwargs)
+
+    # TODO: add multiple combo of variables for encoder and predictor, and being able to build them directly, no need to specify each parameter, e.g., encoder_tiny, encoder_small, encoder_base, encoder_large, etc.
     def build(self) -> "Predictor":
         """Build the predictor."""
         self.validate()

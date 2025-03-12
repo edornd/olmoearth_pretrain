@@ -13,16 +13,19 @@ import torch
 from rasterio.transform import from_origin
 
 from helios.data.constants import BandSet, Modality, ModalitySpec
-from helios.dataset.parse import GridTile, ModalityImage, ModalityTile, TimeSpan
+from helios.dataset.parse import (GridTile, ModalityImage, ModalityTile,
+                                  TimeSpan)
 from helios.dataset.sample import SampleInformation
 from helios.train.masking import MaskValue
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(autouse=True)
 def set_random_seeds() -> None:
     """Set random seeds for reproducibility."""
-    np.random.seed(42)
     torch.manual_seed(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(42)
     random.seed(42)
 
 
@@ -111,7 +114,8 @@ def prepare_samples_and_supported_modalities() -> (
                             / "s2_l2a_10m.tif",
                             BandSet(
                                 ["B05", "B06", "B07", "B8A", "B11", "B12"], 32
-                            ): data_path / "s2_l2a_20m.tif",
+                            ): data_path
+                            / "s2_l2a_20m.tif",
                             BandSet(["B01", "B09"], 64): data_path / "s2_l2a_40m.tif",
                         },
                     ),

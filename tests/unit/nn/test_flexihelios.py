@@ -5,16 +5,9 @@ import torch
 from einops import repeat
 
 from helios.data.constants import Modality, ModalitySpec
-from helios.nn.flexihelios import (
-    Encoder,
-    EncoderConfig,
-    FlexiHeliosBase,
-    FlexiHeliosCompositeEncodings,
-    PoolingType,
-    Predictor,
-    PredictorConfig,
-    TokensAndMasks,
-)
+from helios.nn.flexihelios import (Encoder, EncoderConfig, FlexiHeliosBase,
+                                   FlexiHeliosCompositeEncodings, PoolingType,
+                                   Predictor, PredictorConfig, TokensAndMasks)
 from helios.train.masking import MaskValue
 
 
@@ -427,6 +420,7 @@ class TestPredictor:
         tokens = torch.tensor(
             [[5, 6, 7, 8, 2, 13, 14, 15, 16], [5, 6, 7, 1, 2, 3, 4, 15, 16]]
         ).unsqueeze(-1)
+        # should we handle target encoder values here?
         mask = torch.tensor(
             [
                 [
@@ -540,6 +534,7 @@ class TestPredictor:
             f"Expected tokens[1] to be {expected_tokens_batch1.squeeze(-1)}, "
             f"got {tokens[1].squeeze(-1)}"
         )
+        # Need to add asserts that the masks are put back together correctly
 
     def test_predictor_config(self, supported_modalities: list[ModalitySpec]) -> None:
         """Tests we can build with default args."""

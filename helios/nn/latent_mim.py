@@ -1,5 +1,6 @@
 """Simple set up of latent predictor."""
 
+import logging
 from copy import deepcopy
 from dataclasses import dataclass
 
@@ -7,9 +8,12 @@ import torch.nn as nn
 from olmo_core.config import Config
 
 from helios.data.transform import Transform, TransformConfig
-from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
+from helios.nn.flexihelios import (EncoderConfig, PredictorConfig,
+                                   TokensAndMasks)
 from helios.nn.utils import DistributedMixins
 from helios.train.masking import MaskedHeliosSample
+
+logger = logging.getLogger(__name__)
 
 
 class LatentMIM(nn.Module, DistributedMixins):
@@ -50,6 +54,7 @@ class LatentMIM(nn.Module, DistributedMixins):
         # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
         latent = self.encoder(x, patch_size=patch_size)
         decoded = self.decoder(latent, timestamps=x.timestamps, patch_size=patch_size)
+        logger.info(f"decoded mask sum: {decoded.sentinel1_mask.sum()}")
         return decoded
 
 

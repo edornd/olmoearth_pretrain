@@ -10,12 +10,8 @@ import torch
 from einops import rearrange
 
 from helios.data.constants import Modality, ModalitySpec
-from helios.nn.flexihelios import (
-    Encoder,
-    FlexiHeliosPatchEmbeddings,
-    Predictor,
-    TokensAndMasks,
-)
+from helios.nn.flexihelios import (Encoder, FlexiHeliosPatchEmbeddings,
+                                   Predictor, TokensAndMasks)
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)
@@ -697,17 +693,17 @@ class TestPredictor:
         )
         assert output.latlon_mask.shape == (B, latlon_num_band_sets)
         # Skip backward pass test for now
-        # output.sentinel2_l2a.sum().backward()
-        # for name, param in predictor.named_parameters():
-        #     if not any(
-        #         x in name
-        #         for x in [
-        #             "pos_embed",
-        #             "month_embed",
-        #             "composite_encodings.per_modality_channel_embeddings.latlon",
-        #         ]
-        #     ):
-        #         assert param.grad is not None, name
+        output.sentinel2_l2a.sum().backward()
+        for name, param in predictor.named_parameters():
+            if not any(
+                x in name
+                for x in [
+                    "pos_embed",
+                    "month_embed",
+                    "composite_encodings.per_modality_channel_embeddings.latlon",
+                ]
+            ):
+                assert param.grad is not None, name
 
     @torch.no_grad()
     def test_token_exit_cfgs_single_exit_equivalency(
@@ -909,14 +905,14 @@ def test_end_to_end_with_exit_config(
         1,
     )
     # Skip backward pass test for now
-    # output.worldcover.sum().backward()
-    # for name, param in predictor.named_parameters():
-    #     if not any(
-    #         x in name
-    #         for x in [
-    #             "pos_embed",
-    #             "month_embed",
-    #             "composite_encodings.per_modality_channel_embeddings.latlon",
-    #         ]
-    #     ):
-    #         assert param.grad is not None, name
+    output.worldcover.sum().backward()
+    for name, param in predictor.named_parameters():
+        if not any(
+            x in name
+            for x in [
+                "pos_embed",
+                "month_embed",
+                "composite_encodings.per_modality_channel_embeddings.latlon",
+            ]
+        ):
+            assert param.grad is not None, name

@@ -13,19 +13,16 @@ from olmo_core.float8 import Float8Config
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import ReduceType
-from olmo_core.train.train_module.transformer import (
-    TransformerActivationCheckpointingConfig,
-)
+from olmo_core.train.train_module.transformer import \
+    TransformerActivationCheckpointingConfig
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
-from helios.train.train_module.train_module import (
-    HeliosTrainModule,
-    HeliosTrainModuleConfig,
-)
+from helios.train.train_module.train_module import (HeliosTrainModule,
+                                                    HeliosTrainModuleConfig)
 from helios.train.utils import split_batch
 
 logger = getLogger(__name__)
@@ -223,6 +220,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 patch_size = np.random.choice(
                     np.arange(1, self.model.encoder.max_patch_size)
                 )
+                logger.info(f"patch_size: {patch_size}")
                 microbatch = self.model.transform.apply(microbatch)
                 subsampled_batch = microbatch.subset(
                     patch_size, token_budget, h_w_to_sample
@@ -233,7 +231,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 masked_batch = self.masking_strategy.apply_mask(
                     subsampled_batch, patch_size=patch_size
                 )
-
                 # Run Encoder and decoder on the augmented input
                 decoded, target_output = self.model_forward(
                     masked_batch, patch_size, self.token_exit_cfg
@@ -269,6 +266,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Run a forward pass."""
         with self._model_forward_context():
+            logger.info(f"batch mask sum: {batch.sentinel2_l2a_mask.sum()}")
             decoded = self.model.forward(batch, patch_size)
             with torch.no_grad():
                 logger.info("target encoder running here")
