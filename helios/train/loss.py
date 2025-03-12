@@ -82,7 +82,9 @@ class PatchDiscriminationLoss(Loss):
         all_preds, all_masks = predictions.flatten_tokens_and_masks()
         all_targets = targets.flatten_tokens_and_masks()[0]
         decoder_mask = all_masks == MaskValue.DECODER.value
-        logger.info(f"decoder_mask: {decoder_mask.shape} decoder mask value {decoder_mask.sum(dim=-1)}")
+        logger.info(
+            f"decoder_mask: {decoder_mask.shape} decoder mask value {decoder_mask.sum(dim=-1)}"
+        )
         logger.info(f"pred: {all_preds[decoder_mask].shape}")
         pred = all_preds[decoder_mask].unsqueeze(dim=0)
         logger.info(f"pred: {pred.shape}")

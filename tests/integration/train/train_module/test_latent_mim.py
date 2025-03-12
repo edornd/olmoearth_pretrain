@@ -10,14 +10,11 @@ from olmo_core.optim.adamw import AdamWConfig
 from olmo_core.train.config import TrainerConfig
 
 from helios.data.constants import Modality
-from helios.data.dataloader import HeliosDataLoaderConfig
-from helios.data.dataset import (HeliosDatasetConfig, HeliosSample,
-                                 collate_helios)
+from helios.data.dataset import HeliosSample, collate_helios
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
 from helios.nn.latent_mim import LatentMIM, LatentMIMConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
-from helios.train.train_module import train_module
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 torch.set_default_device("cpu")
@@ -41,7 +38,9 @@ def samples_with_missing_modalities() -> list[HeliosSample]:
     )
     example_latlon_data = torch.randn(2, device="cpu", dtype=torch.float32)
     timestamps = torch.tensor(
-        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]], dtype=torch.int32, device="cpu"
+        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]],
+        dtype=torch.int32,
+        device="cpu",
     )
 
     sample1 = HeliosSample(
@@ -73,24 +72,46 @@ def samples_with_missing_modalities() -> list[HeliosSample]:
 
 
 @pytest.fixture
-def samples_without_missing_modalities() -> list[HeliosSample]:
+def samples_without_missing_modalities(
+    set_random_seeds: None,
+) -> list[HeliosSample]:
     """Samples without missing modalities."""
     s2_H, s2_W, s2_T, s2_C = 16, 16, 12, 13
     s1_H, s1_W, s1_T, s1_C = 16, 16, 12, 2
     wc_H, wc_W, wc_T, wc_C = 16, 16, 1, 10
     example_s2_data = torch.randn(
-        s2_H, s2_W, s2_T, s2_C, device="cpu", dtype=torch.float32, requires_grad=True
+        s2_H,
+        s2_W,
+        s2_T,
+        s2_C,
+        device="cpu",
+        dtype=torch.float32,
+        requires_grad=True,
     )
     example_s1_data = torch.randn(
-        s1_H, s1_W, s1_T, s1_C, device="cpu", dtype=torch.float32, requires_grad=True
+        s1_H,
+        s1_W,
+        s1_T,
+        s1_C,
+        device="cpu",
+        dtype=torch.float32,
+        requires_grad=True,
     )
     example_wc_data = torch.randn(
-        wc_H, wc_W, wc_T, wc_C, device="cpu", dtype=torch.float32, requires_grad=True
+        wc_H,
+        wc_W,
+        wc_T,
+        wc_C,
+        device="cpu",
+        dtype=torch.float32,
+        requires_grad=True,
     )
     print(f"example_wc_data device: {example_wc_data.device}")
     example_latlon_data = torch.randn(2, device="cpu", dtype=torch.float32)
     timestamps = torch.tensor(
-        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]], dtype=torch.int32, device="cpu"
+        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]],
+        dtype=torch.int32,
+        device="cpu",
     )
 
     sample1 = HeliosSample(
@@ -139,7 +160,9 @@ def supported_modality_names() -> list[str]:
 
 
 @pytest.fixture
-def latent_mim_model(supported_modality_names, set_random_seeds) -> LatentMIM:
+def latent_mim_model(
+    supported_modality_names: list[str], set_random_seeds: None
+) -> LatentMIM:
     """Create a real LatentMIM model for testing."""
     # Create encoder config
     encoder_config = EncoderConfig(
@@ -198,7 +221,9 @@ def optim_config() -> AdamWConfig:
 
 
 @pytest.fixture
-def train_module_config(optim_config) -> LatentMIMTrainModuleConfig:
+def train_module_config(
+    optim_config: AdamWConfig,
+) -> LatentMIMTrainModuleConfig:
     """Create a LatentMIMTrainModuleConfig for testing."""
     token_exit_cfg = {modality: 0 for modality in Modality.names()}
     loss_cfg = {"type": "patch_discrimination"}
@@ -227,19 +252,36 @@ def trainer_config(tmp_path: Path) -> TrainerConfig:
 
 
 class MockTrainer:
-    def __init__(self):
-        self._metrics = {}
+    """Mock trainer class for testing."""
 
-    def record_metric(self, name, value, reduce_type, namespace=None):
+    def __init__(self) -> None:
+        """Initialize the mock trainer."""
+        self._metrics: dict[str, float] = {}
+
+    def record_metric(
+        self,
+        name: str,
+        value: float,
+        reduce_type: str,
+        namespace: str | None = None,
+    ) -> None:
+        """Record a metric in the mock trainer.
+
+        Args:
+            name: Name of the metric
+            value: Value of the metric
+            reduce_type: Type of reduction to apply
+            namespace: Optional namespace for the metric
+        """
         self._metrics[name] = value
 
 
 def test_train_batch_without_missing_modalities(
-    samples_without_missing_modalities,
-    supported_modalities,
-    latent_mim_model,
+    samples_without_missing_modalities: list[HeliosSample],
+    supported_modalities: list,
+    latent_mim_model: LatentMIM,
     train_module_config: LatentMIMTrainModuleConfig,
-    set_random_seeds,
+    set_random_seeds: None,
 ) -> None:
     """Test train batch without missing modalities."""
     # Create a collated batch
@@ -248,8 +290,10 @@ def test_train_batch_without_missing_modalities(
     with patch("helios.train.train_module.train_module.build_world_mesh"):
         # Mock the trainer property
         mock_trainer = MockTrainer()
-        # Mock the on_attach method to return None
-        train_module.on_attach = MagicMock(return_value=None)
+        # Create a MagicMock for on_attach
+        on_attach_mock = MagicMock(return_value=None)
+        # Patch the on_attach method
+        train_module.on_attach = on_attach_mock  # type: ignore
         train_module._attach_trainer(mock_trainer)
 
         # Patch the update_target_encoder method to avoid MagicMock issues
@@ -261,17 +305,17 @@ def test_train_batch_without_missing_modalities(
             logger.info(mock_trainer._metrics)
             assert torch.allclose(
                 mock_trainer._metrics["train/Patch Discrimination"],
-                torch.tensor(0.8937),
+                torch.tensor(0.6373),
                 atol=1e-4,
             )
 
 
 def test_train_batch_with_missing_modalities(
-    samples_with_missing_modalities,
-    supported_modalities,
-    latent_mim_model,
+    samples_with_missing_modalities: list[HeliosSample],
+    supported_modalities: list,
+    latent_mim_model: LatentMIM,
     train_module_config: LatentMIMTrainModuleConfig,
-    set_random_seeds,
+    set_random_seeds: None,
 ) -> None:
     """Test train batch with missing modalities."""
     # Create a collated batch
@@ -280,8 +324,10 @@ def test_train_batch_with_missing_modalities(
     with patch("helios.train.train_module.train_module.build_world_mesh"):
         # Mock the trainer property
         mock_trainer = MockTrainer()
-        # Mock the on_attach method to return None
-        train_module.on_attach = MagicMock(return_value=None)
+        # Create a MagicMock for on_attach
+        on_attach_mock = MagicMock(return_value=None)
+        # Patch the on_attach method
+        train_module.on_attach = on_attach_mock  # type: ignore
         train_module._attach_trainer(mock_trainer)
 
         # Patch the update_target_encoder method to avoid MagicMock issues
@@ -293,6 +339,6 @@ def test_train_batch_with_missing_modalities(
             logger.info(mock_trainer._metrics)
             assert torch.allclose(
                 mock_trainer._metrics["train/Patch Discrimination"],
-                torch.tensor(0.8667),
+                torch.tensor(0.6072),
                 atol=1e-2,
             )

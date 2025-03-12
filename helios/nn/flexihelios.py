@@ -14,9 +14,11 @@ from torch import Tensor, nn
 from helios.data.constants import Modality, ModalitySpec
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.nn.attention import Block
-from helios.nn.encodings import (get_1d_sincos_pos_encoding,
-                                 get_2d_sincos_pos_encoding_with_resolution,
-                                 get_month_encoding_table)
+from helios.nn.encodings import (
+    get_1d_sincos_pos_encoding,
+    get_2d_sincos_pos_encoding_with_resolution,
+    get_month_encoding_table,
+)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
@@ -277,7 +279,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
     @staticmethod
     def is_any_data_seen_by_encoder(modality_mask: Tensor) -> bool:
         """Check if any data is seen by the encoder."""
-        return modality_mask.min() == MaskValue.ONLINE_ENCODER.value
+        return (MaskValue.ONLINE_ENCODER.value == modality_mask).any()
 
     def forward(
         self,
@@ -865,31 +867,26 @@ class FlexiHeliosBase(nn.Module):
 
     @staticmethod
     def combine_x_y(
-        x: Tensor,
-        y: Tensor,
-        z: Tensor,
-        x_mask: Tensor,
-        y_mask: Tensor,
-        z_mask: Tensor,
+        unmasked_tokens: Tensor,
+        tokens_to_decode: Tensor,
+        missing_tokens: Tensor,
+        unmasked_tokens_mask: Tensor,
+        tokens_to_decode_mask: Tensor,
+        missing_tokens_mask: Tensor,
         indices: Tensor,
     ) -> Tensor:
         """Reintegrate the separated token sequences into their original order.
-
-        This function combines:
-        1. x tokens (to be decoded)
-        2. y tokens (used as context)
-        3. z tokens (missing tokens)
 
         The token masks zero out positions which are not used/needed,
         and the final scatter step re-applies the original ordering tracked in 'indices'.
 
         Args:
-            x: Query tokens of shape [B, X_len, D].
-            y: Key/value tokens of shape [B, Y_len, D].
-            z: Missing tokens of shape [B, Z_len, D].
-            x_mask: Binary mask for x tokens of shape [B, X_len].
-            y_mask: Binary mask for y tokens of shape [B, Y_len].
-            z_mask: Binary mask for z tokens of shape [B, Z_len].
+            unmasked_tokens: Query tokens of shape [B, X_len, D].
+            tokens_to_decode: Key/value tokens of shape [B, Y_len, D].
+            missing_tokens: Missing tokens of shape [B, Z_len, D].
+            unmasked_tokens_mask: Binary mask for unmasked tokens of shape [B, X_len].
+            tokens_to_decode_mask: Binary mask for tokens to decode of shape [B, Y_len].
+            missing_tokens_mask: Binary mask for missing tokens of shape [B, Z_len].
             indices: Indices for restoring the original token ordering of shape [B, T].
 
         Returns:
@@ -898,85 +895,106 @@ class FlexiHeliosBase(nn.Module):
         """
         # Get dimensions
         B, T = indices.shape[0], indices.shape[1]
-        D = x.shape[-1]
+        D = unmasked_tokens.shape[-1]
 
         # Create empty tensor to hold all tokens
-        tokens = torch.zeros((B, T, D), dtype=x.dtype, device=x.device)
+        tokens = torch.zeros(
+            (B, T, D), dtype=unmasked_tokens.dtype, device=unmasked_tokens.device
+        )
 
         # Calculate counts for each category across all batches
-        z_counts = z_mask.sum(dim=1).int()  # [B]
-        x_counts = x_mask.sum(dim=1).int()  # [B]
-        y_counts = y_mask.sum(dim=1).int()  # [B]
+        missing_counts = missing_tokens_mask.sum(dim=1).int()  # [B]
+        tokens_to_decode_counts = tokens_to_decode_mask.sum(dim=1).int()  # [B]
+        unmasked_tokens_counts = unmasked_tokens_mask.sum(dim=1).int()  # [B]
 
         # Create position indices for each token type
         # For z tokens (missing tokens)
-        z_positions = (
-            torch.arange(z.shape[1], device=z.device).unsqueeze(0).expand(B, -1)
+        missing_positions = (
+            torch.arange(missing_tokens.shape[1], device=missing_tokens.device)
+            .unsqueeze(0)
+            .expand(B, -1)
         )
-        z_valid = z_positions < z_counts.unsqueeze(1)
+        missing_valid = missing_positions < missing_counts.unsqueeze(1)
 
         # For x tokens (decoder tokens)
-        x_positions = (
-            torch.arange(x.shape[1], device=x.device).unsqueeze(0).expand(B, -1)
+        tokens_to_decode_positions = (
+            torch.arange(tokens_to_decode.shape[1], device=tokens_to_decode.device)
+            .unsqueeze(0)
+            .expand(B, -1)
         )
-        x_valid = x_positions < x_counts.unsqueeze(1)
+        tokens_to_decode_valid = (
+            tokens_to_decode_positions < tokens_to_decode_counts.unsqueeze(1)
+        )
 
         # For y tokens (encoder tokens)
-        y_positions = (
-            torch.arange(y.shape[1], device=y.device).unsqueeze(0).expand(B, -1)
+        unmasked_tokens_positions = (
+            torch.arange(unmasked_tokens.shape[1], device=unmasked_tokens.device)
+            .unsqueeze(0)
+            .expand(B, -1)
         )
-        y_valid = y_positions < y_counts.unsqueeze(1)
+        unmasked_tokens_valid = (
+            unmasked_tokens_positions < unmasked_tokens_counts.unsqueeze(1)
+        )
 
         # Calculate starting positions for each token type in the combined sequence
-        z_start = torch.zeros(B, dtype=torch.long, device=z.device)
-        x_start = z_counts
-        y_start = T - y_counts
+        missing_start = torch.zeros(B, dtype=torch.long, device=missing_tokens.device)
+        tokens_to_decode_start = missing_counts
+        unmasked_tokens_start = T - unmasked_tokens_counts
 
         # Create target indices for each token type
-        z_target_indices = z_start.unsqueeze(1) + z_positions
-        x_target_indices = x_start.unsqueeze(1) + x_positions
-        y_target_indices = y_start.unsqueeze(1) + y_positions
+        missing_target_indices = missing_start.unsqueeze(1) + missing_positions
+        tokens_to_decode_target_indices = (
+            tokens_to_decode_start.unsqueeze(1) + tokens_to_decode_positions
+        )
+        unmasked_tokens_target_indices = (
+            unmasked_tokens_start.unsqueeze(1) + unmasked_tokens_positions
+        )
 
         # Create batch indices for scatter operation
-        batch_indices = torch.arange(B, device=z.device).unsqueeze(1)
+        batch_indices = torch.arange(B, device=missing_tokens.device).unsqueeze(1)
 
         # Apply masks to tokens
-        z_masked = z * z_mask.unsqueeze(-1)
-        x_masked = x * x_mask.unsqueeze(-1)
-        y_masked = y * y_mask.unsqueeze(-1)
+        missing_masked = missing_tokens * missing_tokens_mask.unsqueeze(-1)
+        tokens_to_decode_masked = tokens_to_decode * tokens_to_decode_mask.unsqueeze(-1)
+        unmasked_tokens_masked = unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
 
-        # Place z tokens (missing tokens)
-        z_valid_flat = z_valid.flatten()
-        if z_valid_flat.any():
-            batch_indices_z = batch_indices.expand(-1, z.shape[1]).flatten()[
-                z_valid_flat
+        missing_valid_flat = missing_valid.flatten()
+        if missing_valid_flat.any():
+            batch_indices_missing = batch_indices.expand(
+                -1, missing_tokens.shape[1]
+            ).flatten()[missing_valid_flat]
+            missing_target_indices_flat = missing_target_indices.flatten()[
+                missing_valid_flat
             ]
-            z_target_indices_flat = z_target_indices.flatten()[z_valid_flat]
-            tokens[batch_indices_z, z_target_indices_flat] = z_masked.reshape(-1, D)[
-                z_valid.reshape(-1)
+            tokens[batch_indices_missing, missing_target_indices_flat] = (
+                missing_masked.reshape(-1, D)[missing_valid.reshape(-1)]
+            )
+
+        tokens_to_decode_valid_flat = tokens_to_decode_valid.flatten()
+        if tokens_to_decode_valid_flat.any():
+            batch_indices_tokens_to_decode = batch_indices.expand(
+                -1, tokens_to_decode.shape[1]
+            ).flatten()[tokens_to_decode_valid_flat]
+            tokens_to_decode_target_indices_flat = (
+                tokens_to_decode_target_indices.flatten()[tokens_to_decode_valid_flat]
+            )
+            tokens[
+                batch_indices_tokens_to_decode, tokens_to_decode_target_indices_flat
+            ] = tokens_to_decode_masked.reshape(-1, D)[
+                tokens_to_decode_valid.reshape(-1)
             ]
 
-        # Place x tokens (decoder tokens)
-        x_valid_flat = x_valid.flatten()
-        if x_valid_flat.any():
-            batch_indices_x = batch_indices.expand(-1, x.shape[1]).flatten()[
-                x_valid_flat
-            ]
-            x_target_indices_flat = x_target_indices.flatten()[x_valid_flat]
-            tokens[batch_indices_x, x_target_indices_flat] = x_masked.reshape(-1, D)[
-                x_valid.reshape(-1)
-            ]
-
-        # Place y tokens (encoder tokens)
-        y_valid_flat = y_valid.flatten()
-        if y_valid_flat.any():
-            batch_indices_y = batch_indices.expand(-1, y.shape[1]).flatten()[
-                y_valid_flat
-            ]
-            y_target_indices_flat = y_target_indices.flatten()[y_valid_flat]
-            tokens[batch_indices_y, y_target_indices_flat] = y_masked.reshape(-1, D)[
-                y_valid.reshape(-1)
-            ]
+        unmasked_tokens_valid_flat = unmasked_tokens_valid.flatten()
+        if unmasked_tokens_valid_flat.any():
+            batch_indices_unmasked = batch_indices.expand(
+                -1, unmasked_tokens.shape[1]
+            ).flatten()[unmasked_tokens_valid_flat]
+            unmasked_tokens_target_indices_flat = (
+                unmasked_tokens_target_indices.flatten()[unmasked_tokens_valid_flat]
+            )
+            tokens[batch_indices_unmasked, unmasked_tokens_target_indices_flat] = (
+                unmasked_tokens_masked.reshape(-1, D)[unmasked_tokens_valid.reshape(-1)]
+            )
 
         # Scatter tokens back to their original positions
         tokens = tokens.scatter(1, indices[:, :, None].expand_as(tokens), tokens)
@@ -1448,10 +1466,6 @@ class Predictor(FlexiHeliosBase):
             # true values for values we want to take part in attention
             x = blk(x=x, y=y, attn_mask=y_mask.bool())
         x = self.combine_x_y(x, y, z, x_mask, y_mask, z_mask, indices)
-        logger.info(f"x shape after combine_x_y {x.shape}")
-        logger.info(f"x mask sum: {x_mask.sum()}")
-        logger.info(f"y mask sum: {y_mask.sum()}")
-        logger.info(f"z mask sum: {z_mask.sum()}")
         tokens_per_modality_dict = self.split_and_expand_per_modality(
             x, modalities_to_dims_dict
         )
@@ -1460,7 +1474,7 @@ class Predictor(FlexiHeliosBase):
 
     def is_any_data_to_be_decoded(self, modality_mask: Tensor) -> bool:
         """Check if any data is to be decoded for a given modality."""
-        return modality_mask.max() == MaskValue.DECODER.value
+        return (MaskValue.DECODER.value == modality_mask).any()
 
     def forward(
         self,
@@ -1488,6 +1502,7 @@ class Predictor(FlexiHeliosBase):
         )
         for modality in modalities_to_process:
             x_modality = getattr(x, modality)
+            # Are these normalizations masked correctly?
             x_modality = self.input_norm(x_modality)
             x_modality = self.encoder_to_decoder_embed(x_modality)
             masked_modality_name = x.get_masked_modality_name(modality)
@@ -1501,8 +1516,7 @@ class Predictor(FlexiHeliosBase):
         tokens_and_masks = self.apply_attn(
             decoder_emedded_dict, timestamps, patch_size, input_res
         )
-        # TODO: Fac
-        # tor this out into a more readable function
+        # TODO: Factor this out into a more readable function
         output_dict = {}
         available_modalities = return_modalities_from_dict(tokens_and_masks)
         modalities_to_process = get_modalities_to_process(
@@ -1541,7 +1555,7 @@ class Predictor(FlexiHeliosBase):
                         self.norm(per_channel_modality_data)
                     )
                 else:
-                    # If all data should be ignored by encoder, we need to return an empty tensor
+                    # If all data should be ignored by decoder, we need to return an empty tensor
                     output_data = torch.empty(
                         modality_data.shape[0],
                         *modality_specific_dims,
@@ -1634,20 +1648,6 @@ class PredictorConfig(Config):
         kwargs.pop("supported_modality_names")
         kwargs["supported_modalities"] = self.supported_modalities
         logger.info(f"Predictor kwargs: {kwargs}")
-        return Predictor(**kwargs)
-
-    # TODO: add multiple combo of variables for encoder and predictor, and being able to build them directly, no need to specify each parameter, e.g., encoder_tiny, encoder_small, encoder_base, encoder_large, etc.
-    def build(self) -> "Predictor":
-        """Build the predictor."""
-        self.validate()
-        kwargs = self.as_dict(exclude_none=True, recurse=False)
-        # supported_modality_names is replaced by supported_modalities
-        kwargs.pop("supported_modality_names")
-        kwargs["supported_modalities"] = self.supported_modalities
-        logger.info(f"Predictor kwargs: {kwargs}")
-        return Predictor(**kwargs)
-
-        # TODO: add multiple combo of variables for encoder and predictor, and being able to build them directly, no need to specify each parameter, e.g., encoder_tiny, encoder_small, encoder_base, encoder_large, etc.
         return Predictor(**kwargs)
 
 
