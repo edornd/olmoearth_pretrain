@@ -94,10 +94,11 @@ def launch_job(
     resources = batch_v1.ComputeResource()
     resources.cpu_milli = 32000
     resources.memory_mib = 65536
+    resources.boot_disk_mib = 1000000
     task.compute_resource = resources
 
     task.max_retry_count = 1
-    task.max_run_duration = "3600s"
+    task.max_run_duration = "10800s"
 
     group = batch_v1.TaskGroup()
     group.task_count = 1
@@ -105,10 +106,16 @@ def launch_job(
 
     policy = batch_v1.AllocationPolicy.InstancePolicy()
     policy.machine_type = "e2-standard-32"
+    policy.provisioning_model = batch_v1.AllocationPolicy.ProvisioningModel.SPOT
     instances = batch_v1.AllocationPolicy.InstancePolicyOrTemplate()
     instances.policy = policy
+    service_account = batch_v1.ServiceAccount()
+    service_account.email = (
+        "helios-dataset-creation@earthsystem-dev-c3po.iam.gserviceaccount.com"
+    )
     allocation_policy = batch_v1.AllocationPolicy()
     allocation_policy.instances = [instances]
+    allocation_policy.service_account = service_account
 
     job = batch_v1.Job()
     job.task_groups = [group]
@@ -127,6 +134,7 @@ def launch_job(
 
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method("forkserver")
     parser = argparse.ArgumentParser(
         description="Launch Beaker jobs to get Sentinel-2 L1C data",
     )
@@ -164,7 +172,7 @@ if __name__ == "__main__":
         "--batch_size",
         type=int,
         help="Batch size, i.e., number of windows to ingest per Beaker job",
-        default=10,
+        default=50,
     )
     parser.add_argument(
         "--max_jobs",
@@ -173,11 +181,12 @@ if __name__ == "__main__":
         default=None,
     )
     args = parser.parse_args()
-    clusters = args.clusters.split(",")
 
     # Check which windows are not done.
     dataset = Dataset(UPath(args.ds_path))
-    windows = dataset.load_windows(groups=[GROUP], workers=args.workers)
+    windows = dataset.load_windows(
+        groups=[GROUP], workers=args.workers, show_progress=True
+    )
     p = multiprocessing.Pool(args.workers)
     is_pending_list = list(
         tqdm.tqdm(

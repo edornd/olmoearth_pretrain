@@ -232,6 +232,14 @@ class Modality:
         ignore_when_parsing=False,
     )
 
+    SRTM = ModalitySpec(
+        name="srtm",
+        tile_resolution_factor=16,
+        band_sets=[BandSet(["srtm"], 16)],
+        is_multitemporal=False,
+        ignore_when_parsing=False,
+    )
+
     OPENSTREETMAP = ModalitySpec(
         name="openstreetmap",
         tile_resolution_factor=16,
