@@ -23,6 +23,7 @@ from helios.train.masking import MaskValue
 def set_random_seeds() -> None:
     """Set random seeds for reproducibility."""
     torch.manual_seed(42)
+    torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     np.random.seed(42)

@@ -14,11 +14,9 @@ from torch import Tensor, nn
 from helios.data.constants import Modality, ModalitySpec
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.nn.attention import Block
-from helios.nn.encodings import (
-    get_1d_sincos_pos_encoding,
-    get_2d_sincos_pos_encoding_with_resolution,
-    get_month_encoding_table,
-)
+from helios.nn.encodings import (get_1d_sincos_pos_encoding,
+                                 get_2d_sincos_pos_encoding_with_resolution,
+                                 get_month_encoding_table)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
@@ -787,9 +785,9 @@ class FlexiHeliosBase(nn.Module):
         tokens[:, -tokens_to_decode.shape[1] :] = (
             tokens_to_decode * tokens_to_decode_mask.unsqueeze(-1)
         )
-        tokens[:, : unmasked_tokens.shape[1]] += (
-            unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
-        )
+        tokens[
+            :, : unmasked_tokens.shape[1]
+        ] += unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
         tokens = tokens.scatter(1, indices[:, :, None].expand_as(tokens), tokens)
         return tokens
 
@@ -1041,6 +1039,9 @@ class Encoder(FlexiHeliosBase):
         new_mask = mask != MaskValue.ONLINE_ENCODER.value
 
         tokens, indices, new_mask = self.remove_masked_tokens(x, new_mask)
+        logger.info(
+            f"sum and std of tokens we do attention on: {tokens.sum()} {tokens.std()}"
+        )
         if exit_ids_seq is not None:
             exit_ids_seq, _, _ = self.remove_masked_tokens(exit_ids_seq, mask)
             # still linear projections
@@ -1067,7 +1068,6 @@ class Encoder(FlexiHeliosBase):
             # attention
             # WARNING: THIS MAY CHANGE DEPENDING ON THE ATTENTION IMPLEMENTATION
             tokens = blk(x=tokens, y=None, attn_mask=~new_mask.bool())
-
         if exit_ids_seq is not None:
             # this should only ever be called by the target encoder,
             # in a torch.no_grad context
@@ -1081,10 +1081,17 @@ class Encoder(FlexiHeliosBase):
             )
         # we apply the norm before we add the removed tokens,
         # so that the norm is only computed against "real" tokens
+        logger.info(
+            f"sum and std of tokens before norm: {tokens.sum()} {tokens.std()} shape {tokens.shape}"
+        )
         tokens = self.norm(tokens)
+        logger.info(f"sum and std of tokens after norm: {tokens.sum()} {tokens.std()}")
         # we don't care about the mask returned by add_removed_tokens, since we will
         # just use the original, unclipped mask here
         tokens, _ = self.add_removed_tokens(tokens, indices, new_mask)
+        logger.debug(
+            f"sum and std of tokens after add_removed_tokens: {tokens.sum()} {tokens.std()}"
+        )
         tokens_per_modality_dict = self.split_and_expand_per_modality(
             tokens, modalities_to_dims_dict
         )
@@ -1123,6 +1130,11 @@ class Encoder(FlexiHeliosBase):
                 exit_after_n_layers=exit_after_n_layers,
                 token_exit_cfg=token_exit_cfg,
             )
+        total_value = 0
+        for modality in x.modalities:
+            modality_value = patchified_tokens_and_masks[modality].sum()
+            logger.info(f"modality value after attn: {modality} {modality_value}")
+            total_value += modality_value
         return TokensAndMasks(**patchified_tokens_and_masks)
 
 
@@ -1336,6 +1348,9 @@ class Predictor(FlexiHeliosBase):
                     )
                 else:
                     # If all data should be ignored by decoder, we need to return an empty tensor
+                    logger.info(
+                        f"modality_data in decoding {modality}: {modality_data.shape} is empty"
+                    )
                     output_data = torch.empty(
                         modality_data.shape[0],
                         *modality_specific_dims,

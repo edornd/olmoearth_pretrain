@@ -52,9 +52,23 @@ class LatentMIM(nn.Module, DistributedMixins):
     def forward(self, x: MaskedHeliosSample, patch_size: int) -> TokensAndMasks:
         """Forward pass for the Latent MIM Style."""
         # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
+        # total_value = 0
+        # for modality in x.modalities:
+        #     total_value += getattr(x, modality).sum()
+        # logger.info(f"total value input: {total_value}")
         latent = self.encoder(x, patch_size=patch_size)
-        decoded = self.decoder(latent, timestamps=x.timestamps, patch_size=patch_size)
-        logger.info(f"decoded mask sum: {decoded.sentinel1_mask.sum()}")
+        # total_value = 0
+        # for modality in x.modalities:
+        #     modality_value = getattr(latent, modality).sum()
+        #     logger.info(f"modality value: {modality} {modality_value}")
+        #     total_value += modality_value
+        # logger.info(f"total value after encoder: {total_value}")
+        # total_value = 0
+        decoded = self.decoder(latent)
+        # for modality in x.modalities:
+        #     total_value += getattr(decoded, modality).sum()
+        # logger.info(f"total value decoder: {total_value}")
+
         return decoded
 
 

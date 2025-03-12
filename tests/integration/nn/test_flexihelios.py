@@ -10,8 +10,12 @@ import torch
 from einops import rearrange
 
 from helios.data.constants import Modality, ModalitySpec
-from helios.nn.flexihelios import (Encoder, FlexiHeliosPatchEmbeddings,
-                                   Predictor, TokensAndMasks)
+from helios.nn.flexihelios import (
+    Encoder,
+    FlexiHeliosPatchEmbeddings,
+    Predictor,
+    TokensAndMasks,
+)
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)

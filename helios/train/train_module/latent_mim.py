@@ -197,7 +197,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         numbers of tokens making the loss for token averaged losses
         like l1 and l2 weight microbatches with less tokens relatively more.
 
-        NOTE: For contrastive losses, the loss is invariant to the global batch size across GPUS as well
+        NOTE: For non contrastive losses, the loss is invariant to the global batch size across GPUS as well
         """
         self.update_target_encoder()
         # Set the maximum number of tokens
@@ -275,4 +275,8 @@ class LatentMIMTrainModule(HeliosTrainModule):
                     patch_size=patch_size,
                     token_exit_cfg=token_exit_cfg,
                 )
+                total_value = 0
+                for modality in target_output.modalities:
+                    total_value += getattr(target_output, modality).sum()
+                logger.info(f"total value after target encoder: {total_value}")
             return decoded, target_output
