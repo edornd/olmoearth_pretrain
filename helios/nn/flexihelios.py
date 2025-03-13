@@ -1082,17 +1082,10 @@ class Encoder(FlexiHeliosBase):
             )
         # we apply the norm before we add the removed tokens,
         # so that the norm is only computed against "real" tokens
-        logger.debug(
-            f"sum and std of tokens before norm: {tokens.sum()} {tokens.std()} shape {tokens.shape}"
-        )
         tokens = self.norm(tokens)
-        logger.debug(f"sum and std of tokens after norm: {tokens.sum()} {tokens.std()}")
         # we don't care about the mask returned by add_removed_tokens, since we will
         # just use the original, unclipped mask here
         tokens, _ = self.add_removed_tokens(tokens, indices, new_mask)
-        logger.debug(
-            f"sum and std of tokens after add_removed_tokens: {tokens.sum()} {tokens.std()}"
-        )
         tokens_per_modality_dict = self.split_and_expand_per_modality(
             tokens, modalities_to_dims_dict
         )

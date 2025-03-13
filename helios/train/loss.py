@@ -81,25 +81,9 @@ class PatchDiscriminationLoss(Loss):
         """
         all_preds, all_masks = predictions.flatten_tokens_and_masks()
         all_targets = targets.flatten_tokens_and_masks()[0]
-        logger.info(
-            f"all targets sum and std: {all_targets.sum()}, {all_targets.std()}"
-        )
-        # Log the sum of every other element of all masks each way
-        # First way: even indices
-        even_indices = torch.arange(0, all_masks.shape[-1], 2, device=all_masks.device)
-        even_sum = all_masks[:, even_indices].sum()
-
-        # Second way: odd indices
-        odd_indices = torch.arange(1, all_masks.shape[-1], 2, device=all_masks.device)
-        odd_sum = all_masks[:, odd_indices].sum()
         decoder_mask = all_masks == MaskValue.DECODER.value
         pred = all_preds[decoder_mask].unsqueeze(dim=0)
         target = all_targets[decoder_mask].unsqueeze(dim=0)
-        # check pred or target is nan
-        if pred.isnan().any():
-            logger.info(f"pred is nan: {pred[pred.isnan()]}")
-        if target.isnan().any():
-            logger.info(f"target is nan: {target[target.isnan()]}")
         bs, nt, _ = pred.shape
 
         if self.pred2unit:

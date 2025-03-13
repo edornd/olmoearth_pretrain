@@ -12,20 +12,20 @@ from olmo_core.distributed.utils import get_local_tensor, get_world_size
 from olmo_core.float8 import Float8Config
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
-
 from olmo_core.train.common import Duration, ReduceType
 from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
 )
-
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
-from helios.train.train_module.train_module import (HeliosTrainModule,
-                                                    HeliosTrainModuleConfig)
+from helios.train.train_module.train_module import (
+    HeliosTrainModule,
+    HeliosTrainModuleConfig,
+)
 from helios.train.utils import split_batch
 
 logger = getLogger(__name__)
@@ -288,17 +288,12 @@ class LatentMIMTrainModule(HeliosTrainModule):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Run a forward pass."""
         with self._model_forward_context():
-            logger.info(f"batch mask sum: {batch.sentinel2_l2a_mask.sum()}")
             decoded = self.model.forward(batch, patch_size)
             with torch.no_grad():
-                logger.info("target encoder running here")
+                logger.info("Target Encoder forward pass...")
                 target_output = self.model.target_encoder.forward(
                     batch.unmask(),
                     patch_size=patch_size,
                     token_exit_cfg=token_exit_cfg,
                 )
-                total_value = 0
-                for modality in target_output.modalities:
-                    total_value += getattr(target_output, modality).sum()
-                logger.info(f"total value after target encoder: {total_value}")
             return decoded, target_output

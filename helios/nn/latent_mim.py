@@ -8,8 +8,7 @@ import torch.nn as nn
 from olmo_core.config import Config
 
 from helios.data.transform import Transform, TransformConfig
-from helios.nn.flexihelios import (EncoderConfig, PredictorConfig,
-                                   TokensAndMasks)
+from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
 from helios.nn.utils import DistributedMixins
 from helios.train.masking import MaskedHeliosSample
 
@@ -51,30 +50,8 @@ class LatentMIM(nn.Module, DistributedMixins):
 
     def forward(self, x: MaskedHeliosSample, patch_size: int) -> TokensAndMasks:
         """Forward pass for the Latent MIM Style."""
-        # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
-        # total_value = 0
-        # for modality in x.modalities:
-        #     total_value += getattr(x, modality).sum()
-        # logger.info(f"total value input: {total_value}"
-        # logger.info(f"sentinel1_mask num_missing: {(x.sentinel1_mask == 3).sum()}")
-        # for modality in x.modalities:
-        #     modality_value = getattr(x, modality)
-        #     if modality_value.isnan().any():
-        #         logger.info(f"modality value is nan before encoder: {modality} {modality_value[modality_value.isnan()]}")
-        #         raise ValueError(f"modality value is nan: {modality}")
         latent = self.encoder(x, patch_size=patch_size)
-        # total_value = 0
-        for modality in x.modalities:
-            modality_value = getattr(latent, modality)
-            if modality_value.isnan().any():
-                logger.info(f"modality value is nan before decoder: {modality} {modality_value[modality_value.isnan()]}")
-
-        # total_value = 0
         decoded = self.decoder(latent)
-        # for modality in x.modalities:
-        #     total_value += getattr(decoded, modality).sum()
-        # logger.info(f"total value decoder: {total_value}")
-
         return decoded
 
 
