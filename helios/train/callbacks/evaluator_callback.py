@@ -63,7 +63,9 @@ class DownstreamEvaluator:
             num_workers=self.num_workers,
         )
 
-    def _get_embeddings(self, data_loader: DataLoader) -> tuple:
+    def _get_embeddings(
+        self, data_loader: DataLoader
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Get the embeddings for the given data loader."""
         return get_embeddings(
             data_loader=data_loader,
@@ -81,6 +83,15 @@ class DownstreamEvaluator:
 
             train_embeddings, train_labels = self._get_embeddings(train_loader)
             test_embeddings, test_labels = self._get_embeddings(val_loader)
+
+            logger.info(
+                f"train embeddings shape for {self.dataset}: {train_embeddings.shape}"
+            )
+            logger.info(
+                f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
+            )
+            logger.info(f"train labels shape for {self.dataset}: {train_labels.shape}")
+            logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
 
             if self.config.task_type == TaskType.CLASSIFICATION:
                 val_result = run_knn(
@@ -117,7 +128,7 @@ class DownstreamEvaluator:
             return val_result
         except Exception as e:
             logger.error(f"Error during evaluation: {e}")
-            return 0
+            return -1
 
 
 @dataclass

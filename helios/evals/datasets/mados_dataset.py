@@ -25,38 +25,36 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 MADOS_DIR = UPath("/weka/dfive-default/presto_eval_sets/mados")
 
 
-BAND_STATS = (
-    {
-        "01 - Coastal aerosol": {
-            "mean": 0.05834943428635597,
-            "std": 0.021028317511081696,
-        },
-        "02 - Blue": {"mean": 0.05259967967867851, "std": 0.024127380922436714},
-        "03 - Green": {"mean": 0.044100478291511536, "std": 0.027077781036496162},
-        "04 - Red": {"mean": 0.036041468381881714, "std": 0.028892582282423973},
-        "05 - Vegetation Red Edge": {
-            "mean": 0.03370574489235878,
-            "std": 0.028282219544053078,
-        },
-        "06 - Vegetation Red Edge": {
-            "mean": 0.034933559596538544,
-            "std": 0.03273169696331024,
-        },
-        "07 - Vegetation Red Edge": {
-            "mean": 0.03616137430071831,
-            "std": 0.04026992991566658,
-        },
-        "08 - NIR": {"mean": 0.03185819461941719, "std": 0.03786701336503029},
-        "08A - Vegetation Red Edge": {
-            "mean": 0.0348929800093174,
-            "std": 0.04325847327709198,
-        },
-        "09 - Water vapour": {"mean": 0.0348929800093174, "std": 0.04325847327709198},
-        "10 - SWIR - Cirrus": {"mean": 0.029205497354269028, "std": 0.0350610613822937},
-        "11 - SWIR": {"mean": 0.023518012836575508, "std": 0.02930651605129242},
-        "12 - SWIR": {"mean": 0.017942268401384354, "std": 0.022308016195893288},
+BAND_STATS = {
+    "01 - Coastal aerosol": {
+        "mean": 0.05834943428635597,
+        "std": 0.021028317511081696,
     },
-)
+    "02 - Blue": {"mean": 0.05259967967867851, "std": 0.024127380922436714},
+    "03 - Green": {"mean": 0.044100478291511536, "std": 0.027077781036496162},
+    "04 - Red": {"mean": 0.036041468381881714, "std": 0.028892582282423973},
+    "05 - Vegetation Red Edge": {
+        "mean": 0.03370574489235878,
+        "std": 0.028282219544053078,
+    },
+    "06 - Vegetation Red Edge": {
+        "mean": 0.034933559596538544,
+        "std": 0.03273169696331024,
+    },
+    "07 - Vegetation Red Edge": {
+        "mean": 0.03616137430071831,
+        "std": 0.04026992991566658,
+    },
+    "08 - NIR": {"mean": 0.03185819461941719, "std": 0.03786701336503029},
+    "08A - Vegetation Red Edge": {
+        "mean": 0.0348929800093174,
+        "std": 0.04325847327709198,
+    },
+    "09 - Water vapour": {"mean": 0.0348929800093174, "std": 0.04325847327709198},
+    "10 - SWIR - Cirrus": {"mean": 0.029205497354269028, "std": 0.0350610613822937},
+    "11 - SWIR": {"mean": 0.023518012836575508, "std": 0.02930651605129242},
+    "12 - SWIR": {"mean": 0.017942268401384354, "std": 0.022308016195893288},
+}
 
 
 def split_and_filter_tensors(
@@ -223,18 +221,12 @@ class MADOSDataset(Dataset):
             norm_stats_from_pretrained: Whether to use normalization stats from pretrained model
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
         """
-        with (Path(__file__).parents[0] / Path("configs") / Path("mados.json")).open(
-            "r"
-        ) as f:
-            config = json.load(f)
-
         # NOTE: I imputed bands for this dataset before saving the tensors, so no imputation is necessary
         assert split in ["train", "val", "valid", "test"]
         if split == "valid":
             split = "val"
 
-        self.band_info = config["band_info"]
-        self.means, self.stds = self._get_norm_stats(self.band_info)
+        self.means, self.stds = self._get_norm_stats(BAND_STATS)
         self.split = split
         self.norm_method = norm_method
 
@@ -258,7 +250,7 @@ class MADOSDataset(Dataset):
 
     @staticmethod
     def _get_norm_stats(
-        imputed_band_info: dict[str, float],
+        imputed_band_info: dict[str, dict[str, float]],
     ) -> tuple[np.ndarray, np.ndarray]:
         means = []
         stds = []
@@ -287,11 +279,11 @@ class MADOSDataset(Dataset):
             EVAL_TO_HELIOS_S2_BANDS,
         ]
         if self.norm_stats_from_pretrained:
-            image = torch.tensor(
-                self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, image)
-            )
+            image = self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, image)
         timestamp = repeat(torch.tensor(self.default_day_month_year), "d -> t d", t=1)
         masked_sample = MaskedHeliosSample.from_heliossample(
-            HeliosSample(sentinel2_l2a=image.float(), timestamps=timestamp.long())
+            HeliosSample(
+                sentinel2_l2a=torch.tensor(image).float(), timestamps=timestamp.long()
+            )
         )
         return masked_sample, label
