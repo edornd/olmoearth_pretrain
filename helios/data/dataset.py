@@ -684,6 +684,7 @@ class HeliosDataset(Dataset):
                 # Convert Sentinel1 data to dB
                 if modality == Modality.SENTINEL1:
                     image = convert_to_db(image)
+                sample_dict[modality.name] = image
                 # Get latlon and timestamps from Sentinel2 data
                 if modality == Modality.SENTINEL2_L2A:
                     sample_dict["latlon"] = self.get_latlon(sample).astype(self.dtype)
