@@ -544,21 +544,19 @@ class TestPredictor:
         assert tokens_to_decode.shape == (2, 5, 1)
         assert unmasked_tokens.shape == (2, 5, 1)
 
-        expected_tokens_to_decode = torch.tensor([[1, 3, 5, 7, 9], [0, 11, 14, 16, 18]])
+        expected_unmasked_tokens = torch.tensor([[1, 3, 5, 7, 9], [0, 11, 14, 16, 18]])
+        assert torch.equal(unmasked_tokens.squeeze(-1), expected_unmasked_tokens)
+
+        expected_unmasked_tokens_mask = torch.tensor([[1, 1, 1, 1, 1], [0, 1, 1, 1, 1]])
+        assert torch.equal(unmasked_tokens_mask, expected_unmasked_tokens_mask)
+
+        expected_tokens_to_decode = torch.tensor([[0, 2, 6, 8, 0], [0, 0, 0, 12, 15]])
         assert torch.equal(tokens_to_decode.squeeze(-1), expected_tokens_to_decode)
 
         expected_tokens_to_decode_mask = torch.tensor(
-            [[1, 1, 1, 1, 1], [0, 1, 1, 1, 1]]
+            [[0, 1, 1, 1, 0], [0, 0, 0, 1, 1]]
         )
         assert torch.equal(tokens_to_decode_mask, expected_tokens_to_decode_mask)
-
-        expected_unmasked_tokens = torch.tensor([[0, 2, 6, 8, 0], [0, 0, 0, 12, 15]])
-        assert torch.equal(unmasked_tokens.squeeze(-1), expected_unmasked_tokens)
-
-        expected_unmasked_mask = torch.tensor([[0, 1, 1, 1, 0], [0, 0, 0, 1, 1]])
-        assert torch.equal(
-            unmasked_tokens_mask, expected_unmasked_mask
-        ), f"Expected unmasked_mask to be {expected_unmasked_mask}, got {unmasked_tokens_mask}"
 
         # Test that we can combine the tokens back correctly
         combined_tokens = Predictor.combine_x_y(
@@ -641,11 +639,11 @@ class TestPredictor:
     def test_combine_x_y(self) -> None:
         """Test combining the decoded, unmasked, and missing groups back into the original tokens."""
         # x is the query (i.e. the masked tokens)
-        unmasked_tokens = torch.tensor([[14, 15, 16], [15, 16, 1]]).unsqueeze(-1)
+        tokens_to_decode = torch.tensor([[14, 15, 16], [15, 16, 1]]).unsqueeze(-1)
         # y is the keys and values (i.e. the unmasked tokens)
-        tokens_to_decode = torch.tensor([[5, 6, 7, 8], [4, 5, 6, 7]]).unsqueeze(-1)
-        unmasked_tokens_mask = torch.tensor([[1, 1, 1], [1, 1, 0]])
-        tokens_to_decode_mask = torch.tensor([[1, 1, 1, 1], [0, 1, 1, 1]])
+        unmasked_tokens = torch.tensor([[5, 6, 7, 8], [4, 5, 6, 7]]).unsqueeze(-1)
+        tokens_to_decode_mask = torch.tensor([[1, 1, 1], [1, 1, 0]])
+        unmasked_tokens_mask = torch.tensor([[1, 1, 1, 1], [0, 1, 1, 1]])
         indices = torch.tensor(
             [[6, 7, 8, 4, 5, 0, 1, 2, 3], [7, 8, 3, 4, 5, 6, 0, 1, 2]]
         )
