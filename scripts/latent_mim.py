@@ -175,12 +175,20 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     EVAL_INTERVAL_EPOCHS = 5
     EVAL_TASKS = [
         DownstreamTaskConfig(
-            name="m-eurosat",
+            dataset="m-eurosat",
             batch_size=128,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-        )
+        ),
+        DownstreamTaskConfig(
+            dataset="mados",
+            batch_size=128,
+            num_workers=8,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=False,
+            probe_lr=0.1,
+        ),
     ]
     # Let us not use garbage collector fallback
     trainer_config = (

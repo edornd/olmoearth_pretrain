@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 from helios.data.constants import Modality
 from helios.evals.datasets import GeobenchDataset
+from helios.evals.datasets.utils import eval_collate_fn
 from helios.nn.flexihelios import Encoder
 
 
@@ -26,7 +27,7 @@ def test_geobench_dataset(geobench_dir: Path) -> None:
             split="train",
             partition="0.01x_train",
         ),
-        collate_fn=GeobenchDataset.collate_fn,
+        collate_fn=eval_collate_fn,
         shuffle=False,
         batch_size=1,
     )
