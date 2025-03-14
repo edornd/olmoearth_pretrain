@@ -132,9 +132,9 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
+    NUM_WORKERS = 4
     NUM_THREADS = 0
-    GLOBAL_BATCH_SIZE = 512
+    GLOBAL_BATCH_SIZE = 1024
 
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
@@ -142,7 +142,6 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
         work_dir=common.save_folder,
         num_threads=NUM_THREADS,
         num_workers=NUM_WORKERS,
-        prefetch_factor=32,
     )
     # Should the dataloader build the config or take an object?
     return dataloader_config
