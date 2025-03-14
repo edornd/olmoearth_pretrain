@@ -44,13 +44,14 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
     # which may cause issues
     H_W_TO_SAMPLE_MIN = 5
     H_W_TO_SAMPLE_MAX = 13
-    ENCODER_EMBEDDING_SIZE = 128
-    DECODER_EMBEDDING_SIZE = 128
-    ENCODER_DEPTH = 4
+    ENCODER_EMBEDDING_SIZE = 768
+    DECODER_EMBEDDING_SIZE = 768
+    ENCODER_DEPTH = 12
     DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 8
-    DECODER_NUM_HEADS = 8
+    ENCODER_NUM_HEADS = 12
+    DECODER_NUM_HEADS = 12
     MLP_RATIO = 4.0
+
     TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
@@ -89,7 +90,7 @@ def build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 32
+    RANK_MICROBATCH_SIZE = 64
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
