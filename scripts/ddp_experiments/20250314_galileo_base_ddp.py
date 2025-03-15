@@ -62,6 +62,8 @@ for lr, wd, warmup in itertools.product(LEARNING_RATES, WEIGHT_DECAYS, WARMUP_EP
         decoder_num_heads=DECODER_NUM_HEADS,
         mlp_ratio=MLP_RATIO,
         num_workers=NUM_WORKERS,
+        global_batch_size=GLOBAL_BATCH_SIZE,
+        rank_microbatch_size=RANK_MICROBATCH_SIZE,
         lr=lr,
         wd=wd,
         warmup=warmup,
