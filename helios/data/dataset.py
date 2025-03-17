@@ -23,23 +23,14 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from upath import UPath
 
-from helios.data.constants import (
-    BASE_RESOLUTION,
-    IMAGE_TILE_SIZE,
-    PROJECTION_CRS,
-    TIMESTAMPS,
-    Modality,
-    ModalitySpec,
-    TimeSpan,
-)
+from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
+                                   MISSING_VALUE, PROJECTION_CRS, TIMESTAMPS,
+                                   Modality, ModalitySpec, TimeSpan)
 from helios.data.normalize import Normalizer, Strategy
 from helios.data.utils import convert_to_db, update_streaming_stats
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
-from helios.dataset.sample import (
-    SampleInformation,
-    image_tiles_to_samples,
-    load_image_for_sample,
-)
+from helios.dataset.sample import (SampleInformation, image_tiles_to_samples,
+                                   load_image_for_sample)
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.types import ArrayTensor
 
@@ -59,9 +50,6 @@ class HeliosSample(NamedTuple):
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     sentinel1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
     worldcover: ArrayTensor | None = None  # [B, H, W, len(WC_bands)]
-    # Missing modality masks to show which samples are missing which modalities
-    # if a modality is not in the dict, then all samples are present for that modality, if Sample is not batched, then this will be an empty dict
-    missing_modalities_masks: Mapping[str, ArrayTensor] = {}  # {modality: [B]}
 
     # TODO: Add unit tests for this
     def shape(self, attribute: str, mask: bool = False) -> Sequence[int]:
@@ -77,12 +65,6 @@ class HeliosSample(NamedTuple):
         Returns:
             The shape of the attribute.
         """
-        if attribute == "missing_modalities_masks":
-            # For missing_modalities_masks, we return the batch size
-            # Each mask in the dictionary has shape [B]
-            if self.sentinel2_l2a is None:
-                raise ValueError("Sentinel2 L2A is not present in the sample")
-            return [self.sentinel2_l2a.shape[0]]
         # It is safe to assume we always have Sentinel2, timestamps, and latlon
         # If other attributes are missing, we use Sentinel2 to get its partial shape (B, H, W, T)
         # For static modality like worldcover, we specify the T dimension as 1
@@ -117,9 +99,6 @@ class HeliosSample(NamedTuple):
         """Get the number of channels for a given attribute."""
         if attribute == "timestamps":
             return len(TIMESTAMPS)
-        elif attribute == "missing_modalities_masks":
-            # Each mask in the dictionary is a binary tensor, so it has 1 channel
-            return 1
         else:
             return Modality.get(attribute).num_bands
 
@@ -147,7 +126,6 @@ class HeliosSample(NamedTuple):
         return [
             modality
             for modality in self.as_dict(ignore_nones=True).keys()
-            if modality != "missing_modalities_masks"
         ]
 
     def to_device(self, device: torch.device) -> "HeliosSample":
@@ -216,7 +194,7 @@ class HeliosSample(NamedTuple):
         time_multiply_tokens = 0
         # we need to exclude the missing modalities from the token count
         for attribute in self.as_dict(ignore_nones=True).keys():
-            if attribute == "timestamps" or attribute == "missing_modalities_masks":
+            if attribute == "timestamps":
                 continue
             modality_spec = Modality.get(attribute)
             if modality_spec.is_spacetime_varying:
@@ -277,8 +255,6 @@ class HeliosSample(NamedTuple):
         new_data_dict: dict[str, ArrayTensor] = {}
         for attribute, modality in self.as_dict(ignore_nones=True).items():
             assert modality is not None
-            if attribute == "missing_modalities_masks":
-                continue
             if attribute == "timestamps":
                 new_data_dict[attribute] = modality[:, start_t : start_t + max_t]
                 continue
@@ -301,7 +277,6 @@ class HeliosSample(NamedTuple):
                 new_data_dict[attribute] = modality[:, start_t : start_t + max_t]
             elif modality_spec.is_static_in_space_and_time:
                 new_data_dict[attribute] = modality
-        new_data_dict["missing_modalities_masks"] = self.missing_modalities_masks
         return HeliosSample(**new_data_dict)
 
 
@@ -310,7 +285,6 @@ def collate_helios(
 ) -> HeliosSample:
     """Collate function capable of handling batches with samples missing modalities."""
     collated_dict: dict = {}
-    missing_modalities_masks = {}
 
     # First, find a reference sample to get dtypes from
     # We'll use sentinel2_l2a as our reference since it's always required
@@ -347,18 +321,12 @@ def collate_helios(
         # Second pass: fill in missing data with empty tensors of the right shape and dtype
         dtype_to_use = found_dtype if found_dtype is not None else reference_dtype
         for i in missing_data_indices:
-            modality_data_stack[i] = torch.zeros(
+            modality_data_stack[i] = torch.full(
                 expected_shape,
+                fill_value=MISSING_VALUE,
                 dtype=dtype_to_use,
             )
-        if missing_data_indices:
-            missing_modalities_masks[field] = torch.zeros(
-                len(batch),
-                dtype=torch.bool,
-            )
-            missing_modalities_masks[field][missing_data_indices] = True
         collated_dict[field] = torch.stack(modality_data_stack, dim=0)
-    collated_dict["missing_modalities_masks"] = missing_modalities_masks
 
     return HeliosSample(**collated_dict)
 

@@ -12,7 +12,7 @@ from class_registry import ClassRegistry
 from einops import rearrange, repeat
 from olmo_core.config import Config
 
-from helios.data.constants import Modality, ModalitySpec
+from helios.data.constants import MISSING_VALUE, Modality, ModalitySpec
 from helios.data.dataset import HeliosSample
 from helios.types import ArrayTensor
 
@@ -142,10 +142,7 @@ class MaskedHeliosSample(NamedTuple):
         """
         masked_sample_dict = {}
         for key, t in sample.as_dict(ignore_nones=False).items():
-            # Skip the missing_modalities_masks field as it's not part of MaskedHeliosSample
-            if key == "missing_modalities_masks":
-                continue
-            elif key == "timestamps":
+            if key == "timestamps":
                 # lets assume timestamps is not None
                 masked_sample_dict[key] = t
             else:
@@ -192,6 +189,10 @@ class MaskingStrategy(ABC):
             Tuple of (masked_data, mask)
         """
         pass
+
+    def get_missing_mask(self, instance: ArrayTensor) -> ArrayTensor:
+        """Get the missing mask for the input data."""
+        return instance == MISSING_VALUE
 
     def apply_missing_mask(
         self, mask: torch.Tensor, missing_mask: torch.Tensor | None = None
@@ -315,7 +316,6 @@ class TimeMaskingStrategy(MaskingStrategy):
             MaskedHeliosSample containing the masked data and mask
         """
         output_dict: dict[str, ArrayTensor | None] = {}
-        missing_mask_dict = batch.missing_modalities_masks
         temporal_mask = None
         for modality_name in batch.modalities:
             instance = getattr(batch, modality_name)
@@ -348,7 +348,7 @@ class TimeMaskingStrategy(MaskingStrategy):
                         temporal_mask, "b t -> b h w t b_s", h=h, w=w, b_s=b_s
                     )
                     mask = mask.view(*shape).contiguous()
-                missing_mask = missing_mask_dict.get(modality_name, None)
+                missing_mask = instance == MISSING_VALUE
                 mask = self.apply_missing_mask(mask, missing_mask)
                 output_dict[modality_name] = instance
                 output_dict[
