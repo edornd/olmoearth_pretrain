@@ -21,7 +21,7 @@ from olmo_core.distributed.utils import (
     get_rank,
     get_world_size,
 )
-from olmo_core.utils import roundrobin, threaded_generator
+from olmo_core.utils import get_default_device, roundrobin, threaded_generator
 from torch.utils.data import default_collate
 from upath import UPath
 
@@ -54,6 +54,7 @@ class HeliosDataLoader(DataLoaderBase):
         collator: Callable = default_collate,
         target_device_type: str = "cpu",
         drop_last: bool = True,
+        persistent_workers: bool = True,
     ):
         """Initialize the HeliosDataLoader."""
         super().__init__(
@@ -74,6 +75,7 @@ class HeliosDataLoader(DataLoaderBase):
         self.target_device_type = target_device_type
         self.drop_last = drop_last
         self._global_indices: np.ndarray | None = None
+        self.persistent_workers = persistent_workers
 
     @property
     def total_batches(self) -> int:
@@ -177,7 +179,9 @@ class HeliosDataLoader(DataLoaderBase):
             num_workers=self.num_workers,
             pin_memory=self.target_device_type == "cuda" and self.num_workers > 0,
             prefetch_factor=self.prefetch_factor,
-            persistent_workers=False,
+            persistent_workers=self.persistent_workers
+            if self.num_workers > 0
+            else False,
             timeout=0,
         )
 
@@ -403,7 +407,7 @@ class HeliosDataLoaderConfig(Config):
     num_threads: int | None = None
     num_workers: int = 0
     prefetch_factor: int | None = None
-    target_device_type: str = "cpu"
+    target_device_type: str | None = None
     drop_last: bool = True
 
     def validate(self) -> None:
@@ -440,7 +444,7 @@ class HeliosDataLoaderConfig(Config):
             num_threads=self.num_threads,
             num_workers=self.num_workers,
             prefetch_factor=self.prefetch_factor,
-            target_device_type=self.target_device_type,
+            target_device_type=self.target_device_type or get_default_device().type,
             collator=collator,
             drop_last=self.drop_last,
         )

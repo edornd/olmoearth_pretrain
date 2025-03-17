@@ -2,14 +2,17 @@
 
 import hashlib
 import logging
+import os
+import random
 import tempfile
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
 from pathlib import Path
-from random import choice
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
+import h5py
 import numpy as np
 import pandas as pd
 import torch
@@ -19,6 +22,7 @@ from olmo_core.config import Config, DType
 from olmo_core.distributed.utils import get_fs_local_rank
 from pyproj import Transformer
 from torch.utils.data import Dataset
+from tqdm import tqdm
 from upath import UPath
 
 from helios.data.constants import (
@@ -31,7 +35,7 @@ from helios.data.constants import (
     TimeSpan,
 )
 from helios.data.normalize import Normalizer, Strategy
-from helios.data.utils import convert_to_db
+from helios.data.utils import convert_to_db, update_streaming_stats
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
 from helios.dataset.sample import (
     SampleInformation,
@@ -56,7 +60,7 @@ class HeliosSample(NamedTuple):
     latlon: ArrayTensor | None = None  # [B, 2]
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     sentinel1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
-    worldcover: ArrayTensor | None = None  # [B, H, W, len(WC_bands)]
+    worldcover: ArrayTensor | None = None  # [B, H, W, 1, len(WC_bands)]
 
     # TODO: Add unit tests for this
     def shape(self, attribute: str, mask: bool = False) -> Sequence[int]:
@@ -242,7 +246,7 @@ class HeliosSample(NamedTuple):
             raise ValueError(
                 "max height/width allowed by sample smaller than values in hw_to_sample"
             )
-        sampled_hw_p = choice(hw_to_sample)
+        sampled_hw_p = random.choice(hw_to_sample)
         max_t = self._get_max_t_within_token_budget(
             sampled_hw_p, max_tokens_per_instance
         )
@@ -309,6 +313,8 @@ class HeliosDataset(Dataset):
         supported_modalities: list[ModalitySpec],
         dtype: DType,
         samples: list[SampleInformation] | None = None,
+        normalize: bool = True,
+        h5py_folder: str = "h5py_data",
     ):
         """Initialize the dataset.
 
@@ -322,20 +328,36 @@ class HeliosDataset(Dataset):
             tile_path: The path to the raw dataset (image tile directory).
             samples: The samples to include in the dataset.
             dtype: The dtype of the data.
+            normalize: If True, apply normalization to the data, if False, do not apply normalization
+            h5py_folder: The folder to store the h5py files.
+
+        Returns:
+            None
         """
         self.tile_path = tile_path
         self.supported_modalities = supported_modalities
-        # Note: if samples are provided, use them, if not, get them from the tile directory
+        # If samples are provided, use them, if not, get them from the tile directory
         if not samples:
             samples = self._get_samples()  # type: ignore
         if len(samples) == 0:
             raise ValueError("No samples provided")
         self.samples = self._filter_samples(samples)  # type: ignore
         self.dtype = dtype
+        self.normalize = normalize
+        self.h5py_dir = (
+            self.tile_path
+            / h5py_folder
+            / "_".join(
+                sorted([modality.name for modality in self.supported_modalities])
+            )
+            / str(len(self.samples))
+        )
+        os.makedirs(self.h5py_dir, exist_ok=True)
 
-        # Initialize both normalizers for different modalities
-        self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
-        self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+        if self.normalize:
+            self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
+            self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+
         self._fs_local_rank = get_fs_local_rank()
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
@@ -351,6 +373,7 @@ class HeliosDataset(Dataset):
         sha256_hash = hashlib.sha256()
         sha256_hash.update(
             f"tile_path={self.tile_path},"
+            f"supported_modalities={sorted([m.name for m in self.supported_modalities])},"
             f"sample_size={len(self.samples)},"
             f"dtype={self.dtype}".encode()
         )
@@ -426,7 +449,6 @@ class HeliosDataset(Dataset):
     def _get_samples(self) -> list[SampleInformation]:
         """Get the samples from the raw dataset (image tile directory)."""
         tiles = parse_helios_dataset(self.tile_path, self.supported_modalities)
-        logger.info(f"Total tiles: {len(tiles)}")
         samples = image_tiles_to_samples(tiles, self.supported_modalities)
         logger.info(f"Total samples: {len(samples)}")
         logger.info("Distribution of samples before filtering:\n")
@@ -513,6 +535,49 @@ class HeliosDataset(Dataset):
         latlons = np.vstack(latlons)
         return latlons
 
+    def get_sample_data_for_histogram(
+        self, num_samples: int = 100, num_values: int = 100
+    ) -> dict[str, Any]:
+        """Get the sample data per modality per band for showing the histogram.
+
+        Args:
+            num_samples: The number of samples to sample from the dataset.
+            num_values: The number of values to sample from each modality per band.
+
+        Returns:
+            dict: A dictionary containing the sample data per modality per band.
+        """
+        if num_samples > len(self):
+            raise ValueError(
+                f"num_samples {num_samples} is greater than the number of samples in the dataset {len(self)}"
+            )
+        indices_to_sample = random.sample(list(range(len(self))), k=num_samples)
+        sample_data: dict[str, Any] = {}
+
+        # Assume samples could include different modalities and bands
+        # TODO: compute the histogram for each modality and band directly
+        for i in tqdm(indices_to_sample):
+            sample = self[i]
+            for modality in sample.modalities:
+                if modality == "timestamps" or modality == "latlon":
+                    continue
+                modality_data = sample.as_dict(ignore_nones=True)[modality]
+                if modality_data is None:
+                    continue
+                modality_spec = Modality.get(modality)
+                modality_bands = modality_spec.band_order
+                if modality not in sample_data:
+                    sample_data[modality] = {band: [] for band in modality_bands}
+                # for each band, flatten the data and extend the list
+                for idx, band in enumerate(modality_bands):
+                    sample_data[modality][band].extend(
+                        random.sample(
+                            modality_data[:, :, :, idx].flatten().tolist(), num_values
+                        )
+                    )
+
+        return sample_data
+
     def _get_timestamps(self, sample: SampleInformation) -> np.ndarray:
         """Get the timestamps of the sample."""
         sample_sentinel2_l2a = sample.modalities[Modality.SENTINEL2_L2A]
@@ -525,6 +590,74 @@ class HeliosDataset(Dataset):
         """Get the length of the dataset."""
         return len(self.samples)
 
+    def compute_normalization_values(
+        self,
+        estimate_from: int | None = None,
+    ) -> dict[str, Any]:
+        """Compute the normalization values for the dataset in a streaming manner.
+
+        Args:
+            estimate_from: The number of samples to estimate the normalization values from.
+
+        Returns:
+            dict: A dictionary containing the normalization values for the dataset.
+        """
+        if estimate_from is not None:
+            indices_to_sample = random.sample(list(range(len(self))), k=estimate_from)
+        else:
+            indices_to_sample = list(range(len(self)))
+
+        norm_dict: dict[str, Any] = {}
+
+        for i in tqdm(indices_to_sample):
+            sample = self[i]
+            for modality in sample.modalities:
+                # Shall we compute the norm stats for worldcover?
+                if modality == "timestamps" or modality == "latlon":
+                    continue
+                modality_data = sample.as_dict(ignore_nones=True)[modality]
+                modality_spec = Modality.get(modality)
+                modality_bands = modality_spec.band_order
+                if modality_data is None:
+                    continue
+                if modality not in norm_dict:
+                    norm_dict[modality] = {}
+                    for band in modality_bands:
+                        norm_dict[modality][band] = {
+                            "mean": 0.0,
+                            "var": 0.0,
+                            "std": 0.0,
+                            "count": 0,
+                        }
+                # Compute the normalization stats for the modality
+                for idx, band in enumerate(modality_bands):
+                    modality_band_data = modality_data[:, :, :, idx]  # (H, W, T, C)
+                    current_stats = norm_dict[modality][band]
+                    new_count, new_mean, new_var = update_streaming_stats(
+                        current_stats["count"],
+                        current_stats["mean"],
+                        current_stats["var"],
+                        modality_band_data,
+                    )
+                    # Update the normalization stats
+                    norm_dict[modality][band]["count"] = new_count
+                    norm_dict[modality][band]["mean"] = new_mean
+                    norm_dict[modality][band]["var"] = new_var
+
+        # Compute the standard deviation
+        for modality in norm_dict:
+            for band in norm_dict[modality]:
+                norm_dict[modality][band]["std"] = (
+                    norm_dict[modality][band]["var"]
+                    / norm_dict[modality][band]["count"]
+                ) ** 0.5
+
+        norm_dict["total_n"] = len(self)
+        norm_dict["sampled_n"] = len(indices_to_sample)
+        norm_dict["tile_path"] = self.tile_path
+
+        return norm_dict
+
     @classmethod
     def load_sample(
         self, sample_modality: ModalityTile, sample: SampleInformation
@@ -536,7 +669,6 @@ class HeliosDataset(Dataset):
             modality_data = rearrange(image, "t c h w -> h w t c")
         else:
             modality_data = rearrange(image, "c h w -> h w c")
-        # TODO: THere should be a dict per modality
         return modality_data
 
     def normalize_image(self, modality: ModalitySpec, image: np.ndarray) -> np.ndarray:
@@ -548,9 +680,14 @@ class HeliosDataset(Dataset):
         except Exception:
             return self.normalizer_predefined.normalize(modality, image)
 
-    def __getitem__(self, index: int) -> HeliosSample:
-        """Get the item at the given index."""
-        sample = self.samples[index]
+    def _get_h5_file_path(self, index: int) -> UPath:
+        """Get the h5 file path."""
+        return self.h5py_dir / f"sample_{index}.h5"
+
+    def _create_h5_file(
+        self, index: int, sample: SampleInformation, h5_file_path: UPath
+    ) -> dict[str, Any]:
+        """Create the h5 file."""
         sample_dict = {}
         for modality in sample.modalities:
             sample_modality = sample.modalities[modality]
@@ -558,13 +695,44 @@ class HeliosDataset(Dataset):
             # Convert Sentinel1 data to dB
             if modality == Modality.SENTINEL1:
                 image = convert_to_db(image)
-            # Normalize data and convert to dtype
-            image = self.normalize_image(modality, image)
-            sample_dict[modality.name] = image.astype(self.dtype)
+            sample_dict[modality.name] = image
             # Get latlon and timestamps from Sentinel2 data
             if modality == Modality.SENTINEL2_L2A:
                 sample_dict["latlon"] = self.get_latlon(sample).astype(self.dtype)
                 sample_dict["timestamps"] = self._get_timestamps(sample)
+        # Save h5 file on WEKA
+        with h5py.File(h5_file_path, "w") as f:
+            for modality_name, image in sample_dict.items():
+                f.create_dataset(modality_name, data=image)
+        return sample_dict
+
+    def __getitem__(self, index: int) -> HeliosSample:
+        """Get the sample at the given index."""
+        sample = self.samples[index]
+        h5_file_path = self._get_h5_file_path(index)
+
+        if not h5_file_path.exists():
+            sample_dict = self._create_h5_file(index, sample, h5_file_path)
+        else:
+            # Check how long it takes to read h5 data
+            if index == 0:
+                start_time = time.time()
+            with h5py.File(h5_file_path, "r") as f:
+                sample_dict = {k: v[()] for k, v in f.items()}
+            if index == 0:
+                end_time = time.time()
+                logger.info(
+                    f"Time taken to read h5 data: {end_time - start_time} seconds"
+                )
+
+        if self.normalize:
+            for modality in sample.modalities:
+                sample_dict[modality.name] = self.normalize_image(
+                    modality, sample_dict[modality.name]
+                )
+                sample_dict[modality.name] = sample_dict[modality.name].astype(
+                    self.dtype
+                )
         return HeliosSample(**sample_dict)
 
 
@@ -576,6 +744,7 @@ class HeliosDatasetConfig(Config):
     supported_modality_names: list[str]
     samples: list[SampleInformation] | None = None
     dtype: DType = DType.float32
+    normalize: bool = True
 
     def validate(self) -> None:
         """Validate the configuration and build kwargs.
