@@ -5,7 +5,6 @@ import logging
 import os
 import random
 import tempfile
-import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
@@ -312,7 +311,6 @@ class HeliosDataset(Dataset):
         tile_path: UPath,
         supported_modalities: list[ModalitySpec],
         dtype: DType,
-        samples: list[SampleInformation] | None = None,
         normalize: bool = True,
         h5py_folder: str = "h5py_data",
     ):
@@ -326,7 +324,6 @@ class HeliosDataset(Dataset):
         Args:
             supported_modalities: The modalities to include in the dataset.
             tile_path: The path to the raw dataset (image tile directory).
-            samples: The samples to include in the dataset.
             dtype: The dtype of the data.
             normalize: If True, apply normalization to the data, if False, do not apply normalization
             h5py_folder: The folder to store the h5py files.
@@ -336,23 +333,9 @@ class HeliosDataset(Dataset):
         """
         self.tile_path = tile_path
         self.supported_modalities = supported_modalities
-        # If samples are provided, use them, if not, get them from the tile directory
-        if not samples:
-            samples = self._get_samples()  # type: ignore
-        if len(samples) == 0:
-            raise ValueError("No samples provided")
-        self.samples = self._filter_samples(samples)  # type: ignore
+        self.h5py_folder = h5py_folder
         self.dtype = dtype
         self.normalize = normalize
-        self.h5py_dir = (
-            self.tile_path
-            / h5py_folder
-            / "_".join(
-                sorted([modality.name for modality in self.supported_modalities])
-            )
-            / str(len(self.samples))
-        )
-        os.makedirs(self.h5py_dir, exist_ok=True)
 
         if self.normalize:
             self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
@@ -361,6 +344,8 @@ class HeliosDataset(Dataset):
         self._fs_local_rank = get_fs_local_rank()
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
+        self._h5py_dir: Path | None = None  # type: ignore
+        self.sample_indices: np.ndarray | None = None  # type: ignore
 
     @property
     def fingerprint_version(self) -> str:
@@ -408,9 +393,60 @@ class HeliosDataset(Dataset):
         """Check if the working directory was explicitly set."""
         return self._work_dir_set
 
-    def prepare(self) -> None:
-        """Prepare the dataset."""
-        len(self)
+    def create_h5_dataset(self, samples: list[SampleInformation]) -> int:
+        """Create a dataset of the samples in h5 format in a shared weka directory under the given fingerprint.
+
+        Returns:
+            The last index of the samples that was processed.
+        """
+        # TODO: Make this multi-processed so it is much faster
+        for i, sample in enumerate(samples):
+            h5_file_path = self._get_h5_file_path(i)
+            if h5_file_path.exists():
+                logger.info(f"H5 file {h5_file_path} already exists, skipping")
+                continue
+            self._create_h5_file(sample, h5_file_path)
+            last_i = i
+        return last_i
+
+    def get_h5py_dir_path(self, num_samples: int) -> Path:
+        """Get the h5py directory.
+
+        This should be unique to the specific dataset fingerprint
+        """
+        if self._h5py_dir is not None:
+            return self._h5py_dir
+        self._h5py_dir = (
+            self.tile_path
+            / self.h5py_folder
+            / "_".join(
+                sorted([modality.name for modality in self.supported_modalities])
+            )
+            / str(num_samples)
+        )
+        os.makedirs(self.h5py_dir, exist_ok=True)
+        return self._h5py_dir
+
+    def prepare(self, samples: list[SampleInformation] | None = None) -> None:
+        """Prepare the dataset.
+
+        THIS SHOULD BE CALLED BY THE MAIN PROCESS ONLY and should happen
+        before any other process tries to use the dataset
+        """
+        if samples is None:
+            samples = self._get_samples()  # type: ignore
+        if len(samples) == 0:
+            raise ValueError("No samples provided")
+        samples = self._filter_samples(samples)  # type: ignore
+        num_samples = len(samples)
+        self.h5py_dir = self.get_h5py_dir_path(num_samples)
+        highest_sample_index = self.create_h5_dataset(samples)
+        self.sample_indices = np.arange(highest_sample_index + 1)
+
+    @property
+    def is_dataset_prepared(self) -> bool:
+        """Check if the dataset is prepared."""
+        return self.sample_indices is not None
 
     def _log_modality_distribution(self, samples: list[SampleInformation]) -> None:
         """Log the modality distribution."""
@@ -588,7 +624,9 @@ class HeliosDataset(Dataset):
 
     def __len__(self) -> int:
         """Get the length of the dataset."""
-        return len(self.samples)
+        if self.sample_indices is None:
+            raise ValueError("Dataset is not prepared")
+        return len(self.sample_indices)
 
     def compute_normalization_values(
         self,
@@ -685,7 +723,7 @@ class HeliosDataset(Dataset):
         return self.h5py_dir / f"sample_{index}.h5"
 
     def _create_h5_file(
-        self, index: int, sample: SampleInformation, h5_file_path: UPath
+        self, sample: SampleInformation, h5_file_path: UPath
     ) -> dict[str, Any]:
         """Create the h5 file."""
         sample_dict = {}
@@ -708,25 +746,18 @@ class HeliosDataset(Dataset):
 
     def __getitem__(self, index: int) -> HeliosSample:
         """Get the sample at the given index."""
-        sample = self.samples[index]
         h5_file_path = self._get_h5_file_path(index)
 
         if not h5_file_path.exists():
-            sample_dict = self._create_h5_file(index, sample, h5_file_path)
-        else:
-            # Check how long it takes to read h5 data
-            if index == 0:
-                start_time = time.time()
-            with h5py.File(h5_file_path, "r") as f:
-                sample_dict = {k: v[()] for k, v in f.items()}
-            if index == 0:
-                end_time = time.time()
-                logger.info(
-                    f"Time taken to read h5 data: {end_time - start_time} seconds"
-                )
-
+            raise FileNotFoundError(
+                f"H5 file {h5_file_path} does not exist, Be Sure to run prepare before starting Training"
+            )
+        with h5py.File(h5_file_path, "r") as f:
+            sample_dict = {k: v[()] for k, v in f.items()}
+        # Sample modalities should be written into the metadata of the h5 dataset
+        sample_modalities = sample_dict.keys()
         if self.normalize:
-            for modality in sample.modalities:
+            for modality in sample_modalities:
                 sample_dict[modality.name] = self.normalize_image(
                     modality, sample_dict[modality.name]
                 )
