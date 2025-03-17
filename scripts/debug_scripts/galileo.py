@@ -90,7 +90,7 @@ def build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 32
+    RANK_MICROBATCH_SIZE = 16
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -157,7 +157,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
     NUM_WORKERS = 4
     NUM_THREADS = 0
-    GLOBAL_BATCH_SIZE = 32
+    GLOBAL_BATCH_SIZE = 16
     PREFETCH_FACTOR = 2
 
     dataloader_config = HeliosDataLoaderConfig(
@@ -195,6 +195,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         name=common.run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
+        upload_dataset_distribution_pre_train=False,
         enabled=True,  # set to False to avoid wandb errors
     )
     EVAL_INTERVAL_EPOCHS = 1

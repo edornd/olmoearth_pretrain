@@ -202,6 +202,17 @@ def launch(config: HeliosExperimentConfig) -> None:
     config.launch.launch(follow=True)
 
 
+def prep(config: HeliosExperimentConfig) -> None:
+    """Prepare the dataset for an experiment."""
+    dataset = config.dataset.build()
+    dataset.prepare()
+    # Also may want to create the first index of shuffling here for starters
+
+def launch_prep(config: HeliosExperimentConfig) -> None:
+    """Launch the preparation of the dataset for an experiment."""
+    pass
+
+
 class SubCmd(StrEnum):
     """Subcommands for Helios experiments.
 
