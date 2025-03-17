@@ -346,7 +346,8 @@ class HeliosDataset(Dataset):
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
         self._h5py_dir: Path | None = None  # type: ignore
-        self.sample_indices: np.ndarray | None = None  # type: ignore
+        self.sample_indices: np.ndarray | None = None
+        self.latlon_distribution: np.ndarray | None = None
 
     @property
     def fingerprint_version(self) -> str:
@@ -482,6 +483,8 @@ class HeliosDataset(Dataset):
         if len(samples) == 0:
             raise ValueError("No samples provided")
         samples = self._filter_samples(samples)  # type: ignore
+        # probably is faster to do this just once in some way by saving to a with the dataset file and reading it in
+        self.latlon_distribution = self.get_geographic_distribution(samples)
         num_samples = len(samples)
         self.set_h5py_dir(num_samples)
         self.sample_indices = np.arange(num_samples)
@@ -602,7 +605,7 @@ class HeliosDataset(Dataset):
         lon, lat = transformer.transform(x, y)
         return np.array([lat, lon])
 
-    def get_geographic_distribution(self) -> np.ndarray:
+    def get_geographic_distribution(self, samples: list[SampleInformation]) -> np.ndarray:
         """Get the geographic distribution of the dataset.
 
         Returns:
@@ -610,7 +613,7 @@ class HeliosDataset(Dataset):
             coordinates for each of the N samples in the dataset.
         """
         latlons = []
-        for sample in self.samples:
+        for sample in samples:
             latlon = self.get_latlon(sample)
             latlons.append(latlon)
         latlons = np.vstack(latlons)
@@ -800,7 +803,6 @@ class HeliosDataset(Dataset):
         with h5py.File(h5_file_path, "r") as f:
             sample_dict = {k: v[()] for k, v in f.items()}
         # Sample modalities should be written into the metadata of the h5 dataset
-        logger.info(f"Sample modalities: {sample_dict.keys()}")
         sample_modalities = list([Modality.get(key) for key in sample_dict.keys() if key != "timestamps"])
         if self.normalize:
             for modality in sample_modalities:

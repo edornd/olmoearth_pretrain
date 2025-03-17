@@ -90,7 +90,7 @@ def build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 32
+    RANK_MICROBATCH_SIZE = 16
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -127,7 +127,7 @@ def build_train_module_config(
     }
     token_exit_cfg_b = {modality: 0 for modality in common.supported_modality_names}
 
-    WARMUP_EPOCHS = 10
+    WARMUP_EPOCHS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
@@ -155,9 +155,9 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
+    NUM_WORKERS = 4
     NUM_THREADS = 0
-    GLOBAL_BATCH_SIZE = 128
+    GLOBAL_BATCH_SIZE = 16
     PREFETCH_FACTOR = 2
 
     dataloader_config = HeliosDataLoaderConfig(
@@ -189,7 +189,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "helios-train"
+    WANDB_PROJECT = "helios-debug"
     checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
     wandb_callback = HeliosWandBCallback(
         name=common.run_name,
@@ -197,7 +197,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         entity=WANDB_USERNAME,
         enabled=True,  # set to False to avoid wandb errors
     )
-    EVAL_INTERVAL_EPOCHS = 5
+    EVAL_INTERVAL_EPOCHS = 1
     EVAL_TASKS = [
         DownstreamTaskConfig(
             dataset="m-eurosat",
@@ -206,6 +206,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
         ),
+        # Check if this takes a bunch of time to spawn or not
         DownstreamTaskConfig(
             dataset="mados",
             batch_size=128,
