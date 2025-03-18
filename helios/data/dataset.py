@@ -15,7 +15,6 @@ from typing import Any, NamedTuple
 import h5py
 import numpy as np
 import pandas as pd
-import psutil
 import torch
 from einops import rearrange
 from olmo_core.aliases import PathOrStr
@@ -26,14 +25,23 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from upath import UPath
 
-from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
-                                   PROJECTION_CRS, TIMESTAMPS, Modality,
-                                   ModalitySpec, TimeSpan)
+from helios.data.constants import (
+    BASE_RESOLUTION,
+    IMAGE_TILE_SIZE,
+    PROJECTION_CRS,
+    TIMESTAMPS,
+    Modality,
+    ModalitySpec,
+    TimeSpan,
+)
 from helios.data.normalize import Normalizer, Strategy
 from helios.data.utils import convert_to_db, update_streaming_stats
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
-from helios.dataset.sample import (SampleInformation, image_tiles_to_samples,
-                                   load_image_for_sample)
+from helios.dataset.sample import (
+    SampleInformation,
+    image_tiles_to_samples,
+    load_image_for_sample,
+)
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.types import ArrayTensor
 
