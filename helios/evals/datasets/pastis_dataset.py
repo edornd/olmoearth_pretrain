@@ -14,7 +14,7 @@ from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskedHeliosSample
 
-from .constants import EVAL_S2_BAND_NAMES
+from .constants import EVAL_S2_BAND_NAMES, EVAL_TO_HELIOS_S2_BANDS
 from .normalize import normalize_bands
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -107,6 +107,7 @@ class PASTISDataset(Dataset):
         """Return a single PASTIS data instance."""
         image = self.images[idx]  # (12, 13, 64, 64)
         image = einops.rearrange(image, "t c h w -> h w t c")  # (64, 64, 12, 13)
+        image = image[:, :, :, EVAL_TO_HELIOS_S2_BANDS]
 
         labels = self.labels[idx]  # (64, 64)
         months = self.months[idx]  # (12)
