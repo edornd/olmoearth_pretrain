@@ -294,29 +294,6 @@ class GalileoTrainModule(HeliosTrainModule):
 
         NOTE: For contrastive losses, the loss is invariant to the global batch size across GPUS as well
         """
-
-        # # # Collect all tensors
-        # tensors = [obj for obj in gc.get_objects() if isinstance(obj, torch.Tensor)]
-
-        # # Sort tensors by size (bytes)
-        # tensors = sorted(tensors, key=lambda x: x.numel() * x.element_size(), reverse=True)
-
-        # total_tensor_ram = sum([tensor.numel() * tensor.element_size() / (1024 ** 2) for tensor in tensors])
-        # logger.info(f"Total tensor RAM: {total_tensor_ram:.2f} MB")
-        # # Print top N largest tensors
-        # # total_size = 0
-        # # print(f"Found {len(tensors)} tensors in memory.")
-        # # for i, tensor in enumerate(tensors[:100]):  # Show top 10
-        # #     size_in_mb = tensor.numel() * tensor.element_size() / (1024 ** 2)
-        # #     if i < 5:
-        # #         print(f"Tensor {i}: Shape {tensor.shape}, Dtype {tensor.dtype}, Size {size_in_mb:.2f} MB")
-        # #     total_size += size_in_mb
-        # # logger.info(f"Total size of top 100 tensors: {total_size:.2f} MB")
-        # logger.info("Logging total virtual memory usage")
-        # logger.info(f"Total virtual memory usage: {psutil.virtual_memory().total / (1024 * 1024 * 1024):.2f} GB")
-        # total_pss = log_total_memory_usage()
-
-        # self.trainer.record_metric("worker_memory/total_pss", total_pss, ReduceType.mean)
         self.update_target_encoder()
         # Set the model to train mode
         self.model.train()
@@ -332,14 +309,8 @@ class GalileoTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                # Gallileo does this subsetting at the microbatch level so we follow that for now
-                # Smallest h /w must be bigger than the smallest patch size
-
-                # apply transforms after the subsetting
                 microbatch = self.model.transform.apply(microbatch).to_device(self.device)
 
-                # Each microbatch should have about the same number of encoded tokens if
-                # we mask here
                 if microbatch_idx % 2 == 0:
                     masked_batch = self.masking_strategy_a.apply_mask(
                         microbatch, patch_size=patch_size
@@ -384,10 +355,7 @@ class GalileoTrainModule(HeliosTrainModule):
             total_batch_loss,
             ReduceType.mean,
         )
-
-
-        # del batch  # In case this helps with memory utilization.
-        # del masked_batch
+        del masked_batch, batch, microbatch
 
     def eval_batch(
         self, batch: dict[str, Any], labels: torch.Tensor | None = None
