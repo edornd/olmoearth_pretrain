@@ -25,10 +25,9 @@ class HeliosSpeedMonitorCallback(SpeedMonitorCallback):
         super().pre_train()
         train_module = self.trainer.train_module
 
+        self._token_budget = self.trainer.data_loader.token_budget
         if isinstance(train_module, LatentMIMTrainModule):
             # Unwrap if the model is in DDP
-            model = train_module.model
-            self._token_budget = model.token_budget
             self._encoder_ratio = train_module.masking_strategy.encode_ratio
             self._decoder_ratio = train_module.masking_strategy.decode_ratio
             logger.warning(
@@ -37,8 +36,6 @@ class HeliosSpeedMonitorCallback(SpeedMonitorCallback):
             )
         elif isinstance(train_module, GalileoTrainModule):
             # Unwrap if the model is in DDP
-            model = train_module.model
-            self._token_budget = model.token_budget
             self._encoder_ratio = train_module.masking_strategy_a.encode_ratio
             self._decoder_ratio = train_module.masking_strategy_a.decode_ratio
             if train_module.masking_strategy_b.encode_ratio != self._encoder_ratio:

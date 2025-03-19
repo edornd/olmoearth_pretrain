@@ -47,7 +47,6 @@ from helios.types import ArrayTensor
 
 logger = logging.getLogger(__name__)
 
-
 class HeliosSample(NamedTuple):
     """A sample of the data from the Helios dataset.
 
@@ -308,6 +307,12 @@ def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
     collated_dict = {field: stack_or_none(field) for field in sample_fields}
     return patch_size, HeliosSample(**collated_dict)
 
+class GetItemArgs(NamedTuple):
+    """Arguments for the __getitem__ method of the HeliosDataset."""
+    index: int
+    patch_size: int
+    sampled_hw_p: int
+    token_budget: int | None = None
 
 class HeliosDataset(Dataset):
     """Helios dataset."""
@@ -320,7 +325,6 @@ class HeliosDataset(Dataset):
         supported_modalities: list[ModalitySpec],
         dtype: DType,
         normalize: bool = True,
-        token_budget: int = 1500,
         h5py_folder: str = "h5py_data",
         attempt_to_create_h5_files: bool = False,
     ):
@@ -344,14 +348,10 @@ class HeliosDataset(Dataset):
         """
         self.tile_path = tile_path
         self.supported_modalities = supported_modalities
-        self.token_budget = token_budget
         self.h5py_folder = h5py_folder
         self.dtype = dtype
-        # Let us see if pickling the normalizers is slow
         self.normalize = normalize
         if self.normalize:
-            # We want to delay the creation of the normalizers
-            # until the first time they are used so that we don't need to pickle them
             self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
 
@@ -807,10 +807,9 @@ class HeliosDataset(Dataset):
                 f.create_dataset(modality_name, data=image)
         return sample_dict
 
-    def __getitem__(self, index_patch_size_sampled_hw_p: tuple[int, int, int]) -> tuple[int, HeliosSample]:
+    def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:
         """Get the sample at the given index."""
-        index, patch_size, sampled_hw_p = index_patch_size_sampled_hw_p
-        h5_file_path = self._get_h5_file_path(index)
+        h5_file_path = self._get_h5_file_path(args.index)
 
         if not h5_file_path.exists():
             raise FileNotFoundError(
@@ -821,7 +820,10 @@ class HeliosDataset(Dataset):
             sample_dict = {k: v[()] for k, v in f.items()}
 
         sample = HeliosSample(**sample_dict)
-        result = sample.subset(patch_size, self.token_budget, sampled_hw_p)
+        if args.token_budget is not None:
+            result = sample.subset(patch_size=args.patch_size, max_tokens_per_instance=args.token_budget, sampled_hw_p=args.sampled_hw_p)
+        else:
+            result = sample
         sample_dict = result.as_dict(ignore_nones=True)
 
         # Sample modalities should be written into the metadata of the h5 dataset
@@ -837,7 +839,7 @@ class HeliosDataset(Dataset):
                 sample_dict[modality.name] = sample_dict[modality.name].astype(
                     self.dtype
                 )
-        return patch_size, HeliosSample(**sample_dict)
+        return args.patch_size, HeliosSample(**sample_dict)
 
 
 @dataclass

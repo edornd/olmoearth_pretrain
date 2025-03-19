@@ -44,11 +44,6 @@ MIN_PATCH_SIZE = 1
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    TOKEN_BUDGET = 1500
-    # IF HW MIN is too small , then we cna have microbatches with very uneven token budgets
-    # which may cause issues
-    H_W_TO_SAMPLE_MIN = 5
-    H_W_TO_SAMPLE_MAX = 13
     ENCODER_EMBEDDING_SIZE = 128
     DECODER_EMBEDDING_SIZE = 128
     ENCODER_DEPTH = 4
@@ -83,9 +78,6 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
         encoder_config=encoder_config,
         decoder_config=decoder_config,
         transform_type=TRANSFORM_TYPE,
-        token_budget=TOKEN_BUDGET,
-        h_w_to_sample_min=H_W_TO_SAMPLE_MIN,
-        h_w_to_sample_max=H_W_TO_SAMPLE_MAX,
     )
     return model_config
 
@@ -163,6 +155,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     GLOBAL_BATCH_SIZE = 128
     PREFETCH_FACTOR = 4
     SAMPLE_HW_P_LIST = list(range(5, 13))
+    TOKEN_BUDGET = 1500
     # GBS * PREFETCH_FACTOR * NUM_WORKERS is the total number of instances that can be put into prefetch queue
 
     dataloader_config = HeliosDataLoaderConfig(
@@ -174,6 +167,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
         num_workers=NUM_WORKERS,
         prefetch_factor=PREFETCH_FACTOR,
         sampled_hw_p_list=SAMPLE_HW_P_LIST,
+        token_budget=TOKEN_BUDGET,
     )
     # Should the dataloader build the config or take an object?
     return dataloader_config

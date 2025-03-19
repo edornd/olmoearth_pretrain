@@ -23,10 +23,11 @@ from torch.utils.data import default_collate
 from upath import UPath
 
 from helios.data.constants import Modality, IMAGE_TILE_SIZE
-from helios.data.dataset import HeliosDataset, HeliosSample
+from helios.data.dataset import HeliosDataset, HeliosSample, GetItemArgs
 
 logger = logging.getLogger(__name__)
 
+BASE_TOKEN_BUDGET = 1500
 
 class HeliosDataLoader(DataLoaderBase):
     """Helios dataloader.
@@ -43,6 +44,7 @@ class HeliosDataLoader(DataLoaderBase):
         min_patch_size: int,
         max_patch_size: int,
         sampled_hw_p_list: list[int],
+        token_budget: int = BASE_TOKEN_BUDGET,
         dp_world_size: int = 1,
         dp_rank: int = 0,
         fs_local_rank: int = 0,
@@ -70,6 +72,9 @@ class HeliosDataLoader(DataLoaderBase):
             raise RuntimeError("Dataset must be prepared before creating a dataloader")
         self.min_patch_size = min_patch_size
         self.max_patch_size = max_patch_size
+        if token_budget is None:
+            logger.warning("No token budget provided ALL PIXELS WILL BE USED")
+        self.token_budget = token_budget
         self.patch_sizes = np.arange(min_patch_size, max_patch_size + 1)
         self.sampled_hw_p_list = sampled_hw_p_list
         self.collator = collator
@@ -224,7 +229,8 @@ class HeliosDataLoader(DataLoaderBase):
         self, idx: int, patch_size: int, sampled_hw_p: int
     ) -> HeliosSample:
         """Get a dataset item."""
-        item = self.dataset[idx, patch_size, sampled_hw_p]
+        args = GetItemArgs(index=idx, patch_size=patch_size, sampled_hw_p=sampled_hw_p, token_budget=self.token_budget)
+        item = self.dataset[args]
         return item
 
     def state_dict(self) -> dict[str, Any]:
@@ -425,6 +431,7 @@ class HeliosDataLoaderConfig(Config):
     max_patch_size: int
     sampled_hw_p_list: list[int]
     seed: int
+    token_budget: int = BASE_TOKEN_BUDGET
     shuffle: bool = True
     num_workers: int = 0
     prefetch_factor: int | None = None
@@ -472,4 +479,5 @@ class HeliosDataLoaderConfig(Config):
             min_patch_size=self.min_patch_size,
             max_patch_size=self.max_patch_size,
             sampled_hw_p_list=self.sampled_hw_p_list,
+            token_budget=self.token_budget,
         )

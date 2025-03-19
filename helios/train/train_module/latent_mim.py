@@ -211,7 +211,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
         # Set the model to train mode
         self.model.train()
         # Set the maximum number of tokens
-        token_budget = self.model.token_budget
         h_w_to_sample = list(
             range(self.model.h_w_to_sample_min, self.model.h_w_to_sample_max)
         )
