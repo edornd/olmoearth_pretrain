@@ -189,7 +189,12 @@ class HeliosSample(NamedTuple):
         """Get the number of time steps in the data."""
         if self.timestamps is None:
             raise ValueError("Timestamps are not present in the sample")
-        return self.timestamps.shape[1]
+        if self.timestamps.ndim == 3:
+            return self.timestamps.shape[1]
+        elif self.timestamps.ndim == 2:
+            return self.timestamps.shape[0]
+        else:
+            raise ValueError(f"Invalid timestamps shape: {self.timestamps.shape}")
 
     def _get_max_t_within_token_budget(
         self, h_w_p: int, max_tokens_per_instance: int
@@ -261,6 +266,7 @@ class HeliosSample(NamedTuple):
             sampled_hw_p, max_tokens_per_instance
         )
         sampled_hw = sampled_hw_p * patch_size
+        logger.info(f"self.time: {self.time}")
         start_h = np.random.choice(self.height - sampled_hw + 1)
         start_w = np.random.choice(self.width - sampled_hw + 1)
         start_t = np.random.choice(self.time - max_t + 1)
@@ -268,7 +274,7 @@ class HeliosSample(NamedTuple):
         for attribute, modality in self.as_dict(ignore_nones=True).items():
             assert modality is not None
             if attribute == "timestamps":
-                new_data_dict[attribute] = modality[:, start_t : start_t + max_t]
+                new_data_dict[attribute] = modality[start_t : start_t + max_t]
                 continue
 
             # remember to add the batching back in

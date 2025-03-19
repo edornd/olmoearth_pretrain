@@ -334,6 +334,7 @@ class GalileoTrainModule(HeliosTrainModule):
             # log all the shapes of the modalities
             modality_data = getattr(batch, modality_name)
             logger.info(f"Modality: {modality_name}, shape: {modality_data.shape}")
+        logger.info(f"timestamps shape: {batch.timestamps.shape}")
         microbatches = split_batch(batch, self.rank_microbatch_size)
         num_microbatches = len(microbatches)
         for microbatch_idx, microbatch in enumerate(microbatches, start=1):
