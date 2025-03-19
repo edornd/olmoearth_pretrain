@@ -175,12 +175,10 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
-    # h5py_dir = "/weka/dfive-default/helios/dataset/presto/h5py_data/latlon_sentinel1_sentinel2_l2a_worldcover/98856"
-    # TODO: cahnge back to presto
-    tile_path = "/weka/dfive-default/helios/dataset/20250223"
+    h5py_dir = "/weka/dfive-default/helios/dataset/presto/h5py_data/latlon_sentinel1_sentinel2_l2a_worldcover/98856"
     return HeliosDatasetConfig(
-        h5py_dir=None,
-        tile_path=tile_path,
+        h5py_dir=h5py_dir,
+        tile_path=None,
         supported_modality_names=common.supported_modality_names,
         dtype=DType.float32,
     )

@@ -351,7 +351,7 @@ class HeliosDataset(Dataset):
         if h5py_dir is not None and tile_path is not None:
             raise ValueError("Only one of h5py_dir or tile_path can be provided")
         if h5py_dir is not None:
-            self._h5py_dir = h5py_dir
+            self.h5py_dir = h5py_dir
             self.tile_path = h5py_dir.parent.parent
             logger.info(f"H5py dir: {self.h5py_dir.parent.name.split('_')}")
             predefined_supported_modalities_names = self.parse_modalities_names_from_dir_name(self.h5py_dir.parent.name)
@@ -360,7 +360,7 @@ class HeliosDataset(Dataset):
                 raise ValueError(f"The predefined supported modalities do not match the supported modalities: {predefined_supported_modalities_names} != {modality_names}")
         else:
             self.tile_path = tile_path
-            self._h5py_dir: Path | None = None  # type: ignore
+            self.h5py_dir: Path | None = None  # type: ignore
 
         self.supported_modalities = supported_modalities
         self.h5py_folder = h5py_folder
@@ -455,15 +455,6 @@ class HeliosDataset(Dataset):
                 )
             )
 
-    @property
-    def h5py_dir(self) -> Path:
-        """Get the h5py directory.
-
-        This should be unique to the specific dataset fingerprint
-        """
-        if self._h5py_dir is None:
-            raise ValueError("h5py_dir has not been set. Call set_h5py_dir first.")
-        return self._h5py_dir
 
     def set_h5py_dir(self, num_samples: int) -> None:
         """Set the h5py directory.
@@ -473,11 +464,11 @@ class HeliosDataset(Dataset):
         Args:
             num_samples: Number of samples in the dataset
         """
-        if self._h5py_dir is not None:
+        if self.h5py_dir is not None:
             logger.warning("h5py_dir is already set, ignoring new value")
             return
 
-        self._h5py_dir = (
+        self.h5py_dir = (
             self.tile_path
             / self.h5py_folder
             / "_".join(
@@ -485,8 +476,8 @@ class HeliosDataset(Dataset):
             )
             / str(num_samples)
         )
-        logger.info(f"Setting h5py_dir to {self._h5py_dir}")
-        os.makedirs(self._h5py_dir, exist_ok=True)
+        logger.info(f"Setting h5py_dir to {self.h5py_dir}")
+        os.makedirs(self.h5py_dir, exist_ok=True)
 
     def prepare(self, samples: list[SampleInformation] | None = None) -> None:
         """Prepare the dataset.
@@ -499,7 +490,7 @@ class HeliosDataset(Dataset):
             logger.info("Dataset is already prepared")
             return
 
-        if self.tile_path is not None:
+        if self.h5py_dir is None:
             logger.warning("h5py_dir is not set, Generating H5 files from raw tile directory")
             if samples is None:
                 samples = self._get_samples()  # type: ignore
@@ -530,6 +521,7 @@ class HeliosDataset(Dataset):
 
     def save_latlon_distribution(self, latlons: np.ndarray) -> None:
         """Save the latlon distribution to a file."""
+        logger.info(f"Saving latlon distribution to {self.latlon_distribution_path}")
         np.save(self.latlon_distribution_path, latlons)
 
     def _log_modality_distribution(self, samples: list[SampleInformation]) -> None:
