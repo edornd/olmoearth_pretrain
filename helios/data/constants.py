@@ -99,9 +99,6 @@ class ModalitySpec:
     band_sets: list[BandSet]
     is_multitemporal: bool
     ignore_when_parsing: bool  # If true this modality is not parsed from the csv file and not loaded form a file
-    zoom_factor: int = (
-        1  # the zoom factor of the output data, default is 1 meaning no zooming
-    )
 
     def __hash__(self) -> int:
         """Hash this Modality."""
@@ -329,7 +326,6 @@ class Modality:
         ],
         is_multitemporal=False,
         ignore_when_parsing=False,
-        zoom_factor=4,
     )
 
     LATLON = ModalitySpec(
