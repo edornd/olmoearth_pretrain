@@ -195,7 +195,7 @@ class HeliosDataLoader(DataLoaderBase):
             batch_size=None,
             num_workers=self.num_workers,
             pin_memory=self.target_device_type == "cuda" and self.num_workers > 0,
-            prefetch_factor=self.prefetch_factor,
+            prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
             persistent_workers=(
                 self.persistent_workers if self.num_workers > 0 else False
             ),
