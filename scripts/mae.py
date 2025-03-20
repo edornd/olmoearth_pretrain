@@ -19,7 +19,12 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, main
-from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
+from helios.nn.flexihelios import (
+    EncoderConfig,
+    PoolingType,
+    PredictorConfig,
+    ReconstructorConfig,
+)
 from helios.nn.mae import MAEConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
@@ -44,8 +49,8 @@ def build_model_config(common: CommonComponents) -> MAEConfig:
     # which may cause issues
     H_W_TO_SAMPLE_MIN = 5
     H_W_TO_SAMPLE_MAX = 13
-    ENCODER_EMBEDDING_SIZE = 256
-    DECODER_EMBEDDING_SIZE = 256
+    ENCODER_EMBEDDING_SIZE = 128
+    DECODER_EMBEDDING_SIZE = 128
     ENCODER_DEPTH = 4
     DECODER_DEPTH = 4
     ENCODER_NUM_HEADS = 8
@@ -73,9 +78,15 @@ def build_model_config(common: CommonComponents) -> MAEConfig:
         supported_modality_names=common.supported_modality_names,
         learnable_channel_embeddings=True,
     )
+    reconstructor_config = ReconstructorConfig(
+        supported_modality_names=common.supported_modality_names,
+        embedding_size=ENCODER_EMBEDDING_SIZE,
+        max_patch_size=MAX_PATCH_SIZE,
+    )
     model_config = MAEConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
+        reconstructor_config=reconstructor_config,
         transform_type=TRANSFORM_TYPE,
         token_budget=TOKEN_BUDGET,
         h_w_to_sample_min=H_W_TO_SAMPLE_MIN,
@@ -112,10 +123,11 @@ def build_train_module_config(
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
-    scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * STEPS_PER_EPOCH)
+    scheduler = CosWithWarmup()
     train_module_config = MAETrainModuleConfig(
         # TODO: change name to optim config
         optim_config=optim_config,
+        warmup_duration=Duration.epochs(WARMUP_EPOCHS),
         masking_config=masking_config,
         loss_config=loss_config,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
@@ -132,9 +144,10 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 0
+    NUM_WORKERS = 8
     NUM_THREADS = 0
     GLOBAL_BATCH_SIZE = 128
+    PREFETCH_FACTOR = 2
 
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
@@ -142,6 +155,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
         work_dir=common.save_folder,
         num_threads=NUM_THREADS,
         num_workers=NUM_WORKERS,
+        prefetch_factor=PREFETCH_FACTOR,
     )
     # Should the dataloader build the config or take an object?
     return dataloader_config
@@ -201,7 +215,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
                 tasks=EVAL_TASKS,
-                eval_interval=EVAL_INTERVAL_EPOCHS * STEPS_PER_EPOCH,
+                eval_duration=Duration.epochs(EVAL_INTERVAL_EPOCHS),
             ),
         )
     )

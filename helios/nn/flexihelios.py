@@ -348,14 +348,14 @@ class Reconstructor(nn.Module):
 
     def __init__(
         self,
-        supported_modality_names: list[str],
+        supported_modalities: list[ModalitySpec],
         max_patch_size: int,
         embedding_size: int,
     ):
         """Initialize the patch embeddings.
 
         Args:
-            supported_modality_names: Which modalities from Modality this model
+            supported_modalities: Which modalities from Modality this model
                 instantiation supports
             max_patch_size: Maximum size of patches
             embedding_size: Size of embeddings
@@ -363,11 +363,11 @@ class Reconstructor(nn.Module):
         super().__init__()
         self.max_patch_size = max_patch_size
         self.embedding_size = embedding_size
-        self.supported_modality_names = supported_modality_names
+        self.supported_modalities = supported_modalities
         # TODO: want to be able to remove certain bands and modalities
-        self.per_modality_embeddings = nn.ModuleDict({})
-        for modality in self.supported_modality_names:
-            self.per_modality_reconstructions[modality] = (
+        self.per_modality_reconstructions = nn.ModuleDict({})
+        for modality in self.supported_modalities:
+            self.per_modality_reconstructions[modality.name] = (
                 self._get_patch_reconstruction_module_for_modality(modality)
             )
 
@@ -379,22 +379,23 @@ class Reconstructor(nn.Module):
         """
         return f"{modality}__{idx}"
 
-    def _get_patch_reconstruction_module_for_modality(self, modality: str) -> nn.Module:
+    def _get_patch_reconstruction_module_for_modality(
+        self, modality: ModalitySpec
+    ) -> nn.Module:
         """Get the patch reconstruction module for a modality."""
-        modality_spec = Modality.get(modality)
         # Based on the modality name we choose the way to embed the data
 
         # I likely will need to know about what the embedding strategy is in the forward as well
         # Static modality
-        if modality_spec.get_tile_resolution() == 0:
+        if modality.get_tile_resolution() == 0:
             # static in space
             return nn.ModuleDict(
                 {
-                    self._get_reconstruction_module_name(modality, idx): nn.Linear(
+                    self._get_reconstruction_module_name(modality.name, idx): nn.Linear(
                         self.embedding_size, len(channel_set_idxs)
                     )
                     for idx, channel_set_idxs in enumerate(
-                        modality_spec.bandsets_as_indices()
+                        modality.bandsets_as_indices()
                     )
                 }
             )
@@ -402,14 +403,14 @@ class Reconstructor(nn.Module):
             return nn.ModuleDict(
                 {
                     self._get_reconstruction_module_name(
-                        modality, idx
+                        modality.name, idx
                     ): FlexiPatchReconstruction(
                         out_chans=len(channel_set_idxs),
                         embedding_size=self.embedding_size,
                         max_patch_size=self.max_patch_size,
                     )
                     for idx, channel_set_idxs in enumerate(
-                        modality_spec.bandsets_as_indices()
+                        modality.bandsets_as_indices()
                     )
                 }
             )
@@ -420,21 +421,26 @@ class Reconstructor(nn.Module):
     ) -> tuple[Tensor, Tensor]:
         """Apply reconstruction to a modality."""
         masked_modality_name = input_data.get_masked_modality_name(modality)
-
-        modality_data = getattr(input_data, modality)
         modality_mask = getattr(input_data, masked_modality_name)
+        modality_data = getattr(input_data, modality)
 
         modality_spec = Modality.get(modality)
 
         # x: Input tensor with shape [b, h, w, (t), b_s, d]
         modality_tokens, modality_masks = [], []
         for idx, channel_set_indices in enumerate(modality_spec.bandsets_as_indices()):
-            data = modality_data[..., channel_set_indices, :]
-            masks = modality_mask[..., channel_set_indices]
+            print(f"{idx} {channel_set_indices} {modality}")
+            print(modality_data.shape)
+            print(modality_mask.shape)
+            data = modality_data[..., idx, :]
+            print(data.shape)
+            masks = modality_mask[..., idx]
+            print(masks.shape)
             data = self.per_modality_reconstructions[modality][
                 self._get_reconstruction_module_name(modality, idx)
             ](data, patch_size=patch_size)
             modality_tokens.append(data)
+            print(data.shape)
             masks = repeat(
                 masks,
                 "b h w ... -> b (h p_h) (w p_w) ...",
@@ -442,7 +448,7 @@ class Reconstructor(nn.Module):
                 p_w=patch_size,
             )
             modality_masks.append(masks)
-        return torch.stack(modality_tokens, dim=-1), torch.stack(modality_masks, dim=-1)
+        return torch.cat(modality_tokens, dim=-1), torch.cat(modality_masks, dim=-1)
 
     def forward(
         self,
@@ -455,7 +461,7 @@ class Reconstructor(nn.Module):
         """
         output_dict = {}
         modalities_to_process = get_modalities_to_process(
-            input_data.modalities, self.supported_modality_names
+            input_data.modalities, [m.name for m in self.supported_modalities]
         )
         for modality in modalities_to_process:
             modality_tokens, modality_masks = self.apply_reconstruction_to_modality(
@@ -493,8 +499,10 @@ class ReconstructorConfig(Config):
         """Build the reconstructor."""
         self.validate()
         kwargs = self.as_dict(exclude_none=True, recurse=False)
+        kwargs.pop("supported_modality_names")
+        kwargs["supported_modalities"] = self.supported_modalities
         logger.info(f"Predictor kwargs: {kwargs}")
-        return Predictor(**kwargs)
+        return Reconstructor(**kwargs)
 
 
 class FlexiHeliosCompositeEncodings(nn.Module):

@@ -301,18 +301,18 @@ class FlexiPatchReconstruction(nn.Module):
         """Forward pass for the FlexiPatchReconstruction module.
 
         Args:
-            x: Input tensor with shape [b, h, w, (t), b_s, d]
+            x: Input tensor with shape [b, h, w, (t), d]
             patch_size: Patch size to use for the reconstruction. If None, the base patch size
                 will be used.
         """
-        # x has input shape [b, h, w, (t), b_s, d]
-        if len(x.shape) == 5:
+        # x has input shape [b, h, w, (t), d]
+        if len(x.shape) == 4:
             has_time_dimension = False
-            b, h, w, b_s, d = x.shape
+            b, h, w, d = x.shape
             t = 1
         else:
             has_time_dimension = True
-            b, h, w, t, b_s, d = x.shape
+            b, h, w, t, d = x.shape
 
         if not patch_size:
             # During evaluation use base patch size if not specified
@@ -334,12 +334,19 @@ class FlexiPatchReconstruction(nn.Module):
                 p_h=self.max_patch_size[0],
                 p_w=self.max_patch_size[1],
             )
-            b, h, w, c = x.shape[:4]
+            bl, hl, wl, cl = x.shape[:4]
             x = rearrange(x, "b h w c p_h p_w -> (b h w) c p_h p_w")
             x = F.interpolate(
                 x, patch_size, mode=self.interpolation, antialias=self.antialias
             )
-            x = rearrange(x, "(b h w) c p_h p_w -> b c (h p_h) (w p_w)", b=b, h=h, w=w)
+            x = rearrange(
+                x, "(b h w) c p_h p_w -> b c (h p_h) (w p_w)", b=bl, h=hl, w=wl
+            )
+
+        if has_time_dimension:
+            x = rearrange(x, "(b t) c h w -> b h w t c", b=b, t=t)
+        else:
+            x = rearrange(x, "b c h w -> b h w c")
 
         x = self.norm(x)
 

@@ -11,7 +11,7 @@ from olmo_core.distributed.utils import get_world_size
 from olmo_core.float8 import Float8Config
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
-from olmo_core.train.common import ReduceType
+from olmo_core.train.common import Duration, ReduceType
 from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
 )
@@ -49,6 +49,7 @@ class MAETrainModuleConfig(HeliosTrainModuleConfig):
         default_factory=lambda: {modality: 0 for modality in Modality.names()}
     )
     max_grad_norm: float = 1.0
+    warmup_duration: Duration = field(default_factory=lambda: Duration.epochs(2))
 
     def build(
         self,
@@ -114,6 +115,7 @@ class MAETrainModule(HeliosTrainModule):
         device: torch.device | None = None,
         state_dict_save_opts: dist_cp_sd.StateDictOptions | None = None,
         state_dict_load_opts: dist_cp_sd.StateDictOptions | None = None,
+        warmup_duration: Duration = Duration.epochs(2),
     ):
         """Initialize the training module.
 
@@ -136,6 +138,7 @@ class MAETrainModule(HeliosTrainModule):
             state_dict_save_opts: Override state dict options for saving.
             state_dict_load_opts: Override state dict options for loading.
             token_exit_cfg: The token exit configuration for the model.
+            warmup_duration: The warmup duration for the model.
         """
         super().__init__(
             model=model,
@@ -152,6 +155,7 @@ class MAETrainModule(HeliosTrainModule):
             device=device,
             state_dict_save_opts=state_dict_save_opts,
             state_dict_load_opts=state_dict_load_opts,
+            warmup_duration=warmup_duration,
         )
         self.token_exit_cfg = token_exit_cfg
         self.base_loss = loss_config.build()
@@ -198,7 +202,7 @@ class MAETrainModule(HeliosTrainModule):
         )
 
         # Run Encoder and decoder on the augmented input
-        reconstructed = self.model(masked_batch, patch_size, self.token_exit_cfg)
+        reconstructed = self.model(masked_batch, patch_size)
         target_output = TokensAndMasks(**batch.as_dict())
         loss = self.loss_fn(reconstructed, target_output)
         loss.backward()
