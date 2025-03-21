@@ -7,7 +7,8 @@ from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
                                                           DataParallelType)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from olmo_core.train.callbacks import (ConfigSaverCallback,
+from olmo_core.train.callbacks import (CheckpointerCallback,
+                                       ConfigSaverCallback,
                                        GarbageCollectorCallback,
                                        GPUMemoryMonitorCallback)
 from olmo_core.train.checkpoint import CheckpointerConfig
@@ -80,11 +81,11 @@ def build_train_module_config(
     common: CommonComponents,
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
-    LR = 0.002
+    LR = 2e-3
     RANK_MICROBATCH_SIZE = 128
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
-    WD = 0.02
+    WD = 2e-3
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(
         strategy_config={
@@ -100,7 +101,7 @@ def build_train_module_config(
     )
     token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
 
-    WARMUP_EPOCHS = 20
+    WARMUP_EPOCHS = 10
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
@@ -159,18 +160,16 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
-    MAX_DURATION = Duration.epochs(300)
+    MAX_DURATION = Duration.epochs(200)
     METRICS_COLLECT_INTERVAL = 10
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "helios-debug"
+    WANDB_PROJECT = "2025_03_21_latentmim_tiny_sweep"
     PERMANENT_SAVE_INTERVAL = 5000
     EPHERMERAL_SAVE_INTERVAL = 250
     checkpointer_config = CheckpointerConfig(
         work_dir=common.save_folder,
-        save_interval=PERMANENT_SAVE_INTERVAL,
-        ephemeral_save_interval=EPHERMERAL_SAVE_INTERVAL,
     )
     wandb_callback = HeliosWandBCallback(
         name=common.run_name,
@@ -221,6 +220,10 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             ),
         )
         .with_callback("garbage_collector", garbage_collector_callback)
+        .with_callback("checkpointer", CheckpointerCallback(
+            save_interval=PERMANENT_SAVE_INTERVAL,
+            ephemeral_save_interval=EPHERMERAL_SAVE_INTERVAL,
+        ))
     )
     return trainer_config
 

@@ -62,33 +62,18 @@ TOKEN_EXIT_ARGS = [
 ]
 
 # Loss function new is the memory efficient loss function
-LOSS_TYPES = ["patch_discrimination_new", "l2"]
-
-
-# Sweep parameters
-LEARNING_RATES = [2e-3]
-WEIGHT_DECAYS = [2e-2]
-WARMUP_EPOCHS = [10]
+LOSS_TYPES = ["patch_discrimination_new", "l2", "all_discrimination"]
 
 # Base command template
-# NEED TO CHANGE TO a separate project for these new runs
-# swithc back for non debugging to launch and jupiter-cirrascale-2 and python3
 BASE_COMMAND = (
-    "torchrun scripts/parameter_sweeping/2025_03_21/latent_mim_base_script.py train {run_name} local "
+    "python3 scripts/parameter_sweeping/2025_03_21/latent_mim_base_script.py train {run_name} ai2/jupiter-cirrascale-2 "
     "--train_module.masking_config.strategy_config.type={masking_type} "
-    "--train_module.loss_config.loss_config.type={loss_type} "
-    "--train_module.optim_config.lr={lr} "
-    "--train_module.optim_config.weight_decay={wd} "
-    "--train_module.warmup_duration.value={warmup} "
-    "--train_module.warmup_duration.unit=epochs "
+    "--train_module.loss_config.loss_config.type={loss_type} --train_module.rank_microbatch_size={rank_microbatch_size} "
     "{token_exit_args}"
 )
 
 # Iterate over all combinations of hyperparameters
-for lr, wd, warmup, masking_type, loss_type, token_exit_args in itertools.product(
-    LEARNING_RATES,
-    WEIGHT_DECAYS,
-    WARMUP_EPOCHS,
+for masking_type, loss_type, token_exit_args in itertools.product(
     MASKING_TYPES,
     LOSS_TYPES,
     TOKEN_EXIT_ARGS,
@@ -96,15 +81,19 @@ for lr, wd, warmup, masking_type, loss_type, token_exit_args in itertools.produc
     # Construct run name indicating hyperparameters
     run_name = f"latentmim_tiny_masking_{masking_type}_loss_{loss_type}_token_exit_{token_exit_args[1]}"
 
+    if loss_type == "all_discrimination":
+        # Need to reduce rank microbatch size for all discrimination to avoid OOM
+        rank_microbatch_size = 32
+    else:
+        rank_microbatch_size = 128
+
     # Construct full command
     command = BASE_COMMAND.format(
         run_name=run_name,
         masking_type=masking_type,
         loss_type=loss_type,
-        lr=lr,
-        wd=wd,
-        warmup=warmup,
         token_exit_args=token_exit_args[0],
+        rank_microbatch_size=rank_microbatch_size,
     )
 
     print(f"Launching: {command}")
