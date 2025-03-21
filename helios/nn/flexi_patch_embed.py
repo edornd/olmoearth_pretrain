@@ -13,7 +13,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from olmo_core.distributed.utils import distribute_like, get_full_tensor
 from torch import Tensor, vmap
+from torch.distributed.tensor import DTensor
 
 logger = logging.getLogger(__name__)
 
@@ -151,13 +153,13 @@ class FlexiPatchEmbed(nn.Module):
                 self.patch_size, new_patch_size
             )
         pinv = self.pinvs[new_patch_size]
-        pinv = pinv.to(patch_embed.device)
+        # I don't know if this will work without FSDP
+        pinv = distribute_like(patch_embed, pinv)
 
         def resample_patch_embed(patch_embed: Tensor) -> Tensor:
             h, w = new_patch_size
             resampled_kernel = pinv @ patch_embed.reshape(-1)
             return rearrange(resampled_kernel, "(h w) -> h w", h=h, w=w)
-
         v_resample_patch_embed = vmap(vmap(resample_patch_embed, 0, 0), 1, 1)
 
         return v_resample_patch_embed(patch_embed)
@@ -195,11 +197,13 @@ class FlexiPatchEmbed(nn.Module):
         ), "patch_size must be a 2-tuple"
 
         # Resize conv weights
+        # THIS SEEMS REALLY WRONG AND NOT HANDFUL
         if patch_size == self.patch_size:
             weight = self.proj.weight
         else:
             weight = self.resize_patch_embed(self.proj.weight, patch_size)
         # Apply conv with resized weights
+        logger.info(f"type of x: {type(x)}")
         x = F.conv2d(x, weight, bias=self.proj.bias, stride=patch_size)
         # At this point x has embedding dim sized channel dimension
         if has_time_dimension:

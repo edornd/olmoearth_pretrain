@@ -7,24 +7,22 @@ from typing import Any
 import torch
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 from olmo_core.distributed.parallel import DataParallelConfig
-from olmo_core.distributed.utils import get_local_tensor
+from olmo_core.distributed.utils import get_full_tensor, get_local_tensor
 from olmo_core.float8 import Float8Config
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import Duration, ReduceType
-from olmo_core.train.train_module.transformer import (
-    TransformerActivationCheckpointingConfig,
-)
+from olmo_core.train.train_module.transformer import \
+    TransformerActivationCheckpointingConfig
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
-from helios.train.train_module.train_module import (
-    HeliosTrainModule,
-    HeliosTrainModuleConfig,
-)
+from helios.train.train_module.train_module import (HeliosTrainModule,
+                                                    HeliosTrainModuleConfig)
 from helios.train.utils import split_batch
 
 logger = getLogger(__name__)
@@ -212,8 +210,9 @@ class GalileoTrainModule(HeliosTrainModule):
             for param, target_param in zip(
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
+                # TODO: Make this an in place operation
                 target_param.data = (
-                    cur_ema_value * target_param.data + (1 - cur_ema_value) * param.data
+                    cur_ema_value * get_full_tensor(target_param.data) + (1 - cur_ema_value) * get_full_tensor(param.data)
                 )
 
     def train_batch(
@@ -250,9 +249,8 @@ class GalileoTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                microbatch = self.model.transform.apply(microbatch).to_device(
-                    self.device
-                )
+                # IN FSDP because we use a NAMED TUPLE WE NEED TO MANUALLY MOVE THE TENSORS TO THE DEVICE
+                microbatch = self.model.transform.apply(microbatch)
 
                 if microbatch_idx % 2 == 0:
                     masked_batch = self.masking_strategy_a.apply_mask(

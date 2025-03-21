@@ -10,23 +10,19 @@ import torch
 import torch.distributed as dist
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 from olmo_core.config import Config, DType
-from olmo_core.distributed.parallel import (
-    DataParallelConfig,
-    DataParallelType,
-    build_world_mesh,
-    get_dp_mesh,
-    get_dp_process_group,
-)
+from olmo_core.distributed.parallel import (DataParallelConfig,
+                                            DataParallelType, build_world_mesh,
+                                            get_dp_mesh, get_dp_process_group)
 from olmo_core.distributed.utils import get_world_size
 from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.float8 import Float8Config, Float8Handler
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import Duration
-from olmo_core.train.train_module import EvalBatchSizeUnit, EvalBatchSpec, TrainModule
-from olmo_core.train.train_module.transformer import (
-    TransformerActivationCheckpointingConfig,
-)
+from olmo_core.train.train_module import (EvalBatchSizeUnit, EvalBatchSpec,
+                                          TrainModule)
+from olmo_core.train.train_module.transformer import \
+    TransformerActivationCheckpointingConfig
 from olmo_core.utils import gc_cuda, get_default_device
 from torch.distributed.checkpoint.metadata import Metadata
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -179,6 +175,7 @@ class HeliosTrainModule(TrainModule):
         super().__init__()
 
         self.model = model
+        # make these cached properties of the model
         if isinstance(self.model, Galileo):
             logger.info("Number of encoder parameters: %d", sum(p.numel() for p in self.model.encoder.parameters()))
             logger.info("Number of decoder a parameters: %d", sum(p.numel() for p in self.model.decoder_a.parameters()))
@@ -196,6 +193,9 @@ class HeliosTrainModule(TrainModule):
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )
         self.warmup_duration = warmup_duration
+
+
+        # TODO: Move this all into a parallelize Model method
         self.float8_handler: Float8Handler | None = None
         # float8_enabled = False
         if float8_config is not None:
@@ -230,17 +230,10 @@ class HeliosTrainModule(TrainModule):
         self._dp_config = dp_config
         if dp_config is not None:
             dp_mesh = get_dp_mesh(self.world_mesh)
-            if dp_config.name in (DataParallelType.fsdp, DataParallelType.hsdp):
+            if dp_config.name in (DataParallelType.fsdp):
+                # TODO: MIXED PRecision is not yet supported
                 self.model.apply_fsdp(
                     dp_mesh=dp_mesh,
-                    param_dtype=(
-                        dp_config.param_dtype.as_pt()
-                        if dp_config.param_dtype is not None
-                        else None
-                    ),
-                    reduce_dtype=dp_config.reduce_dtype.as_pt(),
-                    wrapping_strategy=dp_config.wrapping_strategy,
-                    pp_enabled=False,
                 )
                 logger.info("Applied FSDP to the model")
             elif dp_config.name == DataParallelType.ddp:
@@ -440,6 +433,12 @@ class HeliosTrainModule(TrainModule):
         self, micro_batch_idx: int, num_micro_batches: int
     ) -> Generator[None, None, None]:
         with contextlib.ExitStack() as stack:
+            # TODO: Implement FSDP Microbatching
+            # if isinstance(self.model, FSDPModule):
+            #     assert self.dp_config is not None
+            #     # On the last backward FSDP waits on pending gradient reduction and clears internal data
+            #     # data structures for backward prefetching.
+            #     self.model.set_is_last_backward(is_last_mb)
             if isinstance(self.model, DDP) and micro_batch_idx != num_micro_batches - 1:
                 # For DDP, only sync gradients on the final micro batch.
                 stack.enter_context(self.model.no_sync())

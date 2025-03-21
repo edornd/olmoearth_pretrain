@@ -6,19 +6,15 @@ These Settings are meant to help you get quick results on a single GPU in minima
 import logging
 
 from olmo_core.config import DType
-from olmo_core.distributed.parallel.data_parallel import (
-    DataParallelConfig,
-    DataParallelType,
-)
+from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
+                                                          DataParallelType)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from olmo_core.train.callbacks import (
-    ConfigSaverCallback,
-    GarbageCollectorCallback,
-    GPUMemoryMonitorCallback,
-)
+from olmo_core.train.callbacks import (ConfigSaverCallback,
+                                       GarbageCollectorCallback,
+                                       GPUMemoryMonitorCallback,
+                                       ProfilerCallback)
 from olmo_core.train.checkpoint import CheckpointerConfig
-from olmo_core.train.callbacks import ProfilerCallback
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
@@ -28,14 +24,13 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
 from helios.internal.common import build_common_components
-from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
+from helios.internal.experiment import (CommonComponents,
+                                        HeliosVisualizeConfig, main)
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.galileo import GalileoConfig
-from helios.train.callbacks import (
-    DownstreamEvaluatorCallbackConfig,
-    HeliosSpeedMonitorCallback,
-    HeliosWandBCallback,
-)
+from helios.train.callbacks import (DownstreamEvaluatorCallbackConfig,
+                                    HeliosSpeedMonitorCallback,
+                                    HeliosWandBCallback)
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -49,12 +44,12 @@ MIN_PATCH_SIZE = 1
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 1536
-    DECODER_EMBEDDING_SIZE = 1536
-    ENCODER_DEPTH = 40
+    ENCODER_EMBEDDING_SIZE = 128
+    DECODER_EMBEDDING_SIZE = 128
+    ENCODER_DEPTH = 4
     DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 24
-    DECODER_NUM_HEADS = 24
+    ENCODER_NUM_HEADS = 8
+    DECODER_NUM_HEADS = 8
     MLP_RATIO = 4.0
 
     TRANSFORM_TYPE = "flip_and_rotate"
@@ -130,7 +125,7 @@ def build_train_module_config(
     token_exit_cfg_b = {modality: 0 for modality in common.supported_modality_names}
 
     WARMUP_EPOCHS = 10
-    dp_config = DataParallelConfig(name=DataParallelType.ddp)
+    dp_config = DataParallelConfig(name=DataParallelType.fsdp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
