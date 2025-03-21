@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Any
 
+import numpy as np
 import torch
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 from olmo_core.distributed.parallel import DataParallelConfig
-from olmo_core.distributed.utils import get_world_size
+from olmo_core.distributed.utils import get_local_tensor, get_world_size
 from olmo_core.float8 import Float8Config
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
@@ -26,6 +27,7 @@ from helios.train.train_module.train_module import (
     HeliosTrainModule,
     HeliosTrainModuleConfig,
 )
+from helios.train.utils import split_batch
 
 logger = getLogger(__name__)
 
@@ -189,25 +191,57 @@ class MAETrainModule(HeliosTrainModule):
         )
         total_batch_loss = torch.tensor(0.0, device=self.device)
 
-        # Smallest h /w must be bigger than the smallest patch size
+        # Split into micro-batches.
+        microbatches = split_batch(batch, self.rank_microbatch_size)
+        num_microbatches = len(microbatches)
+        for microbatch_idx, microbatch in enumerate(microbatches, start=1):
+            with self._train_microbatch_context(microbatch_idx, num_microbatches):
+                logger.info(
+                    f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
+                )
+                # Gallileo does this subsetting at the microbatch level so we follow that for now
+                # Smallest h /w must be bigger than the smallest patch size
 
-        patch_size = self.model.encoder.max_patch_size
-        batch = self.model.transform.apply(batch)
-        subsampled_batch = batch.subset(patch_size, token_budget, h_w_to_sample)
-        subsampled_batch = subsampled_batch.to_device(self.device)
-        # Each microbatch should have about the same number of encoded tokens if
-        # we mask here
-        masked_batch = self.masking_strategy.apply_mask(
-            subsampled_batch, patch_size=patch_size
-        )
+                patch_size = np.random.choice(
+                    np.arange(
+                        self.model.encoder.min_patch_size,
+                        self.model.encoder.max_patch_size,
+                    )
+                )
+                microbatch = self.model.transform.apply(microbatch)
+                subsampled_batch = microbatch.subset(
+                    patch_size, token_budget, h_w_to_sample
+                )
+                subsampled_batch = subsampled_batch.to_device(self.device)
+                # Each microbatch should have about the same number of encoded tokens if
+                # we mask here
 
-        # Run Encoder and decoder on the augmented input
-        reconstructed = self.model(masked_batch, patch_size)
-        labels = batch.as_dict()
-        labels.pop('timestamps', None)
-        labels = TokensAndMasks(**labels)
-        loss = self.loss_fn(reconstructed, labels)
-        loss.backward()
+                masked_batch = self.masking_strategy.apply_mask(
+                    subsampled_batch, patch_size=patch_size
+                )
+
+                # Run Encoder and decoder on the augmented input
+                reconstructed = self.model(masked_batch, patch_size)
+                labels_dict = masked_batch.as_dict()
+                labels_dict.pop("timestamps", None)
+                labels = TokensAndMasks(**labels_dict)
+                loss = self.loss_fn(reconstructed, labels)
+
+                # Scale loss by number of microbatches
+                loss = loss / num_microbatches
+                loss_val = get_local_tensor(loss)
+                total_batch_loss += loss_val
+
+                # Skip bad batches# Skip bad batches
+                if torch.isnan(loss).any() or torch.isinf(loss).any():
+                    logger.warning(
+                        f"NaN or Inf detected in loss at microbatch {microbatch_idx}, stopping training for this batch."
+                    )
+                    del reconstructed, labels
+                    break
+
+                del reconstructed, labels
+                loss.backward()
 
         self.trainer.record_metric(
             f"train/{self.base_loss.name}",

@@ -157,7 +157,7 @@ class L2Loss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute L2 loss between predictions and targets.
 
         Args:
@@ -174,6 +174,7 @@ class L2Loss(Loss):
         target = all_targets[all_masks == MaskValue.DECODER.value]
         return F.mse_loss(pred, target)
 
+
 @LOSS_REGISTRY.register("imagel2")
 class ImageL2Loss(Loss):
     """Loss function for L2 (mean squared error) over images."""
@@ -182,7 +183,7 @@ class ImageL2Loss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute L2 loss between predictions and targets.
 
         Args:
@@ -193,20 +194,23 @@ class ImageL2Loss(Loss):
         Returns:
             The computed loss value.
         """
-        loss = torch.tensor(0.)
+        loss = torch.tensor(0.0, device=predictions.device)
         for modality in predictions.modalities:
             pred = getattr(predictions, modality)
             if pred is not None:
-                mask = getattr(predictions, predictions.get_masked_modality_name(modality))
+                # TODO use the mask
+                # mask = getattr(
+                #    predictions, predictions.get_masked_modality_name(modality)
+                # )
                 label = getattr(targets, modality)
-                #print (pred.shape)
-                #print (mask.shape)
-                #print ((mask==MaskValue.DECODER.value).shape)
+                # print (pred.shape)
+                # print (mask.shape)
+                # print ((mask==MaskValue.DECODER.value).shape)
                 loss += F.mse_loss(pred, label)
-        #all_preds, all_masks = predictions.flatten_tokens_and_masks()
-        #all_targets = targets.flatten_tokens_and_masks()[0]
-        #pred = all_preds[all_masks == MaskValue.DECODER.value]
-        #target = all_targets[all_masks == MaskValue.DECODER.value]
+        # all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        # all_targets = targets.flatten_tokens_and_masks()[0]
+        # pred = all_preds[all_masks == MaskValue.DECODER.value]
+        # target = all_targets[all_masks == MaskValue.DECODER.value]
         return loss
 
 

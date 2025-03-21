@@ -9,8 +9,8 @@ from helios.data.constants import Modality, ModalitySpec
 from helios.data.transform import TransformConfig
 from helios.nn.flexihelios import Encoder, Predictor, Reconstructor, TokensAndMasks
 from helios.nn.mae import MAE
-from helios.train.masking import MaskedHeliosSample, MaskValue
 from helios.train.loss import ImageL2Loss
+from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,9 @@ def test_mae_with_loss(
     # Create dummy sentinel2_l2a data: shape (B, H, W, T, C)
     sentinel2_l2a = torch.randn(B, H, W, T, C)
     # Here we assume 0 (ONLINE_ENCODER) means the token is visible.
-    sentinel2_l2a_mask = torch.zeros(B, H, W, T, sentinel2_l2a_num_band_sets, dtype=torch.long)
+    sentinel2_l2a_mask = torch.zeros(
+        B, H, W, T, sentinel2_l2a_num_band_sets, dtype=torch.long
+    )
 
     worldcover = torch.randn(B, H, W, 1, 1)
     worldcover_mask = (
@@ -127,15 +129,16 @@ def test_mae_with_loss(
 
     assert output.worldcover is not None
     assert output.worldcover_mask is not None
+    assert x.worldcover is not None
+    assert x.worldcover_mask is not None
     assert output.worldcover.shape == x.worldcover.shape
     assert output.worldcover_mask.shape == x.worldcover_mask.shape
-
 
     # this reflects the forward_model function in mae
     loss_fn = ImageL2Loss()
     reconstructed = output
     labels = x.as_dict()
-    labels.pop('timestamps')
+    labels.pop("timestamps")
     target_output = TokensAndMasks(**labels)
     loss = loss_fn.compute(reconstructed, target_output)
     loss.backward()

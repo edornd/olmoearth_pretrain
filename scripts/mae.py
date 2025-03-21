@@ -15,7 +15,7 @@ from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
 
-from helios.data.constants import Modality, ModalitySpec
+from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
@@ -48,7 +48,7 @@ SUPPORTED_MODALITIES = [
 def build_model_config(common: CommonComponents) -> MAEConfig:
     """Build the model config for an experiment."""
     MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
-    TOKEN_BUDGET = None
+    TOKEN_BUDGET = 1500
     # IF HW MIN is too small , then we cna have microbatches with very uneven token budgets
     # which may cause issues
     H_W_TO_SAMPLE_MIN = 5
