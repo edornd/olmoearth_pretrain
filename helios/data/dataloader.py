@@ -287,23 +287,23 @@ class HeliosDataLoader(DataLoaderBase):
     def get_mock_batch(self) -> HeliosSample:
         """Get a mock batch, for dry-run of forward and backward pass."""
         logger.info("Getting mock batch NOT FROM DATASET")
-        # TODO: This should be a feature of the modality spec
+        rng = get_rng(42)
         output_dict = {}
         if Modality.SENTINEL2_L2A in self.dataset.supported_modalities:
-            mock_sentinel2_l2a = np.random.rand(256, 256, 12, 12).astype(np.float32)
+            mock_sentinel2_l2a = rng.random((256, 256, 12, 12), dtype=np.float32)
             output_dict["sentinel2_l2a"] = mock_sentinel2_l2a
         if Modality.SENTINEL1 in self.dataset.supported_modalities:
-            mock_sentinel1 = np.random.rand(256, 256, 12, 2).astype(np.float32)
+            mock_sentinel1 = rng.random((256, 256, 12, 2), dtype=np.float32)
             output_dict["sentinel1"] = mock_sentinel1
         if Modality.WORLDCOVER in self.dataset.supported_modalities:
-            mock_worldcover = np.random.rand(256, 256, 1, 1).astype(np.float32)
+            mock_worldcover = rng.random((256, 256, 1, 1), dtype=np.float32)
             output_dict["worldcover"] = mock_worldcover
         if Modality.LATLON in self.dataset.supported_modalities:
-            mock_latlon = np.random.rand(2).astype(np.float32)
+            mock_latlon = rng.random((2,), dtype=np.float32)
             output_dict["latlon"] = mock_latlon
-        days = np.random.randint(0, 25, (12, 1))
-        months = np.random.randint(0, 12, (12, 1))
-        years = np.random.randint(2018, 2020, (12, 1))
+        days = rng.integers(0, 25, (12, 1))
+        months = rng.integers(0, 12, (12, 1))
+        years = rng.integers(2018, 2020, (12, 1))
         timestamps = np.concatenate([days, months, years], axis=1)  # shape: (12, 3)
 
         output_dict["timestamps"] = timestamps
