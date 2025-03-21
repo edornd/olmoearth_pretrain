@@ -302,9 +302,7 @@ class PASTISRDataset(Dataset):
             norm_stats_from_pretrained: Whether to use normalization stats from pretrained model
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
         """
-        assert split in ["train", "val", "valid", "test"]
-        if split == "valid":
-            split = "val"
+        assert split in ["train", "valid", "test"]
         self.is_multimodal = is_multimodal
 
         self.s2_means, self.s2_stds = self._get_norm_stats(
@@ -325,6 +323,7 @@ class PASTISRDataset(Dataset):
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
 
         torch_obj = torch.load(path_to_splits / f"pastis_r_{split}.pt")
+        logger.info(f"torch_obj: {torch_obj.keys()}")
         self.s2_images = torch_obj["s2_images"]
         if self.is_multimodal:
             self.s1_images = torch_obj["s1_images"]

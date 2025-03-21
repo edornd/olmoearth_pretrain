@@ -33,12 +33,6 @@ DATASET_TO_CONFIG = {
         num_classes=10,
         is_multilabel=False,
     ),
-    "m-brick-kiln": EvalDatasetConfig(
-        task_type=TaskType.CLASSIFICATION,
-        imputes=[],
-        num_classes=2,
-        is_multilabel=False,
-    ),
     "mados": EvalDatasetConfig(
         task_type=TaskType.SEGMENTATION,
         imputes=[

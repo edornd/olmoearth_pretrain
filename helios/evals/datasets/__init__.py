@@ -45,11 +45,15 @@ def get_eval_dataset(
             norm_stats_from_pretrained=norm_stats_from_pretrained,
         )
 <<<<<<< HEAD
+<<<<<<< HEAD
     elif eval_dataset == "sen1floods11":
         return Sen1Floods11Dataset(
             path_to_splits=FLOODS_DIR,
 =======
     elif eval_dataset == "pastis_r":
+=======
+    elif eval_dataset == "pastis-r":
+>>>>>>> ruff
         # PASTIS-R is the multimodal version of PASTIS
         return PASTISRDataset(
             path_to_splits=PASTIS_DIR,
