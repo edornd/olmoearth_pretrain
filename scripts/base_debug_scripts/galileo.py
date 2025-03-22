@@ -207,7 +207,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
     logger.warning("WANDB Distribution Uploads are disabled for Debugging")
     EVAL_INTERVAL_EPOCHS = 1
-        EVAL_TASKS = {
+    EVAL_TASKS = {
         "m-eurosat": DownstreamTaskConfig(
             dataset="m-eurosat",
             batch_size=128,

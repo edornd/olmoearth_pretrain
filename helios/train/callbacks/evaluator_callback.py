@@ -5,7 +5,6 @@ import time
 from dataclasses import dataclass, field
 
 import torch
-from olmo_core.eval.evaluator import Evaluator
 from olmo_core.train.callbacks.callback import Callback, CallbackConfig
 from olmo_core.train.common import Duration
 from olmo_core.train.trainer import Trainer
@@ -144,7 +143,9 @@ class DownstreamEvaluatorCallback(Callback):
     def post_step(self) -> None:
         """Run the evaluators."""
         for evaluator in self.evaluators:
-            eval_interval_steps = self.trainer.convert_duration_to_steps(evaluator.eval_interval)
+            eval_interval_steps = self.trainer.convert_duration_to_steps(
+                evaluator.eval_interval
+            )
             if self.step <= 1 or self.step % eval_interval_steps != 0:
                 continue
             logger.info(f"Running {evaluator.dataset} evaluations...")
@@ -194,18 +195,20 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
             if config.task_type == TaskType.SEGMENTATION:
                 if task.probe_lr is None:
                     raise ValueError(f"probe_lr cannot be None for {task.dataset}")
-            evaluators.append(DownstreamEvaluator(
-                dataset=task.dataset,
-                trainer=trainer,
-                batch_size=task.batch_size,
-                num_workers=task.num_workers,
-                pooling_type=task.pooling_type,
+            evaluators.append(
+                DownstreamEvaluator(
+                    dataset=task.dataset,
+                    trainer=trainer,
+                    batch_size=task.batch_size,
+                    num_workers=task.num_workers,
+                    pooling_type=task.pooling_type,
                     norm_stats_from_pretrained=task.norm_stats_from_pretrained,
                     device=trainer.device,
                     probe_lr=task.probe_lr,
                     patch_size=task.patch_size,
                     eval_interval=task.eval_interval,
-                ))
+                )
+            )
         return DownstreamEvaluatorCallback(
             evaluators=evaluators,
         )

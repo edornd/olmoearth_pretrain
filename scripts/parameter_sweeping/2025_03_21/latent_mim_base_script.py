@@ -3,14 +3,18 @@
 import logging
 
 from olmo_core.config import DType
-from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
-                                                          DataParallelType)
+from olmo_core.distributed.parallel.data_parallel import (
+    DataParallelConfig,
+    DataParallelType,
+)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from olmo_core.train.callbacks import (CheckpointerCallback,
-                                       ConfigSaverCallback,
-                                       GarbageCollectorCallback,
-                                       GPUMemoryMonitorCallback)
+from olmo_core.train.callbacks import (
+    CheckpointerCallback,
+    ConfigSaverCallback,
+    GarbageCollectorCallback,
+    GPUMemoryMonitorCallback,
+)
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
@@ -20,13 +24,14 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
 from helios.internal.common import build_common_components
-from helios.internal.experiment import (CommonComponents,
-                                        HeliosVisualizeConfig, main)
+from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
-from helios.train.callbacks import (DownstreamEvaluatorCallbackConfig,
-                                    HeliosSpeedMonitorCallback,
-                                    HeliosWandBCallback)
+from helios.train.callbacks import (
+    DownstreamEvaluatorCallbackConfig,
+    HeliosSpeedMonitorCallback,
+    HeliosWandBCallback,
+)
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -126,7 +131,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8 # should be 8
+    NUM_WORKERS = 8  # should be 8
     GLOBAL_BATCH_SIZE = 128
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
@@ -175,7 +180,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         name=common.run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
-        cancel_check_interval=100, # checks for cancel tag on wandb
+        cancel_check_interval=100,  # checks for cancel tag on wandb
         enabled=True,  # set to False to avoid wandb errors
     )
     # Safe to collect everys tep for now
@@ -229,10 +234,13 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             ),
         )
         .with_callback("garbage_collector", garbage_collector_callback)
-        .with_callback("checkpointer", CheckpointerCallback(
-            save_interval=PERMANENT_SAVE_INTERVAL,
-            ephemeral_save_interval=EPHERMERAL_SAVE_INTERVAL,
-        ))
+        .with_callback(
+            "checkpointer",
+            CheckpointerCallback(
+                save_interval=PERMANENT_SAVE_INTERVAL,
+                ephemeral_save_interval=EPHERMERAL_SAVE_INTERVAL,
+            ),
+        )
     )
     return trainer_config
 
