@@ -96,7 +96,7 @@ def build_train_module_config(
     )
     loss_config = LossConfig(
         loss_config={
-            "type": "patch_discrimination",  # TODO: Should be registered via enum names
+            "type": "patch_discrimination_new",  # TODO: Should be registered via enum names
         }
     )
     token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
@@ -126,7 +126,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
+    NUM_WORKERS = 8 # should be 8
     GLOBAL_BATCH_SIZE = 128
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
@@ -196,7 +196,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=False,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
+            eval_interval=Duration.epochs(10),
         ),
         "sen1floods11": DownstreamTaskConfig(
             dataset="sen1floods11",
@@ -205,7 +205,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
+            eval_interval=Duration.steps(10),
         ),
     }
     trainer_config = (

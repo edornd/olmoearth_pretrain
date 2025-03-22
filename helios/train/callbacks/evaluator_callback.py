@@ -205,7 +205,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
                     probe_lr=task.probe_lr,
                     patch_size=task.patch_size,
                     eval_interval=task.eval_interval,
-                )
+                ))
         return DownstreamEvaluatorCallback(
             evaluators=evaluators,
         )
