@@ -127,9 +127,6 @@ class DownstreamEvaluator:
             raise ValueError(f"Unrecognized task type: {self.config.task_type}")
         logger.info(f"Downstream evaluator {self.dataset} score: {val_result}")
         return val_result
-        # except Exception as e:
-        #     logger.error(f"Error during evaluation: {e}")
-        #     return -1
 
 
 @dataclass

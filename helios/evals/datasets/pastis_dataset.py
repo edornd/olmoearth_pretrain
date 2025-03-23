@@ -246,9 +246,7 @@ class PASTISRProcessor:
         }
 
         for split, data in all_data_splits.items():
-            # torch.save(data, self.output_dir / f"pastis_r_{split}.pt")
-
-            # Instead of saving the whole dataset into torch object, we save each S1/S2 separately
+            # Save each S1/S2 separately
             split_dir = self.output_dir / f"pastis_r_{split}"
             os.makedirs(split_dir, exist_ok=True)
 
@@ -345,13 +343,6 @@ class PASTISRDataset(Dataset):
 
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
 
-        # torch_obj = torch.load(path_to_splits / f"pastis_r_{split}.pt")
-        # self.s2_images = torch_obj["s2_images"]
-        # if self.is_multimodal:
-        #     self.s1_images = torch_obj["s1_images"]
-        # self.labels = torch_obj["targets"]
-        # self.months = torch_obj["months"]
-
         self.s2_images_dir = path_to_splits / f"pastis_r_{split}" / "s2_images"
         self.s1_images_dir = path_to_splits / f"pastis_r_{split}" / "s1_images"
         self.labels = torch.load(path_to_splits / f"pastis_r_{split}" / "targets.pt")
@@ -372,12 +363,10 @@ class PASTISRDataset(Dataset):
 
     def __len__(self) -> int:
         """Length of the dataset."""
-        # return self.s2_images.shape[0]
         return self.labels.shape[0]
 
     def __getitem__(self, idx: int) -> tuple[MaskedHeliosSample, torch.Tensor]:
         """Return a single PASTIS data instance."""
-        # s2_image = self.s2_images[idx]  # (12, 13, 64, 64)
         s2_image = torch.load(self.s2_images_dir / f"{idx}.pt")
         s2_image = einops.rearrange(s2_image, "t c h w -> h w t c")  # (64, 64, 12, 13)
         s2_image = s2_image[:, :, :, EVAL_TO_HELIOS_S2_BANDS]
