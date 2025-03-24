@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import einops
 import numpy as np
 import torch
 import torch.distributed as dist
+from einops import rearrange
 from olmo_core.config import Config
 from olmo_core.data.data_loader import DataLoaderBase
 from olmo_core.data.utils import get_rng, memmap_to_write
@@ -309,7 +309,7 @@ class HeliosDataLoader(DataLoaderBase):
         months = torch.randint(0, 12, (1, 1, 12), dtype=torch.long)
         years = torch.randint(2018, 2020, (1, 1, 12), dtype=torch.long)
         timestamps = torch.cat([days, months, years], dim=1)
-        timestamps = einops.rearrange(timestamps, "b t c -> b c t")
+        timestamps = rearrange(timestamps, "b t c -> b c t")
         output_dict["timestamps"] = timestamps
 
         patch_size = 1
