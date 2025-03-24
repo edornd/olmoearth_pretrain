@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import einops
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -301,11 +302,14 @@ class HeliosDataLoader(DataLoaderBase):
         if Modality.LATLON in self.dataset.supported_modalities:
             mock_latlon = rng.random((2,), dtype=np.float32)
             output_dict["latlon"] = mock_latlon
-        days = rng.integers(0, 25, (12, 1))
-        months = rng.integers(0, 12, (12, 1))
-        years = rng.integers(2018, 2020, (12, 1))
-        timestamps = np.concatenate([days, months, years], axis=1)  # shape: (12, 3)
-
+        if Modality.OPENSTREETMAP_RASTER in self.dataset.supported_modalities:
+            mock_openstreetmap_raster = torch.rand(1, 256, 256, 1, 30)
+            output_dict["openstreetmap_raster"] = mock_openstreetmap_raster
+        days = torch.randint(0, 25, (1, 1, 12), dtype=torch.long)
+        months = torch.randint(0, 12, (1, 1, 12), dtype=torch.long)
+        years = torch.randint(2018, 2020, (1, 1, 12), dtype=torch.long)
+        timestamps = torch.cat([days, months, years], dim=1)
+        timestamps = einops.rearrange(timestamps, "b t c -> b c t")
         output_dict["timestamps"] = timestamps
 
         patch_size = 1
