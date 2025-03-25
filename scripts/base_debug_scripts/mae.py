@@ -202,6 +202,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
+            eval_duration=Duration.epochs(EVAL_INTERVAL_EPOCHS),
         ),
         DownstreamTaskConfig(
             dataset="mados",
@@ -210,6 +211,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=False,
             probe_lr=0.1,
+            eval_duration=Duration.epochs(EVAL_INTERVAL_EPOCHS),
         ),
     ]
     trainer_config = (
@@ -230,7 +232,6 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
                 tasks=EVAL_TASKS,
-                eval_duration=Duration.epochs(EVAL_INTERVAL_EPOCHS),
             ),
         )
         .with_callback("garbage_collector", garbage_collector_callback)
