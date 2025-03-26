@@ -32,7 +32,6 @@ class DownstreamEvaluator:
         batch_size: int = 128,
         num_workers: int = 8,
         patch_size: int = 4,
-        eval_duration: Duration = field(default_factory=lambda: Duration.epochs(1)),
         pooling_type: PoolingType = PoolingType.MEAN,
         norm_stats_from_pretrained: bool = True,
         device: torch.device | None = None,
@@ -50,7 +49,6 @@ class DownstreamEvaluator:
         self.norm_stats_from_pretrained = norm_stats_from_pretrained
         self.probe_lr = probe_lr
         self.patch_size = patch_size
-        self.eval_duration = eval_duration
 
     def _get_data_loader(self, split: str) -> DataLoader:
         """Get the data loader for the given split."""
@@ -144,7 +142,6 @@ class DownstreamEvaluatorCallback(Callback):
             )
             if self.step <= 1 or self.step % eval_interval_steps != 0:
                 continue
-            evaluator.eval_duration
             logger.info(f"Running {evaluator.dataset} evaluations...")
             start_time = time.monotonic()
             val_result = evaluator.val()
