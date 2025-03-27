@@ -81,11 +81,11 @@ class Galileo(nn.Module, DistributedMixins):
         """Apply FSDP to the model."""
         fsdp_config = dict(mesh=dp_mesh)
 
-        fully_shard(self.encoder, **fsdp_config)
-        fully_shard(self.decoder_b, **fsdp_config)
-        fully_shard(self.decoder_a, **fsdp_config)
-        fully_shard(self.target_encoder, **fsdp_config)
-        # TODO: More finegrained wrapping next time
+        self.encoder.apply_fsdp(**fsdp_config)
+        self.decoder_a.apply_fsdp(**fsdp_config)
+        self.decoder_b.apply_fsdp(**fsdp_config)
+        self.target_encoder.apply_fsdp(**fsdp_config)
+        # TODO: More finegrained wrapping of the encoder transformer layers next time
         fully_shard(self, **fsdp_config)
         register_fsdp_forward_method(self.target_encoder, "forward")
         register_fsdp_forward_method(self, "forward_a")

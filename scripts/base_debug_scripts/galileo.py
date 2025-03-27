@@ -42,14 +42,32 @@ MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
 MIN_PATCH_SIZE = 1
 
 
+# Billion parameters model Vit-H
+
+ENCODER_EMBEDDING_SIZE = 1024
+DECODER_EMBEDDING_SIZE = 768
+ENCODER_DEPTH = 24
+DECODER_DEPTH = 12
+ENCODER_NUM_HEADS = 16
+DECODER_NUM_HEADS = 12
+MLP_RATIO = 4.0
+
+
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 128
-    DECODER_EMBEDDING_SIZE = 128
-    ENCODER_DEPTH = 4
-    DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 8
-    DECODER_NUM_HEADS = 8
+    # ENCODER_EMBEDDING_SIZE = 128
+    # DECODER_EMBEDDING_SIZE = 128
+    # ENCODER_DEPTH = 4
+    # DECODER_DEPTH = 4
+    # ENCODER_NUM_HEADS = 8
+    # DECODER_NUM_HEADS = 8
+    # MLP_RATIO = 4.0
+    ENCODER_EMBEDDING_SIZE = 1024
+    DECODER_EMBEDDING_SIZE = 768
+    ENCODER_DEPTH = 24
+    DECODER_DEPTH = 12
+    ENCODER_NUM_HEADS = 16
+    DECODER_NUM_HEADS = 12
     MLP_RATIO = 4.0
 
     TRANSFORM_TYPE = "flip_and_rotate"
