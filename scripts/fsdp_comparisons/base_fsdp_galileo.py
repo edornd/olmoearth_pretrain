@@ -70,9 +70,9 @@ MLP_RATIO = 4.0
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 1024
+    ENCODER_EMBEDDING_SIZE = 1536
     DECODER_EMBEDDING_SIZE = 768
-    ENCODER_DEPTH = 24
+    ENCODER_DEPTH = 40
     DECODER_DEPTH = 12
     ENCODER_NUM_HEADS = 16
     DECODER_NUM_HEADS = 12
