@@ -14,7 +14,6 @@ from olmo_core.train.common import Duration, ReduceType
 from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
 )
-from torch.distributed.fsdp import register_fsdp_forward_method
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
@@ -181,8 +180,6 @@ class GalileoTrainModule(HeliosTrainModule):
         self.token_exit_cfg_b = token_exit_cfg_b
         self.base_loss_b = loss_config_b.build()
         self.masking_strategy_b = masking_config_b.build()
-        register_fsdp_forward_method(self.model, "forward_a")
-        register_fsdp_forward_method(self.model, "forward_b")
 
     def loss_fn_a(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
@@ -196,28 +193,6 @@ class GalileoTrainModule(HeliosTrainModule):
         """Compute the loss between the predicted and target tensors."""
         raise NotImplementedError("eval loss fn not implemented")
 
-    def update_target_encoder(self) -> None:
-        """Update the target encoder."""
-        # Update target encoder with EMA this should be a callback
-        cur_ema_value = (
-            self.start_ema
-            + self.trainer.global_step
-            * (self.end_ema - self.start_ema)
-            / self.trainer.max_steps
-        )
-        with torch.no_grad():
-            self.trainer.record_metric(
-                "train/ema_decay",
-                cur_ema_value,
-                ReduceType.mean,
-            )
-            for param, target_param in zip(
-                self.model.encoder.parameters(), self.model.target_encoder.parameters()
-            ):
-                # TODO: Make this an in place operation
-                target_param.data = cur_ema_value * get_full_tensor(
-                    target_param.data
-                ) + (1 - cur_ema_value) * get_full_tensor(param.data)
 
     def train_batch(
         self, batch: tuple[int, HeliosSample], dry_run: bool = False

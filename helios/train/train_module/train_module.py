@@ -17,11 +17,12 @@ from olmo_core.distributed.parallel import (
     get_dp_mesh,
     get_dp_process_group,
 )
+from olmo_core.distributed.utils import get_full_tensor, get_local_tensor
 from olmo_core.distributed.utils import get_world_size
 from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
-from olmo_core.train.common import Duration
+from olmo_core.train.common import Duration, ReduceType
 from olmo_core.train.train_module import EvalBatchSizeUnit, EvalBatchSpec, TrainModule
 from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
@@ -183,7 +184,6 @@ class HeliosTrainModule(TrainModule):
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )
         self.warmup_duration = warmup_duration
-        self.model.attach_world_mesh(self.world_mesh)
         # Maybe apply activation checkpointing.
         if ac_config is not None:
             self.model.apply_activation_checkpointing(
@@ -225,9 +225,6 @@ class HeliosTrainModule(TrainModule):
         self.optimizer: Optimizer = optim_config.build(
             self.model,
         )
-
-        # We need to be able to access the world mesh from the model to create DTensor objects
-        self.model.world_mesh = self.world_mesh
         self.rank_microbatch_size = rank_microbatch_size
         self.autocast_precision = autocast_precision
         self.max_grad_norm = max_grad_norm
@@ -448,3 +445,26 @@ class HeliosTrainModule(TrainModule):
         return torch.nn.utils.clip_grad_norm_(
             self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
         )
+
+    def update_target_encoder(self) -> None:
+        """Update the target encoder."""
+        # Update target encoder with EMA this should be a callback
+        cur_ema_value = (
+            self.start_ema
+            + self.trainer.global_step
+            * (self.end_ema - self.start_ema)
+            / self.trainer.max_steps
+        )
+        with torch.no_grad():
+            self.trainer.record_metric(
+                "train/ema_decay",
+                cur_ema_value,
+                ReduceType.mean,
+            )
+            for param, target_param in zip(
+                self.model.encoder.parameters(), self.model.target_encoder.parameters()
+            ):
+                # TODO: Make this an in place operation
+                target_param.data = cur_ema_value * get_full_tensor(
+                    target_param.data
+                ) + (1 - cur_ema_value) * get_full_tensor(param.data)

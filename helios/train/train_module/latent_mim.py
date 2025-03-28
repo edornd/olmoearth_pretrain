@@ -170,28 +170,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
         """Compute the loss between the predicted and target tensors."""
         raise NotImplementedError("eval loss fn not implemented")
 
-    def update_target_encoder(self) -> None:
-        """Update the target encoder."""
-        # Update target encoder with EMA this should be a callback
-        cur_ema_value = (
-            self.start_ema
-            + self.trainer.global_step
-            * (self.end_ema - self.start_ema)
-            / self.trainer.max_steps
-        )
-        with torch.no_grad():
-            self.trainer.record_metric(
-                "train/ema_decay",
-                cur_ema_value,
-                ReduceType.mean,
-            )
-            for param, target_param in zip(
-                self.model.encoder.parameters(), self.model.target_encoder.parameters()
-            ):
-                target_param.data = (
-                    cur_ema_value * target_param.data + (1 - cur_ema_value) * param.data
-                )
-
     def train_batch(
         self, batch: tuple[int, HeliosSample], dry_run: bool = False
     ) -> None:
