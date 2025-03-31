@@ -54,22 +54,23 @@ MIN_PATCH_SIZE = 1
 
 
 # Base model
-ENCODER_EMBEDDING_SIZE = 768
-DECODER_EMBEDDING_SIZE = 768
-ENCODER_DEPTH = 12
-DECODER_DEPTH = 12
-ENCODER_NUM_HEADS = 12
-DECODER_NUM_HEADS = 12
-MLP_RATIO = 4.0
+# ENCODER_EMBEDDING_SIZE = 768
+# DECODER_EMBEDDING_SIZE = 768
+# ENCODER_DEPTH = 12
+# DECODER_DEPTH = 12
+# ENCODER_NUM_HEADS = 12
+# DECODER_NUM_HEADS = 12
+# MLP_RATIO = 4.0
 
 
 # # Large model
-# ENCODER_EMBEDDING_SIZE = 1024
-# DECODER_EMBEDDING_SIZE = 1024
-# ENCODER_DEPTH = 24
-# DECODER_DEPTH = 24
-# ENCODER_NUM_HEADS = 16
-# DECODER_NUM_HEADS = 16
+ENCODER_EMBEDDING_SIZE = 1024
+DECODER_EMBEDDING_SIZE = 1024
+ENCODER_DEPTH = 24
+DECODER_DEPTH = 24
+ENCODER_NUM_HEADS = 16
+DECODER_NUM_HEADS = 16
+MLP_RATIO = 4.0
 
 
 # # Large shallow decoder model
@@ -125,7 +126,7 @@ def build_train_module_config(
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 2e-3
-    RANK_MICROBATCH_SIZE = 32
+    RANK_MICROBATCH_SIZE = 16
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.74
     WD = 2e-3
@@ -209,7 +210,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "2025_03_28_model_ladder_sweep"
+    WANDB_PROJECT = "2025_03_31_model_ladder_hp_sweep"
     PERMANENT_SAVE_INTERVAL = 5000
     EPHERMERAL_SAVE_INTERVAL = 250
     checkpointer_config = CheckpointerConfig(

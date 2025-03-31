@@ -1,4 +1,4 @@
-"""Looking at base model with momentum and different learning rates"""
+"""Looking at base and largemodel with momentum and different learning rates"""
 
 import subprocess  # nosec
 
@@ -16,9 +16,19 @@ MODEL_SIZE_ARGS = {
         "decoder_num_heads": 12,
         "mlp_ratio": 4.0,
     },
+        "large": {
+        "decoder_depth": 24,
+        "encoder_embedding_size": 1024,
+        "decoder_embedding_size": 1024,
+        "encoder_depth": 24,
+        "encoder_num_heads": 16,
+        "decoder_num_heads": 16,
+        "mlp_ratio": 4.0,
+    },
 }
 
 EMA_DECAYS = [0.841, 0.946, 0.974, 0.987, 0.992, 0.997, 0.9993]
+EMA_DECAYS = EMA_DECAYS[::-1]
 
 LEARNING_RATES = [3e-4, 1e-3, 2e-3]
 
@@ -36,10 +46,18 @@ BASE_COMMAND = (
     "--model.decoder_config.mlp_ratio={mlp_ratio} "
     "--train_module.ema_decay=\"[{ema_decay}, {ema_decay}]\" "
     "--train_module.optim_config.lr={lr} "
-    "--launch.num_gpus=4"
+    "--data_loader.rank_microbatch_size={rank_microbatch_size} "
+    "--launch.num_gpus={num_gpus}"
 )
 # Iterate over all combinations of hyperparameters
 for size_str, args in MODEL_SIZE_ARGS.items():
+    if size_str == "large":
+        rank_microbatch_size = 16
+        num_gpus = 8
+    else:
+        rank_microbatch_size = 32
+        num_gpus = 4
+    # we may need the rank microbatch to be 16 with 8 gpusfor large models without fsdp
     for lr in LEARNING_RATES:
         for ema_decay in EMA_DECAYS:
             # Construct run name indicating hyperparameters
@@ -51,11 +69,11 @@ for size_str, args in MODEL_SIZE_ARGS.items():
                 **args,
                 ema_decay=ema_decay,
                 lr=lr,
+                rank_microbatch_size=rank_microbatch_size,
+                num_gpus=num_gpus,
             )
 
             print(f"Launching: {command}")
-            break
-        break
 
             # Execute the command
-            # subprocess.run(command, shell=True, check=True)  # nosec
+            subprocess.run(command, shell=True, check=True)  # nosec
