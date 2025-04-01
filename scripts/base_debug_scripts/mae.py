@@ -103,8 +103,8 @@ def build_train_module_config(
     """Build the train module config for an experiment."""
     LR = 0.002
     RANK_MICROBATCH_SIZE = 32
-    ENCODE_RATIO = 0.1
-    DECODE_RATIO = 0.75
+    ENCODE_RATIO = 0.4
+    DECODE_RATIO = 0.6
     WD = 0.02
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(
@@ -180,7 +180,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
-    MAX_DURATION = Duration.epochs(50)
+    MAX_DURATION = Duration.epochs(300)
     METRICS_COLLECT_INTERVAL = 1
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
