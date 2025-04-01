@@ -1,4 +1,4 @@
-"""Looking at base and largemodel with momentum and different learning rates"""
+"""Looking at base and largemodel with momentum and different learning rates."""
 
 import subprocess  # nosec
 
@@ -61,7 +61,7 @@ for size_str, args in MODEL_SIZE_ARGS.items():
     for lr in LEARNING_RATES:
         for ema_decay in EMA_DECAYS:
             # Construct run name indicating hyperparameters
-            run_name = f"base_latent_mim_momentum_{ema_decay}_lr_{lr}_{size_str}"
+            run_name = f"2base_latent_mim_momentum_{ema_decay}_lr_{lr}_{size_str}"
 
             # Construct full command
             command = BASE_COMMAND.format(

@@ -89,9 +89,9 @@ MLP_RATIO = 4.0
 # ENCODER_NUM_HEADS = 12
 # DECODER_NUM_HEADS = 12
 
+
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
-    TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -116,7 +116,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     model_config = LatentMIMConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
-        transform_type=TRANSFORM_TYPE,
     )
     return model_config
 
@@ -210,7 +209,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "2025_03_31_model_ladder_hp_sweep"
+    WANDB_PROJECT = "2025_04_01_model_ladder_hp_sweep"
     PERMANENT_SAVE_INTERVAL = 5000
     EPHERMERAL_SAVE_INTERVAL = 250
     checkpointer_config = CheckpointerConfig(
