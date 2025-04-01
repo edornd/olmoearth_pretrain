@@ -10,7 +10,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
 from pathlib import Path
-from random import choice
 from typing import Any, NamedTuple, cast
 
 import h5py
@@ -127,14 +126,18 @@ class HeliosSample(NamedTuple):
     def modalities(self) -> list[str]:
         """Get the modalities present in the sample.
 
-        Includes timestamps and latlon"""
+        Includes timestamps and latlon
+        """
         return [modality for modality in self.as_dict(ignore_nones=True).keys()]
-
 
     @property
     def missing_modalities(self) -> list[str]:
         """Get the modalities missing from the sample."""
-        return [modality for modality in self.as_dict(ignore_nones=True).keys() if self.as_dict(ignore_nones=True)[modality] is None]
+        return [
+            modality
+            for modality in self.as_dict(ignore_nones=True).keys()
+            if self.as_dict(ignore_nones=True)[modality] is None
+        ]
 
     def to_device(self, device: torch.device) -> "HeliosSample":
         """Move all tensors to the specified device.
@@ -885,6 +888,39 @@ class HeliosDataset(Dataset):
                 f.create_dataset(modality_name, data=image)
         return sample_dict
 
+    def fill_sample_with_missing_values(
+        self, sample: HeliosSample
+    ) -> tuple[HeliosSample, list[str]]:
+        """Fill the sample with missing values."""
+        missing_modalities = []
+        sample_dict = sample.as_dict(ignore_nones=True)
+        for modality in self.supported_modalities:
+            if modality.name not in sample_dict.keys():
+                sample_dict[modality.name] = np.full(
+                    sample.get_expected_shape(modality.name),
+                    fill_value=MISSING_VALUE,
+                    dtype=self.dtype,
+                )
+                missing_modalities.append(modality.name)
+        return HeliosSample(**sample_dict), missing_modalities
+
+    def apply_subset(self, sample: HeliosSample, args: GetItemArgs) -> HeliosSample:
+        """Apply the subset to the sample."""
+        if args.token_budget is not None:
+            sample_subset = sample.subset(
+                patch_size=args.patch_size,
+                max_tokens_per_instance=args.token_budget,
+                sampled_hw_p=args.sampled_hw_p,
+            )
+        else:
+            sample_subset = sample
+        return sample_subset
+
+    def read_h5_file(self, h5_file_path: UPath) -> dict[str, Any]:
+        """Read the h5 file."""
+        with h5py.File(h5_file_path, "r") as f:
+            return {k: v[()] for k, v in f.items()}
+
     def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:
         """Get the sample at the given index."""
         h5_file_path = self._get_h5_file_path(args.idx)
@@ -895,28 +931,13 @@ class HeliosDataset(Dataset):
             )
         # We are currently reading the entire h5 file into memory this can be made faster by chunking the dataset appropriately and only reading in the optimal chunks
         # THis io is the current bottleneck of the getitem operation
-        with h5py.File(h5_file_path, "r") as f:
-            sample_dict = {k: v[()] for k, v in f.items()}
-        sample = HeliosSample(**sample_dict)
-        for missing_modality in sample.missing_modalities:
-            if missing_modality in self.supported_modalities:
-                sample_dict[missing_modality] = np.full(
-                    sample.get_expected_shape(missing_modality),
-                    fill_value=MISSING_VALUE,
-                    dtype=self.dtype,
-                )
+        sample_dict = self.read_h5_file(h5_file_path)
+        sample_dict, missing_modalities = self.fill_sample_with_missing_values(
+            sample_dict
+        )
+        subset_sample = self.apply_subset(HeliosSample(**sample_dict), args)
 
-        # I would like to know the expected shape of the sample Perhaps Helios Sample can have a property that returns the expected shape of the sample
-        if args.token_budget is not None:
-            result = sample.subset(
-                patch_size=args.patch_size,
-                max_tokens_per_instance=args.token_budget,
-                sampled_hw_p=args.sampled_hw_p,
-            )
-        else:
-            result = sample
-        sample_dict = result.as_dict(ignore_nones=True)
-
+        sample_dict = subset_sample.as_dict(ignore_nones=True)
         # Sample modalities should be written into the metadata of the h5 dataset
         sample_modalities = list(
             [Modality.get(key) for key in sample_dict.keys() if key != "timestamps"]
@@ -924,6 +945,9 @@ class HeliosDataset(Dataset):
 
         if self.normalize:
             for modality in sample_modalities:
+                # DO NOT NORMALIZE MISSING MODALITIES otherwise the MISSING_VALUE will be normalized
+                if modality.name in missing_modalities:
+                    continue
                 sample_dict[modality.name] = self.normalize_image(
                     modality, sample_dict[modality.name]
                 )
