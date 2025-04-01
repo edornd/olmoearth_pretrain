@@ -42,6 +42,9 @@ MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
 
 
+
+
+
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
     ENCODER_EMBEDDING_SIZE = 768
