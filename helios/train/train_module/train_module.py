@@ -37,7 +37,6 @@ from torch.optim import Optimizer
 
 from helios.data.transform import TransformConfig
 
-
 logger = getLogger(__name__)
 
 
@@ -475,7 +474,6 @@ class HeliosTrainModule(TrainModule):
             for param, target_param in zip(
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
-
                 # TODO: Make this an in place operation
                 target_param.data = cur_ema_value * get_full_tensor(
                     target_param.data
