@@ -153,7 +153,6 @@ class FlexiPatchEmbed(nn.Module):
             )
         pinv = self.pinvs[new_patch_size]
         pinv = pinv.to(patch_embed.device)
-        # # I don't know if this will work without FSDP
         pinv = distribute_like(patch_embed, pinv)
 
         def resample_patch_embed(patch_embed: Tensor) -> Tensor:

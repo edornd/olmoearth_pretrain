@@ -1197,7 +1197,6 @@ class Encoder(FlexiHeliosBase):
         super().apply_fsdp(**fsdp_kwargs)
         fully_shard(self.patch_embeddings, **fsdp_kwargs)
         register_fsdp_forward_method(self.patch_embeddings, "forward")
-        # fully_shard(self.norm, **fsdp_kwargs)
         fully_shard(self, **fsdp_kwargs)
 
 
