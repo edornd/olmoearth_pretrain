@@ -517,6 +517,73 @@ class CrossEntropyLoss(Loss):
         return F.cross_entropy(pred, target.squeeze())
 
 
+@LOSS_REGISTRY.register("KoLeo")
+class KoLeoLoss(Loss):
+    """Loss function for cross entropy.
+
+    The KoLeo regularizer derives from the
+    Kozachenko-Leonenko differential entropy estimator and
+    encourages a uniform span of the features within a batch.
+
+    https://github.com/facebookresearch/dinov2/blob/main/dinov2/loss/koleo_loss.py
+    """
+
+    name = "KoLeo"
+
+    def __init__(self, eps: float = 1e-8) -> None:
+        """Initialize KoLeo regularizer.
+
+        Args:
+            eps: small value to avoid division by zero.
+        """
+        self.eps = eps
+        self.pdist = torch.nn.PairwiseDistance(2, eps=eps)
+
+    @staticmethod
+    def pairwise_nearest_neighbours(x: torch.Tensor) -> torch.Tensor:
+        """Pairwise nearest neighbors for L2-normalized vectors.
+
+        Uses Torch rather than Faiss to remain on GPU.
+
+        Args:
+            x: embeddings against which we want to compute nearest neighbours.
+
+        Returns:
+            indices: indices of nearest neighbour (i.e. indices[i] will return
+            the index for the nearest neighbour of the ith embedding).
+        """
+        # parwise dot products (= inverse distance)
+        dots = torch.mm(x, x.t())
+        n = x.shape[0]
+        dots.view(-1)[:: (n + 1)].fill_(-1)  # Trick to fill diagonal with -1
+        # max inner prod -> min distance
+        _, indices = torch.max(dots, dim=1)
+        return indices
+
+    def compute(
+        self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
+    ) -> Tensor:
+        """Compute the KoLeo regularization term.
+
+        Args:
+            predictions: Model predictions. Unlike other losses, these are
+                _online encoder outputs_, not decoder outputs.
+            targets: Ground truth targets. Unused but kept for consistency.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            The computed loss value.
+        """
+        all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        online_encodings = all_preds[all_masks == MaskValue.ONLINE_ENCODER.value]
+
+        # apply l2 norm
+        online_encodings = F.normalize(online_encodings, eps=self.eps, p=2, dim=-1)
+        idx_of_nn = self.pairwise_nearest_neighbours(online_encodings)
+        distances_to_nn = self.pdist(online_encodings, online_encodings[idx_of_nn])
+        return -torch.log(distances_to_nn + self.eps).mean()
+
+
 @dataclass
 class LossConfig(Config):
     """Configuration for loss functions.
