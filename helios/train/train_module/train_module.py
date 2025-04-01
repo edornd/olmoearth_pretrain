@@ -2,7 +2,7 @@
 
 import contextlib
 from collections.abc import Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Any, cast
 
@@ -35,7 +35,8 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 
-# move to another file
+from helios.data.transform import TransformConfig
+
 
 logger = getLogger(__name__)
 
@@ -47,6 +48,7 @@ class HeliosTrainModuleConfig(Config):
     Args:
         rank_microbatch_size: The micro batch size per rank in instances.
         optim: The optimizer configuration.
+        transform_config: The transform configuration for the model.
         compile_model: Whether to compile the model using torch.compile.
         dp_config: Data parallel configuration for distributed training.
         ac_config: Activation checkpointing configuration.
@@ -63,6 +65,9 @@ class HeliosTrainModuleConfig(Config):
     optim_config: OptimConfig
     rank_microbatch_size: int
 
+    transform_config: TransformConfig = field(
+        default_factory=lambda: TransformConfig(transform_type="flip_and_rotate")
+    )
     # Model settings
     compile_model: bool = False
     dp_config: DataParallelConfig | None = None
@@ -122,7 +127,8 @@ class HeliosTrainModule(TrainModule):
 
     Args:
         model: The transformer model to train.
-        optim: The corresponding optimizer config.
+        optim_config: The corresponding optimizer config.
+        transform_config: The transform configuration for the model.
         rank_microbatch_size: The rank micro batch size in instances.
         compile_model: Whether to compile to the model.
         dp_config: Data parallel configuration for the model.
@@ -140,6 +146,7 @@ class HeliosTrainModule(TrainModule):
         self,
         model: Any,
         optim_config: OptimConfig,
+        transform_config: TransformConfig,
         rank_microbatch_size: int,
         warmup_duration: Duration | None = None,
         compile_model: bool = False,
@@ -158,6 +165,7 @@ class HeliosTrainModule(TrainModule):
         Args:
             model: The transformer model to train.
             optim_config: The corresponding optimizer config.
+            transform_config: The transform configuration for the model.
             rank_microbatch_size: The rank batch size in instances.
             warmup_duration: The warmup duration.
             compile_model: Whether to compile to the model.
@@ -175,6 +183,7 @@ class HeliosTrainModule(TrainModule):
 
         self.model = model
 
+        self.transform = transform_config.build()
         logger.info(
             "Number of encoder parameters: %d",
             sum(p.numel() for p in self.model.encoder.parameters()),
@@ -466,7 +475,14 @@ class HeliosTrainModule(TrainModule):
             for param, target_param in zip(
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
+
                 # TODO: Make this an in place operation
                 target_param.data = cur_ema_value * get_full_tensor(
                     target_param.data
                 ) + (1 - cur_ema_value) * get_full_tensor(param.data)
+
+    def eval_batch(
+        self, batch: dict[str, Any], labels: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        """Evaluate a batch."""
+        raise NotImplementedError("eval batch not implemented")

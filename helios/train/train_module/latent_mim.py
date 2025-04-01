@@ -17,6 +17,7 @@ from olmo_core.train.train_module.transformer import (
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
+from helios.data.transform import TransformConfig
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
@@ -79,6 +80,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
     Args:
         model: The transformer model to train.
         optim: The corresponding optimizer config.
+        transform_config: The transform configuration for the model.
         masking_config: The masking configuration for the model.
         loss_config: The loss configuration for the model.
         rank_microbatch_size: The rank microbatch size in instances.
@@ -101,6 +103,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         self,
         model: LatentMIM,
         optim_config: OptimConfig,
+        transform_config: TransformConfig,
         masking_config: MaskingConfig,
         loss_config: LossConfig,
         rank_microbatch_size: int,
@@ -123,6 +126,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         Args:
             model: The transformer model to train.
             optim_config: The corresponding optimizer config.
+            transform_config: The transform configuration for the model.
             masking_config: The masking configuration for the model.
             loss_config: The loss configuration for the model.
             rank_microbatch_size: The rank microbatch size in instances.
@@ -144,6 +148,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         super().__init__(
             model=model,
             optim_config=optim_config,
+            transform_config=transform_config,
             rank_microbatch_size=rank_microbatch_size,
             compile_model=compile_model,
             dp_config=dp_config,
@@ -165,10 +170,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
     def loss_fn(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
         return self.base_loss.compute(pred, targets)
-
-    def eval_loss_fn(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        """Compute the loss between the predicted and target tensors."""
-        raise NotImplementedError("eval loss fn not implemented")
 
     def train_batch(
         self, batch: tuple[int, HeliosSample], dry_run: bool = False
@@ -198,9 +199,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                microbatch = self.model.transform.apply(microbatch).to_device(
-                    self.device
-                )
+                microbatch = self.transform.apply(microbatch).to_device(self.device)
                 masked_batch = self.masking_strategy.apply_mask(
                     microbatch, patch_size=patch_size
                 )
@@ -236,12 +235,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
 
         del batch, batch_data  # In case this helps with memory utilization.
         del masked_batch
-
-    def eval_batch(
-        self, batch: dict[str, Any], labels: torch.Tensor | None = None
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        """Evaluate a batch."""
-        raise NotImplementedError("eval batch not implemented")
 
     def model_forward(
         self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]

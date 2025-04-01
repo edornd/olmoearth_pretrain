@@ -10,7 +10,6 @@ from olmo_core.config import Config
 from torch.distributed import DeviceMesh
 from torch.distributed.fsdp import fully_shard, register_fsdp_forward_method
 
-from helios.data.transform import Transform, TransformConfig
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
 from helios.nn.utils import DistributedMixins
 from helios.train.masking import MaskedHeliosSample
@@ -25,17 +24,12 @@ class Galileo(nn.Module, DistributedMixins):
         self,
         encoder: nn.Module,
         decoder: nn.Module,
-        # TODO: Transforms should be in the TrainModule
-        transform: Transform,
     ):
         """Initialize the Galileo Style.
 
         Args:
             encoder: The encoder to use.
             decoder: The decoder to use.
-            transform: The transform to use.
-            h_w_to_sample_min: The minimum height and width to sample.
-            h_w_to_sample_max: The maximum height and width to sample.
         """
         super().__init__()
         self.encoder = encoder
@@ -44,7 +38,6 @@ class Galileo(nn.Module, DistributedMixins):
         self.target_encoder = deepcopy(self.encoder)
         for p in self.target_encoder.parameters():
             p.requires_grad = False
-        self.transform = transform
 
     def forward_a(self, x: MaskedHeliosSample, patch_size: int) -> TokensAndMasks:
         """Forward pass for the Latent MIM Style."""
@@ -87,7 +80,6 @@ class GalileoConfig(Config):
 
     encoder_config: "EncoderConfig"
     decoder_config: "PredictorConfig"
-    transform_type: str = "no_transform"
 
     def validate(self) -> None:
         """Validate the configuration."""
@@ -114,9 +106,7 @@ class GalileoConfig(Config):
         self.validate()
         encoder = self.encoder_config.build()
         decoder = self.decoder_config.build()
-        transform = TransformConfig(transform_type=self.transform_type).build()
         return Galileo(
             encoder=encoder,
             decoder=decoder,
-            transform=transform,
         )
