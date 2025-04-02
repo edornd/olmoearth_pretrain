@@ -51,7 +51,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     ENCODER_NUM_HEADS = 16
     DECODER_NUM_HEADS = 12
     MLP_RATIO = 4.0
-    TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -76,7 +75,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     model_config = LatentMIMConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
-        transform_type=TRANSFORM_TYPE,
     )
     return model_config
 
@@ -86,7 +84,7 @@ def build_train_module_config(
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 32
+    RANK_MICROBATCH_SIZE = 64
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -130,8 +128,8 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
-    GLOBAL_BATCH_SIZE = 128
+    NUM_WORKERS = 2
+    GLOBAL_BATCH_SIZE = 256
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
 

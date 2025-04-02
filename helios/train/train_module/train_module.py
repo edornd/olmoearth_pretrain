@@ -217,9 +217,14 @@ class HeliosTrainModule(TrainModule):
         if dp_config is not None:
             dp_mesh = get_dp_mesh(self.world_mesh)
             if dp_config.name in (DataParallelType.fsdp):
+                param_dtype = (
+                dp_config.param_dtype.as_pt() if dp_config.param_dtype is not None else None
+            )
                 # TODO: MIXED PRecision is not yet supported
                 self.model.apply_fsdp(
                     dp_mesh=dp_mesh,
+                    param_dtype=param_dtype,
+                    reduce_dtype=dp_config.reduce_dtype.as_pt(),
                 )
                 logger.info("Applied FSDP to the model")
             elif dp_config.name == DataParallelType.ddp:
