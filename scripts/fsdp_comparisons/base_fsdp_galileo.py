@@ -109,10 +109,10 @@ def build_train_module_config(
     common: CommonComponents,
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
-    LR = 0.0004
+    LR = 4e-5
     RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
-    DECODE_RATIO = 0.75
+    DECODE_RATIO = 0.72
     WD = 0.02
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config_a = MaskingConfig(
@@ -140,9 +140,9 @@ def build_train_module_config(
         }
     )
     token_exit_cfg_a = {
-        Modality.SENTINEL2_L2A.name: 4,
-        Modality.LATLON.name: 4,
-        Modality.SENTINEL1.name: 4,
+        Modality.SENTINEL2_L2A.name: 40,
+        Modality.LATLON.name: 40,
+        Modality.SENTINEL1.name: 40,
         Modality.WORLDCOVER.name: 0,
     }
     token_exit_cfg_b = {modality: 0 for modality in common.supported_modality_names}
@@ -157,7 +157,6 @@ def build_train_module_config(
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
     train_module_config = GalileoTrainModuleConfig(
-        # TODO: change name to optim config
         optim_config=optim_config,
         warmup_duration=Duration.epochs(WARMUP_EPOCHS),
         masking_config_a=masking_config_a,
