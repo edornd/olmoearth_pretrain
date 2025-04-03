@@ -77,7 +77,6 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
     ENCODER_NUM_HEADS = 16
     DECODER_NUM_HEADS = 12
     MLP_RATIO = 4.0
-    TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -102,7 +101,6 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
     model_config = GalileoConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
-        transform_type=TRANSFORM_TYPE,
     )
     return model_config
 
