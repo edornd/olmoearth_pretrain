@@ -196,6 +196,7 @@ def test_latentmim_with_loss(
                 "composite_encodings.per_modality_channel_embeddings.worldcover",
                 "patch_embeddings.per_modality_embeddings.latlon",
                 "patch_embeddings.per_modality_embeddings.worldcover",
+                "pinv",
             ]
         ):
             assert param.grad is not None, name
@@ -207,6 +208,7 @@ def test_latentmim_with_loss(
                 "pos_embed",
                 "month_embed",
                 "composite_encodings.per_modality_channel_embeddings.latlon",
+                "pinv",
             ]
         ):
             assert param.grad is not None, name

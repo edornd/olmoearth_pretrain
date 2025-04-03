@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from olmo_core.distributed.utils import distribute_like
 from torch import Tensor, vmap
+from torch.nn import Parameter, ParameterDict
 
 logger = logging.getLogger(__name__)
 
@@ -92,13 +93,15 @@ class FlexiPatchEmbed(nn.Module):
             return tuple(x)
         return (x, x)
 
-    def _cache_pinvs(self) -> dict:
+    def _cache_pinvs(self) -> ParameterDict:
         """Pre-calculate all pinv matrices."""
         pinvs = {}
         for ps in self.patch_size_seq:
             tuple_ps = self.to_2tuple(ps)
-            pinvs[tuple_ps] = self._calculate_pinv(self.patch_size, tuple_ps)
-        return pinvs
+            pinvs[str(tuple_ps)] = Parameter(
+                self._calculate_pinv(self.patch_size, tuple_ps), requires_grad=False
+            )
+        return ParameterDict(pinvs)
 
     def _resize(self, x: Tensor, shape: tuple[int, int]) -> Tensor:
         """Resize the input tensor to the target shape.
@@ -147,12 +150,12 @@ class FlexiPatchEmbed(nn.Module):
             return patch_embed
 
         # Calculate pseudo-inverse of resize matrix
-        if new_patch_size not in self.pinvs:
-            self.pinvs[new_patch_size] = self._calculate_pinv(
-                self.patch_size, new_patch_size
+        if str(new_patch_size) not in self.pinvs:
+            self.pinvs[str(new_patch_size)] = Parameter(
+                self._calculate_pinv(self.patch_size, new_patch_size),
+                requires_grad=False,
             )
-        pinv = self.pinvs[new_patch_size]
-        pinv = pinv.to(patch_embed.device)
+        pinv = self.pinvs[str(new_patch_size)]
         pinv = distribute_like(patch_embed, pinv)
 
         def resample_patch_embed(patch_embed: Tensor) -> Tensor:

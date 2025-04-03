@@ -296,6 +296,7 @@ class TestEncoder:
                     "pos_embed",
                     "month_embed",
                     "composite_encodings.per_modality_channel_embeddings.latlon",
+                    "pinv",
                 ]
             ):
                 assert param.grad is not None, name
@@ -395,6 +396,7 @@ class TestEncoder:
                         "pos_embed",
                         "month_embed",
                         "composite_encodings.per_modality_channel_embeddings.latlon",
+                        "pinv",
                     ]
                 )
                 or ("block" in name)
@@ -495,6 +497,7 @@ class TestEncoder:
                         "month_embed",
                         "composite_encodings.per_modality_channel_embeddings.latlon",
                         "patch_embeddings.per_modality_embeddings.latlon",
+                        "pinv",
                     ]
                 )
                 or ("block" in name)
@@ -608,6 +611,7 @@ class TestPredictor:
                     "pos_embed",
                     "month_embed",
                     "composite_encodings.per_modality_channel_embeddings.latlon",
+                    "pinv",
                 ]
             ):
                 assert param.grad is not None, name
@@ -698,6 +702,7 @@ class TestPredictor:
                     "pos_embed",
                     "month_embed",
                     "composite_encodings.per_modality_channel_embeddings.latlon",
+                    "pinv",
                 ]
             ):
                 assert param.grad is not None, name
@@ -859,6 +864,7 @@ def test_end_to_end_with_exit_config(
                 "composite_encodings.per_modality_channel_embeddings.worldcover",
                 "patch_embeddings.per_modality_embeddings.latlon",
                 "patch_embeddings.per_modality_embeddings.worldcover",
+                "pinv",
             ]
         ):
             assert param.grad is not None, name
@@ -870,6 +876,7 @@ def test_end_to_end_with_exit_config(
                 "pos_embed",
                 "month_embed",
                 "composite_encodings.per_modality_channel_embeddings.latlon",
+                "pinv",
             ]
         ):
             assert param.grad is not None, name
