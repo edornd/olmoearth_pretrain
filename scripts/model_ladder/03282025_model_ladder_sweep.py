@@ -23,6 +23,8 @@ Eurosat best:
 
 import subprocess  # nosec
 
+from helios.internal.utils import build_token_exit_config
+
 MASKING_TYPES = [
     "random",
     "space_time",
@@ -96,40 +98,6 @@ MODEL_SIZE_ARGS = {
 EXIT_CONFIG_TYPES = ["zero", "full"]
 
 LEARNING_RATE_ARGS = [4e-5, 4e-4, 2e-3]
-
-
-# TODO: THis should be added to the code so we don't have to configure directly anymore
-def build_token_exit_config(
-    config_type: str, modality_names: list[str], encoder_depth: int
-) -> str:
-    """Build the token exit config for an experiment."""
-    if config_type == "zero":
-        return " ".join(
-            f"--train_module.token_exit_cfg.{modality_name}=0"
-            for modality_name in modality_names
-        )
-    elif config_type == "half":
-        return " ".join(
-            f"--train_module.token_exit_cfg.{modality_name}={encoder_depth // 2}"
-            for modality_name in modality_names
-        )
-    elif config_type == "full":
-        return " ".join(
-            f"--train_module.token_exit_cfg.{modality_name}={encoder_depth}"
-            for modality_name in modality_names
-        )
-    elif config_type == "varied":
-        varied_args = []
-        for modality_name in modality_names:
-            if modality_name not in ["latlon", "worldcover"]:
-                varied_args.append(
-                    f"--train_module.token_exit_cfg.{modality_name}={encoder_depth}"
-                )
-            else:
-                varied_args.append(f"--train_module.token_exit_cfg.{modality_name}=0")
-        return " ".join(varied_args)
-    else:
-        raise ValueError(f"Invalid config type: {config_type}")
 
 
 # Base command template
