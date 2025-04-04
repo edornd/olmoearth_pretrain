@@ -75,9 +75,7 @@ class TestHeliosDataset:
         ):
             loaded_data = image[..., bandset_index]
             for idx in range(len(expected_value_lst)):
-                print(
-                    f"loaded_data[0, 0, 0, idx]: {loaded_data[0, 0, 0, idx]} expected_value_lst[idx]: {expected_value_lst[idx]}"
-                )
+                print(loaded_data[0, 0, 0, idx])
                 data_matches_expected.append(
                     loaded_data[0, 0, 0, idx] == expected_value_lst[idx]
                 )
