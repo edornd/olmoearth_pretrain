@@ -838,6 +838,7 @@ class HeliosDataset(Dataset):
         sample = HeliosSample(**sample_dict)
         for modality in self.supported_modalities:
             if modality.name not in sample_dict.keys():
+                logger.info(f"Filling {modality.name} with missing values")
                 sample_dict[modality.name] = np.full(
                     sample.get_expected_shape(modality.name),
                     fill_value=MISSING_VALUE,
@@ -863,6 +864,7 @@ class HeliosDataset(Dataset):
         with h5_file_path.open("rb") as f:
             with h5py.File(f, "r") as h5file:
                 sample_dict = {k: v[()] for k, v in h5file.items()}
+        return sample_dict
 
     def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:
         """Get the sample at the given index."""
@@ -875,6 +877,7 @@ class HeliosDataset(Dataset):
         # We are currently reading the entire h5 file into memory this can be made faster by chunking the dataset appropriately and only reading in the optimal chunks
         # THis io is the current bottleneck of the getitem operation
         sample_dict = self.read_h5_file(h5_file_path)
+
         sample, missing_modalities = self.fill_sample_with_missing_values(sample_dict)
         subset_sample = self.apply_subset(sample, args)
         sample_dict = subset_sample.as_dict(ignore_nones=True)
