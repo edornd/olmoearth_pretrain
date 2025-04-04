@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pytest
 import torch
 from olmo_core.optim.adamw import AdamWConfig
@@ -12,6 +11,7 @@ from olmo_core.train.config import TrainerConfig
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample, collate_helios
+from helios.data.transform import TransformConfig
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
 from helios.nn.latent_mim import LatentMIM, LatentMIMConfig
 from helios.train.loss import LossConfig
@@ -20,95 +20,6 @@ from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 torch.set_default_device("cpu")
 logger = logging.getLogger(__name__)
-
-
-@pytest.fixture
-def samples_with_missing_modalities() -> list[HeliosSample]:
-    """Samples with missing modalities."""
-    s2_H, s2_W, s2_T, s2_C = 16, 16, 12, 13
-    s1_H, s1_W, s1_T, s1_C = 16, 16, 12, 2
-    wc_H, wc_W, wc_T, wc_C = 16, 16, 1, 10
-
-    example_s2_data = np.random.randn(s2_H, s2_W, s2_T, s2_C).astype(np.float32)
-    example_s1_data = np.random.randn(s1_H, s1_W, s1_T, s1_C).astype(np.float32)
-    example_wc_data = np.random.randn(wc_H, wc_W, wc_T, wc_C).astype(np.float32)
-    example_latlon_data = np.random.randn(2).astype(np.float32)
-    timestamps = np.array(
-        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]],
-        dtype=np.int32,
-    )
-
-    sample1 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=example_s1_data,
-        worldcover=example_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    sample2 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=None,
-        worldcover=example_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    sample_3 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=example_s1_data,
-        worldcover=None,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    batch = [sample1, sample2, sample_3]
-    return batch
-
-
-@pytest.fixture
-def samples_without_missing_modalities(
-    set_random_seeds: None,
-) -> list[HeliosSample]:
-    """Samples without missing modalities."""
-    s2_H, s2_W, s2_T, s2_C = 16, 16, 12, 13
-    s1_H, s1_W, s1_T, s1_C = 16, 16, 12, 2
-    wc_H, wc_W, wc_T, wc_C = 16, 16, 1, 10
-    example_s2_data = np.random.randn(s2_H, s2_W, s2_T, s2_C).astype(np.float32)
-    example_s1_data = np.random.randn(s1_H, s1_W, s1_T, s1_C).astype(np.float32)
-    example_wc_data = np.random.randn(wc_H, wc_W, wc_T, wc_C).astype(np.float32)
-    example_latlon_data = np.random.randn(2).astype(np.float32)
-    timestamps = np.array(
-        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]],
-        dtype=np.int32,
-    )
-
-    sample1 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=example_s1_data,
-        worldcover=example_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    sample2 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=example_s1_data,
-        worldcover=example_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    sample_3 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=example_s1_data,
-        worldcover=example_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    batch = [sample1, sample2, sample_3]
-    return batch
 
 
 @pytest.fixture
@@ -166,10 +77,6 @@ def latent_mim_model(
     latent_mim_config = LatentMIMConfig(
         encoder_config=encoder_config,
         decoder_config=predictor_config,
-        transform_type="no_transform",
-        token_budget=1500,
-        h_w_to_sample_min=2,
-        h_w_to_sample_max=13,
     )
 
     # Build the model
@@ -197,6 +104,9 @@ def train_module_config(
     token_exit_cfg = {modality: 0 for modality in Modality.names()}
     loss_cfg = {"type": "patch_discrimination"}
     masking_cfg = {"type": "random"}
+    transform_cfg = TransformConfig(
+        transform_type="no_transform",
+    )
 
     # Create the config with all required parameters
     config = LatentMIMTrainModuleConfig(
@@ -207,6 +117,7 @@ def train_module_config(
         token_exit_cfg=token_exit_cfg,
         ema_decay=(0.996, 1.0),
         max_grad_norm=1.0,
+        transform_config=transform_cfg,
     )
     return config
 
@@ -249,13 +160,12 @@ class MockTrainer:
 
 def test_train_batch_without_missing_modalities(
     samples_without_missing_modalities: list[HeliosSample],
-    supported_modalities: list,
     latent_mim_model: LatentMIM,
     train_module_config: LatentMIMTrainModuleConfig,
     set_random_seeds: None,
 ) -> None:
     """Test train batch without missing modalities."""
-    batch = collate_helios(samples_without_missing_modalities, supported_modalities)
+    batch = collate_helios(samples_without_missing_modalities)
     train_module = train_module_config.build(latent_mim_model, device="cpu")
     with patch("helios.train.train_module.train_module.build_world_mesh"):
         # Mock the trainer property
@@ -276,14 +186,13 @@ def test_train_batch_without_missing_modalities(
 
 def test_train_batch_with_missing_modalities(
     samples_with_missing_modalities: list[HeliosSample],
-    supported_modalities: list,
     latent_mim_model: LatentMIM,
     train_module_config: LatentMIMTrainModuleConfig,
     set_random_seeds: None,
 ) -> None:
     """Test train batch with missing modalities."""
     # Create a collated batch
-    batch = collate_helios(samples_with_missing_modalities, supported_modalities)
+    batch = collate_helios(samples_with_missing_modalities)
     train_module = train_module_config.build(latent_mim_model, device="cpu")
     with patch("helios.train.train_module.train_module.build_world_mesh"):
         # Mock the trainer property

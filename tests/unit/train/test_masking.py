@@ -6,13 +6,9 @@ import torch
 
 from helios.data.constants import MISSING_VALUE, Modality
 from helios.data.dataset import HeliosSample
-from helios.train.masking import (
-    MaskValue,
-    ModalityMaskingStrategy,
-    RandomMaskingStrategy,
-    SpaceMaskingStrategy,
-    TimeMaskingStrategy,
-)
+from helios.train.masking import (MaskValue, ModalityMaskingStrategy,
+                                  RandomMaskingStrategy, SpaceMaskingStrategy,
+                                  TimeMaskingStrategy)
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +237,7 @@ def test_create_random_mask_with_missing_mask() -> None:
     encode_ratio, decode_ratio = 0.25, 0.5
     masked_sample = RandomMaskingStrategy(
         encode_ratio=encode_ratio, decode_ratio=decode_ratio
-    ).apply_mask(batch)
+    ).apply_mask(batch, patch_size=1)
 
     # Check the sentinel1 mask
     sentinel1_mask = masked_sample.sentinel1_mask
@@ -478,7 +474,7 @@ def test_time_masking_with_missing_modality_mask() -> None:
     strategy = TimeMaskingStrategy(encode_ratio=encode_ratio, decode_ratio=decode_ratio)
 
     # Apply masking
-    masked_sample = strategy.apply_mask(batch)
+    masked_sample = strategy.apply_mask(batch, patch_size=4)
 
     # Check that sentinel1_mask has been created
     sentinel1_mask = masked_sample.sentinel1_mask
@@ -564,7 +560,7 @@ def test_random_masking_with_missing_modality_mask() -> None:
     )
 
     # Apply masking
-    masked_sample = strategy.apply_mask(batch)
+    masked_sample = strategy.apply_mask(batch, patch_size=1)
 
     # Check that sentinel1_mask has been created
     sentinel1_mask = masked_sample.sentinel1_mask

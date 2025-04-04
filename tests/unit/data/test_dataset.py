@@ -1,65 +1,17 @@
 """Unit tests for the dataset module."""
 
-import numpy as np
-import pytest
 import torch
 
 from helios.data.constants import MISSING_VALUE
 from helios.data.dataset import HeliosSample, collate_helios
 
 
-@pytest.fixture
-def samples_with_missing_modalities() -> list[HeliosSample]:
-    """Samples with missing modalities."""
-    s2_H, s2_W, s2_T, s2_C = 16, 16, 12, 13
-    s1_H, s1_W, s1_T, s1_C = 16, 16, 12, 2
-    wc_H, wc_W, wc_T, wc_C = 16, 16, 1, 10
-
-    example_s2_data = np.random.randn(s2_H, s2_W, s2_T, s2_C)
-    example_s1_data = np.random.randn(s1_H, s1_W, s1_T, s1_C)
-    example_wc_data = np.random.randn(wc_H, wc_W, wc_T, wc_C)
-    example_latlon_data = np.random.randn(2)
-    timestamps = np.array([[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]], dtype=np.int32)
-    missing_s1_data = np.random.randn(s1_H, s1_W, s1_T, s1_C)
-    missing_s1_data[:] = MISSING_VALUE
-    missing_wc_data = np.random.randn(wc_H, wc_W, wc_T, wc_C)
-    missing_wc_data[:] = MISSING_VALUE
-    sample1 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=example_s1_data,
-        worldcover=example_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    sample2 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=missing_s1_data,
-        worldcover=example_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    sample_3 = HeliosSample(
-        sentinel2_l2a=example_s2_data,
-        sentinel1=example_s1_data,
-        worldcover=missing_wc_data,
-        latlon=example_latlon_data,
-        timestamps=timestamps,
-    )
-
-    batch = [sample1, sample2, sample_3]
-    return batch
-
-
 def test_collate_helios(
-    samples_with_missing_modalities: list[HeliosSample],
+    samples_with_missing_modalities: list[tuple[int, HeliosSample]],
 ) -> None:
     """Test the collate_helios function."""
-    patch_size = [2 for _ in range(len(samples_with_missing_modalities))]
-    patch_size_sample_tuples = list(zip(patch_size, samples_with_missing_modalities))
     collated_sample = collate_helios(
-        patch_size_sample_tuples,
+        samples_with_missing_modalities,
     )
 
     # Check that all required fields are present
@@ -87,13 +39,14 @@ class TestHeliosSample:
     # Test subsetting collate function with missing modalities
     def test_subset_with_missing_modalities(
         self,
-        samples_with_missing_modalities: list[HeliosSample],
+        samples_with_missing_modalities: list[tuple[int, HeliosSample]],
     ) -> None:
         """Test subsetting a collated sample with missing modalities."""
         sampled_hw_p = 4
         patch_size = 2
         max_tokens_per_instance = 100
-        subset_sample = samples_with_missing_modalities[1].subset(
+        sample: HeliosSample = samples_with_missing_modalities[1][1]
+        subset_sample = sample.subset(
             patch_size=patch_size,
             max_tokens_per_instance=max_tokens_per_instance,
             sampled_hw_p=sampled_hw_p,

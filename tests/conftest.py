@@ -14,7 +14,8 @@ import rasterio
 import torch
 from rasterio.transform import from_origin
 
-from helios.data.constants import BandSet, Modality, ModalitySpec
+from helios.data.constants import MISSING_VALUE, BandSet, Modality, ModalitySpec
+from helios.data.dataset import HeliosSample
 from helios.dataset.parse import GridTile, ModalityImage, ModalityTile, TimeSpan
 from helios.dataset.sample import SampleInformation
 from helios.train.masking import MaskValue
@@ -256,3 +257,92 @@ def masked_sample_dict(
         "timestamps": timestamps,
     }
     return masked_sample_dict
+
+
+@pytest.fixture
+def samples_with_missing_modalities() -> list[HeliosSample]:
+    """Samples with missing modalities."""
+    s2_H, s2_W, s2_T, s2_C = 16, 16, 12, 13
+    s1_H, s1_W, s1_T, s1_C = 16, 16, 12, 2
+    wc_H, wc_W, wc_T, wc_C = 16, 16, 1, 10
+
+    example_s2_data = np.random.randn(s2_H, s2_W, s2_T, s2_C)
+    example_s1_data = np.random.randn(s1_H, s1_W, s1_T, s1_C)
+    example_wc_data = np.random.randn(wc_H, wc_W, wc_T, wc_C)
+    example_latlon_data = np.random.randn(2)
+    timestamps = np.array([[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]], dtype=np.int32)
+    missing_s1_data = np.random.randn(s1_H, s1_W, s1_T, s1_C)
+    missing_s1_data[:] = MISSING_VALUE
+    missing_wc_data = np.random.randn(wc_H, wc_W, wc_T, wc_C)
+    missing_wc_data[:] = MISSING_VALUE
+    sample1 = HeliosSample(
+        sentinel2_l2a=example_s2_data,
+        sentinel1=example_s1_data,
+        worldcover=example_wc_data,
+        latlon=example_latlon_data,
+        timestamps=timestamps,
+    )
+
+    sample2 = HeliosSample(
+        sentinel2_l2a=example_s2_data,
+        sentinel1=missing_s1_data,
+        worldcover=example_wc_data,
+        latlon=example_latlon_data,
+        timestamps=timestamps,
+    )
+
+    sample_3 = HeliosSample(
+        sentinel2_l2a=example_s2_data,
+        sentinel1=example_s1_data,
+        worldcover=missing_wc_data,
+        latlon=example_latlon_data,
+        timestamps=timestamps,
+    )
+
+    batch = [(1, sample1), (1, sample2), (1, sample_3)]
+    return batch
+
+
+@pytest.fixture
+def samples_without_missing_modalities(
+    set_random_seeds: None,
+) -> list[HeliosSample]:
+    """Samples without missing modalities."""
+    s2_H, s2_W, s2_T, s2_C = 16, 16, 12, 13
+    s1_H, s1_W, s1_T, s1_C = 16, 16, 12, 2
+    wc_H, wc_W, wc_T, wc_C = 16, 16, 1, 10
+    example_s2_data = np.random.randn(s2_H, s2_W, s2_T, s2_C).astype(np.float32)
+    example_s1_data = np.random.randn(s1_H, s1_W, s1_T, s1_C).astype(np.float32)
+    example_wc_data = np.random.randn(wc_H, wc_W, wc_T, wc_C).astype(np.float32)
+    example_latlon_data = np.random.randn(2).astype(np.float32)
+    timestamps = np.array(
+        [[15, 7, 2023], [15, 8, 2023], [15, 9, 2023]],
+        dtype=np.int32,
+    )
+
+    sample1 = HeliosSample(
+        sentinel2_l2a=example_s2_data,
+        sentinel1=example_s1_data,
+        worldcover=example_wc_data,
+        latlon=example_latlon_data,
+        timestamps=timestamps,
+    )
+
+    sample2 = HeliosSample(
+        sentinel2_l2a=example_s2_data,
+        sentinel1=example_s1_data,
+        worldcover=example_wc_data,
+        latlon=example_latlon_data,
+        timestamps=timestamps,
+    )
+
+    sample_3 = HeliosSample(
+        sentinel2_l2a=example_s2_data,
+        sentinel1=example_s1_data,
+        worldcover=example_wc_data,
+        latlon=example_latlon_data,
+        timestamps=timestamps,
+    )
+
+    batch = [(1, sample1), (1, sample2), (1, sample_3)]
+    return batch
