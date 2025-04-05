@@ -199,10 +199,17 @@ class HeliosTrainModule(TrainModule):
             )
 
         self.device = device or get_default_device()
-        self.world_mesh = build_world_mesh(dp=dp_config, device_type=self.device.type)
-        logger.info(
-            f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
-        )
+
+        if dp_config is not None:
+            self.world_mesh = build_world_mesh(
+                dp=dp_config, device_type=self.device.type
+            )
+            logger.info(
+                f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
+            )
+        else:
+            self.world_mesh = None
+
         self.warmup_duration = warmup_duration
         # Maybe apply activation checkpointing.
         if ac_config is not None:
@@ -271,6 +278,8 @@ class HeliosTrainModule(TrainModule):
     @property
     def dp_process_group(self) -> dist.ProcessGroup | None:
         """Get the data parallel process group."""
+        if self.world_mesh is None:
+            return None
         return get_dp_process_group(self.world_mesh)
 
     @property
