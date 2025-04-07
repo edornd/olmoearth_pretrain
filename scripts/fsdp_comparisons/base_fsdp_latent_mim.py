@@ -1,4 +1,4 @@
-"""Trying to prototype fitting everything into olmo core."""
+"""Base fsdp latentmim experiment."""
 
 import logging
 
@@ -13,6 +13,7 @@ from olmo_core.train.callbacks import (
     ConfigSaverCallback,
     GarbageCollectorCallback,
     GPUMemoryMonitorCallback,
+    ProfilerCallback,
 )
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
@@ -44,12 +45,14 @@ MIN_PATCH_SIZE = 1
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 128
-    DECODER_EMBEDDING_SIZE = 128
-    ENCODER_DEPTH = 4
-    DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 8
-    DECODER_NUM_HEADS = 8
+    ENCODER_EMBEDDING_SIZE = 1536
+    DECODER_EMBEDDING_SIZE = (
+        1536  # we should try to do this with a full depth just to check
+    )
+    ENCODER_DEPTH = 40
+    DECODER_DEPTH = 12
+    ENCODER_NUM_HEADS = 16
+    DECODER_NUM_HEADS = 12
     MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
@@ -83,8 +86,8 @@ def build_train_module_config(
     common: CommonComponents,
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
-    LR = 0.002
-    RANK_MICROBATCH_SIZE = 128
+    LR = 0.0002
+    RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -104,18 +107,22 @@ def build_train_module_config(
     token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
 
     WARMUP_EPOCHS = 20
-    dp_config = DataParallelConfig(name=DataParallelType.ddp)
+    dp_config = DataParallelConfig(
+        name=DataParallelType.fsdp,
+        param_dtype=DType.bfloat16,
+        reduce_dtype=DType.float32,
+    )
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
     train_module_config = LatentMIMTrainModuleConfig(
+        # TODO: change name to optim config
         optim_config=optim_config,
         masking_config=masking_config,
         warmup_duration=Duration.epochs(WARMUP_EPOCHS),
         loss_config=loss_config,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
         token_exit_cfg=token_exit_cfg,
-        autocast_precision=DType.bfloat16,
         max_grad_norm=1.0,
         dp_config=dp_config,
         scheduler=scheduler,
@@ -128,8 +135,8 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
-    GLOBAL_BATCH_SIZE = 128
+    NUM_WORKERS = 2
+    GLOBAL_BATCH_SIZE = 256
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
 
@@ -245,6 +252,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             ),
         )
         .with_callback("garbage_collector", garbage_collector_callback)
+        .with_callback("profiler", ProfilerCallback())
     )
     return trainer_config
 

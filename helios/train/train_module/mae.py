@@ -7,7 +7,7 @@ from typing import Any
 import torch
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 from olmo_core.distributed.parallel import DataParallelConfig
-from olmo_core.distributed.utils import get_local_tensor, get_world_size
+from olmo_core.distributed.utils import get_local_tensor
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import Duration, ReduceType
@@ -17,10 +17,11 @@ from olmo_core.train.train_module.transformer import (
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
+from helios.data.transform import TransformConfig
 from helios.nn.flexihelios import TokensAndMasks
 from helios.nn.mae import MAE
 from helios.train.loss import LossConfig
-from helios.train.masking import MaskingConfig
+from helios.train.masking import MaskedHeliosSample, MaskingConfig
 from helios.train.train_module.train_module import (
     HeliosTrainModule,
     HeliosTrainModuleConfig,
@@ -62,7 +63,7 @@ class MAETrainModuleConfig(HeliosTrainModuleConfig):
             model: The model to train.
             device: The device to train on.
         """
-        kwargs = self.as_dict(exclude_none=True, recurse=False)
+        kwargs = self.prepare_kwargs()
         return MAETrainModule(
             model=model,
             device=device,
@@ -99,6 +100,7 @@ class MAETrainModule(HeliosTrainModule):
         self,
         model: MAE,
         optim_config: OptimConfig,
+        transform_config: TransformConfig,
         masking_config: MaskingConfig,
         loss_config: LossConfig,
         rank_microbatch_size: int,
@@ -114,12 +116,14 @@ class MAETrainModule(HeliosTrainModule):
         state_dict_save_opts: dist_cp_sd.StateDictOptions | None = None,
         state_dict_load_opts: dist_cp_sd.StateDictOptions | None = None,
         warmup_duration: Duration = Duration.epochs(2),
+        regularizer_config: LossConfig | None = None,
     ):
         """Initialize the training module.
 
         Args:
             model: The transformer model to train.
             optim_config: The corresponding optimizer config.
+            transform_config: The transform configuration for the model.
             masking_config: The masking configuration for the model.
             loss_config: The loss configuration for the model.
             rank_microbatch_size: The rank microbatch size in instances.
@@ -136,10 +140,12 @@ class MAETrainModule(HeliosTrainModule):
             state_dict_load_opts: Override state dict options for loading.
             token_exit_cfg: The token exit configuration for the model.
             warmup_duration: The warmup duration for the model.
+            regularizer_config: An optional regularizer configuration for the model.
         """
         super().__init__(
             model=model,
             optim_config=optim_config,
+            transform_config=transform_config,
             rank_microbatch_size=rank_microbatch_size,
             compile_model=compile_model,
             dp_config=dp_config,
@@ -156,14 +162,28 @@ class MAETrainModule(HeliosTrainModule):
         self.token_exit_cfg = token_exit_cfg
         self.base_loss = loss_config.build()
         self.masking_strategy = masking_config.build()
+        self.regularizer = (
+            regularizer_config.build() if regularizer_config is not None else None
+        )
+        self.total_loss_name = self.base_loss.name
+        if self.regularizer is not None:
+            self.total_loss_name = f"{self.base_loss.name}+{self.regularizer.name}"
 
     def loss_fn(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
         return self.base_loss.compute(pred, targets)
 
-    def eval_loss_fn(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        """Compute the loss between the predicted and target tensors."""
-        raise NotImplementedError("eval loss fn not implemented")
+    def model_forward(
+        self, masked_batch: MaskedHeliosSample, patch_size: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Forward pass of the model."""
+        with self._model_forward_context():
+            _, reconstructed = self.model(masked_batch, patch_size)
+            labels_dict = masked_batch.as_dict()
+            labels_dict.pop("timestamps", None)
+            labels = TokensAndMasks(**labels_dict)
+            loss = self.loss_fn(reconstructed, labels)
+            return loss, reconstructed, labels
 
     def train_batch(
         self, patch_batch: tuple[int, HeliosSample], dry_run: bool = False
@@ -185,7 +205,7 @@ class MAETrainModule(HeliosTrainModule):
         self.model.train()
         # Set the maximum number of tokens
         total_batch_loss = torch.tensor(0.0, device=self.device)
-
+        total_batch_reg = torch.tensor(0.0, device=self.device)
         # Split into micro-batches.
         microbatches = split_batch(batch, self.rank_microbatch_size)
         num_microbatches = len(microbatches)
@@ -194,20 +214,22 @@ class MAETrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                microbatch = self.model.transform.apply(microbatch).to_device(
-                    self.device
-                )
+                microbatch = self.transform.apply(microbatch).to_device(self.device)
                 masked_batch = self.masking_strategy.apply_mask(
                     microbatch, patch_size=patch_size
                 )
 
                 # Run Encoder and decoder on the augmented input
-                reconstructed = self.model(masked_batch, patch_size)
+                loss, latent, reconstructed = self.model_forward(
+                    masked_batch, patch_size
+                )
                 labels_dict = masked_batch.as_dict()
                 labels_dict.pop("timestamps", None)
                 labels = TokensAndMasks(**labels_dict)
-                loss = self.loss_fn(reconstructed, labels)
-
+                reg_term = self.compute_regularization(latent)
+                if reg_term is not None:
+                    loss = loss + reg_term
+                    total_batch_reg += get_local_tensor(reg_term) / num_microbatches
                 # Scale loss by number of microbatches
                 loss = loss / num_microbatches
                 loss_val = get_local_tensor(loss)
@@ -225,19 +247,14 @@ class MAETrainModule(HeliosTrainModule):
                 loss.backward()
 
         self.trainer.record_metric(
-            f"train/{self.base_loss.name}",
-            total_batch_loss / get_world_size(self.dp_process_group),
+            f"train/{self.total_loss_name}",
+            total_batch_loss,
             ReduceType.mean,
         )
+        self.log_regularization(total_batch_reg)
 
         if dry_run:
             return
 
         del batch  # In case this helps with memory utilization.
         del masked_batch
-
-    def eval_batch(
-        self, batch: dict[str, Any], labels: torch.Tensor | None = None
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        """Evaluate a batch."""
-        raise NotImplementedError("eval batch not implemented")
