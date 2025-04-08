@@ -685,6 +685,7 @@ def test_modality_mask_and_unmask() -> None:
 
 
 def test_space_cross_modality_masking() -> None:
+    """Test space cross modality masking."""
     b, h, w, t = 4, 16, 16, 8
 
     patch_size = 4
@@ -707,8 +708,8 @@ def test_space_cross_modality_masking() -> None:
         max_unmasking_bandsets=20,
         min_encoding_bandsets=2,
         max_encoding_bandsets=3,
-        encode_ratio=0.25,
-        decode_ratio=0.5,
+        encode_ratio=0.1,
+        decode_ratio=0.75,
     )
     for i in range(10):
-        masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
+        _ = strategy.apply_mask(batch, patch_size=patch_size)

@@ -25,8 +25,8 @@ for modality in Modality.values():
         ALL_BANDSET_IDXS.append((modality.name, bandset_idx))
 
 
-def powerset(iterable) -> list[tuple[tuple[str, int], ...]]:
-    """powerset([1,2,3]) → (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)."""
+def powerset(iterable: list[tuple[str, int]]) -> list[tuple[tuple[str, int], ...]]:
+    """Powerset of [1,2,3] → (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)."""
     s = list(iterable)
     return_list = list(
         chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
@@ -726,13 +726,6 @@ class ModalityCrossSpaceMaskingStrategy(MaskingStrategy):
                 )
                 continue
             candidate_decoding_bandset_combinations.append(bandset_combination)
-
-        logger.info(
-            f"candidate_decoding_bandset_combinations total: {len(candidate_decoding_bandset_combinations)}"
-        )
-        logger.info(
-            f"candidate_decoding_bandset_combinations: {candidate_decoding_bandset_combinations}"
-        )
 
         decoded_bandset_idxs = candidate_decoding_bandset_combinations[
             self.generator.integers(0, len(candidate_decoding_bandset_combinations))
