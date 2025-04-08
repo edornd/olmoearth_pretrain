@@ -814,9 +814,26 @@ class HeliosDataset(Dataset):
 
     def _get_timestamps(self, sample: SampleInformation) -> np.ndarray:
         """Get the timestamps of the sample."""
-        sample_sentinel2_l2a = sample.modalities[Modality.SENTINEL2_L2A]
-        timestamps = [i.start_time for i in sample_sentinel2_l2a.images]
-        dt = pd.to_datetime(timestamps)
+        # Assume that all multitemporal modalities have the same timestamps
+        if Modality.SENTINEL2_L2A in sample.modalities:
+            sample_sentinel2_l2a = sample.modalities[Modality.SENTINEL2_L2A]
+            timestamps = [i.start_time for i in sample_sentinel2_l2a.images]
+            dt = pd.to_datetime(timestamps)
+        elif Modality.SENTINEL1 in sample.modalities:
+            sample_sentinel1 = sample.modalities[Modality.SENTINEL1]
+            timestamps = [i.start_time for i in sample_sentinel1.images]
+            dt = pd.to_datetime(timestamps)
+        elif Modality.LANDSAT in sample.modalities:
+            sample_landsat = sample.modalities[Modality.LANDSAT]
+            timestamps = [i.start_time for i in sample_landsat.images]
+            dt = pd.to_datetime(timestamps)
+        elif Modality.NAIP in sample.modalities:
+            sample_naip = sample.modalities[Modality.NAIP]
+            timestamps = [i.start_time for i in sample_naip.images]
+            dt = pd.to_datetime(timestamps)
+        else:
+            raise ValueError("Sample does not have any multitemporal modalities")
+        # Note that month should be 0-indexed
         # Note that month should be 0-indexed
         return np.array([dt.day, dt.month - 1, dt.year]).T
 

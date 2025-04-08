@@ -19,130 +19,15 @@ from olmo_core.utils import prepare_cli_environment
 logger = logging.getLogger(__name__)
 
 
-def process_sample(args: Tuple[HeliosDataset, int]) -> Dict[str, Any]:
-    """Process a single sample to compute its normalization stats.
-
-    Args:
-        args: Tuple containing the dataset and the index to process
-
-    Returns:
-        Dictionary containing normalization values for this sample
-    """
-    dataset, i = args
-    local_norm_dict: Dict[str, Any] = {}
-
-    try:
-        get_item_args = GetItemArgs(idx=i, patch_size=1, sampled_hw_p=IMAGE_TILE_SIZE)
-        _, sample = dataset[get_item_args]
-
-        if "timestamps" not in sample.modalities:
-            # Returning info as part of the result rather than logging
-            return {"error": f"Skipping {i} because it has no timestamps"}
-
-        for modality in sample.modalities:
-            if modality == "timestamps" or modality == "latlon":
-                continue
-
-            modality_data = sample.as_dict(ignore_nones=True)[modality]
-            modality_spec = Modality.get(modality)
-            modality_bands = modality_spec.band_order
-
-            if modality_data is None:
-                continue
-
-            if (modality_data == MISSING_VALUE).all():
-                continue
-
-            if modality not in local_norm_dict:
-                local_norm_dict[modality] = {}
-
-            for idx, band in enumerate(modality_bands):
-                modality_band_data = modality_data[:, :, :, idx]  # (H, W, T, C)
-
-                # For each band, store sum, sum_squared, and count
-                if band not in local_norm_dict.get(modality, {}):
-                    local_norm_dict.setdefault(modality, {})[band] = {
-                        "sum": modality_band_data.sum(),
-                        "sum_squared": (modality_band_data**2).sum(),
-                        "count": modality_band_data.size,
-                    }
-                else:
-                    local_norm_dict[modality][band]["sum"] += modality_band_data.sum()
-                    local_norm_dict[modality][band]["sum_squared"] += (modality_band_data**2).sum()
-                    local_norm_dict[modality][band]["count"] += modality_band_data.size
-
-    except Exception as e:
-        # Return errors rather than logging them
-        return {"error": f"Error processing sample {i}: {str(e)}"}
-
-    return local_norm_dict
-
-
-def merge_norm_dicts(norm_dicts: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Merge multiple normalization dictionaries.
-
-    Args:
-        norm_dicts: List of normalization dictionaries to merge
-
-    Returns:
-        Merged normalization dictionary
-    """
-    merged_dict: Dict[str, Any] = {}
-
-    for norm_dict in norm_dicts:
-        for modality in norm_dict:
-            if modality not in merged_dict:
-                merged_dict[modality] = {}
-
-            for band in norm_dict[modality]:
-                if band not in merged_dict[modality]:
-                    merged_dict[modality][band] = {
-                        "sum": norm_dict[modality][band]["sum"],
-                        "sum_squared": norm_dict[modality][band]["sum_squared"],
-                        "count": norm_dict[modality][band]["count"],
-                    }
-                else:
-                    merged_dict[modality][band]["sum"] += norm_dict[modality][band]["sum"]
-                    merged_dict[modality][band]["sum_squared"] += norm_dict[modality][band]["sum_squared"]
-                    merged_dict[modality][band]["count"] += norm_dict[modality][band]["count"]
-
-    # Calculate mean, variance, and std from the merged sums
-    for modality in merged_dict:
-        logger.info(f"Processing modality: {modality}")
-        for band in merged_dict[modality]:
-            logger.info(f"Processing band: {band}")
-            count = merged_dict[modality][band]["count"]
-            sum_val = merged_dict[modality][band]["sum"]
-            sum_squared = merged_dict[modality][band]["sum_squared"]
-            logger.info(f"Sum: {sum_val}, Sum squared: {sum_squared}, Count: {count}")
-
-            mean = sum_val / count
-            # Var = E[X²] - E[X]²
-            var = (sum_squared / count) - (mean**2)
-
-            merged_dict[modality][band]["mean"] = float(mean)
-            merged_dict[modality][band]["var"] = float(var)
-            merged_dict[modality][band]["std"] = float(np.sqrt(var))
-            merged_dict[modality][band]["count"] = int(count)
-
-            # Clean up intermediate values
-            del merged_dict[modality][band]["sum"]
-            del merged_dict[modality][band]["sum_squared"]
-
-    return merged_dict
-
-
 def compute_normalization_values(
     dataset: HeliosDataset,
     estimate_from: int | None = None,
-    num_workers: int = mp.cpu_count(),
 ) -> dict[str, Any]:
-    """Compute the normalization values for the dataset using parallelism.
+    """Compute the normalization values for the dataset in a streaming manner.
 
     Args:
         dataset: The dataset to compute the normalization values for.
         estimate_from: The number of samples to estimate the normalization values from.
-        num_workers: Number of worker processes to use.
 
     Returns:
         dict: A dictionary containing the normalization values for the dataset.
@@ -152,38 +37,53 @@ def compute_normalization_values(
         indices_to_sample = random.sample(list(range(dataset_len)), k=estimate_from)
     else:
         indices_to_sample = list(range(dataset_len))
+    norm_dict: dict[str, Any] = {}
 
-    # Process samples in parallel
-    logger.info(f"Processing {len(indices_to_sample)} samples with {num_workers} workers")
-    with mp.Pool(num_workers) as pool:
-        args_list = [(dataset, i) for i in indices_to_sample]
-        results = []
-        errors = []
-
-        for result in tqdm(
-            pool.imap(process_sample, args_list),
-            total=len(indices_to_sample),
-            desc="Computing normalization stats"
-        ):
-            if result is None:
+    for i in tqdm(indices_to_sample):
+        get_item_args = GetItemArgs(idx=i, patch_size=1, sampled_hw_p=IMAGE_TILE_SIZE)
+        _, sample = dataset[get_item_args]
+        for modality in sample.modalities:
+            # Shall we compute the norm stats for worldcover?
+            if modality == "timestamps" or modality == "latlon":
                 continue
-            elif "error" in result:
-                errors.append(result["error"])
-                # Log errors from the worker processes
-                logger.info(result["error"])
-            else:
-                results.append(result)
+            modality_data = sample.as_dict(ignore_nones=True)[modality]
+            modality_spec = Modality.get(modality)
+            modality_bands = modality_spec.band_order
+            if modality_data is None:
+                continue
+            if (modality_data == MISSING_VALUE).all():
+                logger.info(f"Skipping modality {i} because modality {modality} has no valid data")
+                continue
+            if modality not in norm_dict:
+                norm_dict[modality] = {}
+                for band in modality_bands:
+                    norm_dict[modality][band] = {
+                        "mean": 0.0,
+                        "var": 0.0,
+                        "std": 0.0,
+                        "count": 0,
+                    }
+            # Compute the normalization stats for the modality
+            for idx, band in enumerate(modality_bands):
+                modality_band_data = modality_data[:, :, :, idx]  # (H, W, T, C)
+                current_stats = norm_dict[modality][band]
+                new_count, new_mean, new_var = update_streaming_stats(
+                    current_stats["count"],
+                    current_stats["mean"],
+                    current_stats["var"],
+                    modality_band_data,
+                )
+                # Update the normalization stats
+                norm_dict[modality][band]["count"] = new_count
+                norm_dict[modality][band]["mean"] = new_mean
+                norm_dict[modality][band]["var"] = new_var
 
-        # Log a summary of errors
-        if errors:
-            logger.info(f"Encountered {len(errors)} errors during processing")
-
-    # Merge results from all processes (filter out None results and error messages)
-    valid_results = [r for r in results if r and "error" not in r]
-    if not valid_results:
-        raise ValueError("No valid samples were processed, cannot compute normalization")
-    logger.info(f"Merging {len(valid_results)} valid results")
-    norm_dict = merge_norm_dicts(valid_results)
+    # Compute the standard deviation
+    for modality in norm_dict:
+        for band in norm_dict[modality]:
+            norm_dict[modality][band]["std"] = (
+                norm_dict[modality][band]["var"] / norm_dict[modality][band]["count"]
+            ) ** 0.5
 
     norm_dict["total_n"] = dataset_len
     norm_dict["sampled_n"] = len(indices_to_sample)
