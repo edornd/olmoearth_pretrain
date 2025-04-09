@@ -1006,8 +1006,8 @@ class HeliosDataset(Dataset):
                 # Not sure lat lon should be here
                 sample_dict = {k: v[()] for k, v in h5file.items() if k in self.training_modalities or k in ["latlon", "timestamps"]}
         # log the shape of all modalities
-        for modality, data in sample_dict.items():
-            logger.info(f"Shape of modality {modality}: {data.shape}")
+        # for modality, data in sample_dict.items():
+        #     logger.info(f"Shape of modality {modality}: {data.shape}")
         return sample_dict
 
     def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:

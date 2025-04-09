@@ -1179,7 +1179,6 @@ class Encoder(FlexiHeliosBase):
         """
         # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
-        logger.info(f"Patchified tokens and masks srtm: {patchified_tokens_and_masks['srtm']}")
         if token_exit_cfg is None or any(
             [exit_depth > 0 for exit_depth in token_exit_cfg.values()]
         ):
@@ -1190,7 +1189,6 @@ class Encoder(FlexiHeliosBase):
                 input_res=input_res,
                 token_exit_cfg=token_exit_cfg,
             )
-        logger.info(f"Patchified tokens and masks srtm: {patchified_tokens_and_masks['srtm']}")
         return TokensAndMasks(**patchified_tokens_and_masks)
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
