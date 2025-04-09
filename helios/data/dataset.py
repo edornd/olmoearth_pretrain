@@ -717,15 +717,10 @@ class HeliosDataset(Dataset):
             if not all(
                 modality in self.supported_modalities
                 for modality in sample.modalities
+                # TODO: clarify usage of ignore when parsing
                 if not modality.ignore_when_parsing
             ):
                 logger.info("Skipping sample because it has unsupported modalities")
-                if has_naip:
-                    logger.info("Skipping sample because it has naip and unsupported modalities")
-                    continue
-                if has_landsat:
-                    logger.info("Skipping sample because it has landsat and unsupported modalities")
-                    continue
                 continue
 
             if not self.use_samples_with_missing_supported_modalities:
@@ -743,56 +738,14 @@ class HeliosDataset(Dataset):
                     continue
             if sample.time_span != TimeSpan.YEAR:
                 logger.info("Skipping sample because it is not the yearly frequency data")
-                if has_naip:
-                    logger.info("Skipping sample because it has naip and is not the yearly frequency data")
-                    continue
-                if has_landsat:
-                    logger.info("Skipping sample because it has landsat and is not the yearly frequency data")
-                    continue
                 continue
-            # check if sample modalities have s1 and s2
-            has_s1 = Modality.SENTINEL1 in sample.modalities
-            has_s2 = Modality.SENTINEL2_L2A in sample.modalities
-            # if not has_s2:
-            #     # If any of our samples don't have S2 this will be a problem
-            #     continue
-            if has_s1:
-                sentinel1_months = len(
-                    set(sample.modalities[Modality.SENTINEL1].images)
-                )
-                if sentinel1_months != 12:
-                    logger.info("Skipping sample because it has less than 12 months of S1 data")
-                    if has_naip:
-                        logger.info("Skipping sample because it has naip and less than 12 months of S1 data")
-                        continue
-                    if has_landsat:
-                        logger.info("Skipping sample because it has landsat and less than 12 months of S1 data")
-                        continue
-                    continue
-            if has_s2:
-                sentinel2_months = len(
-                    set(sample.modalities[Modality.SENTINEL2_L2A].images)
-                )
-                if sentinel2_months != 12:
-                    logger.info("Skipping sample because it has less than 12 months of S2 data")
-                    if has_naip:
-                        logger.info("Skipping sample because it has naip and less than 12 months of S2 data")
-                        continue
-                    if has_landsat:
-                        logger.info("Skipping sample because it has landsat and less than 12 months of S2 data")
-                        continue
-                    continue
-            if has_s1 and has_s2:
-                # Check if S1 and S2 all have the same 12 months of data
-                if sentinel1_months != sentinel2_months:
-                    logger.info("Skipping sample because S1 and S2 have different number of months")
-                    if has_naip:
-                        logger.info("Skipping sample because it has naip and S1 and S2 have different number of months")
-                        continue
-                    if has_landsat:
-                        logger.info("Skipping sample because it has landsat and S1 and S2 have different number of months")
-                        continue
-                    continue
+
+            multitemporal_modalities = [modality for modality in sample.modalities if modality.is_multitemporal]
+            # Pop off any modalities that don't have 12 months of data
+            for modality in multitemporal_modalities:
+                if len(sample.modalities[modality].images) != 12:
+                    logger.info(f"Sk {modality} has less than 12 months of data")
+                    sample.modalities.pop(modality)
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
         logger.info("Distribution of samples after filtering:")
@@ -940,10 +893,8 @@ class HeliosDataset(Dataset):
 
     def _get_h5_file_path(self, index: int) -> UPath:
         """Get the h5 file path."""
-        index = self.sample_indices[index]
-        logger.info(f"Getting h5 file path for sample index {index}")
-        if index in self.naip_indices:
-            logger.info(f"Sample index {index} is in NAIP indices")
+        if hasattr(self, "sample_indices") and self.sample_indices is not None:
+            index = self.sample_indices[index]
         return self.h5py_dir / f"sample_{index}.h5"
 
     def _create_h5_file(
