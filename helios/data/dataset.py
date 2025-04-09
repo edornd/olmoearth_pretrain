@@ -648,7 +648,15 @@ class HeliosDataset(Dataset):
         # Avoid samples with NAIP which has a resolution factor of 1
         resolution_factor = Modality.SENTINEL2_L2A.tile_resolution_factor
         for sample in samples:
+            has_landsat = Modality.LANDSAT in sample.modalities
+            has_naip = Modality.NAIP in sample.modalities
             if sample.grid_tile.resolution_factor != resolution_factor:
+                if has_naip:
+                    logger.info("Skipping sample because it has naip and resolution factor is not the same as sentinel2")
+                    continue
+                if has_landsat:
+                    logger.info("Skipping sample because it has landsat and resolution factor is not the same as sentinel2")
+                    continue
                 continue
             # Check if all the modalities are supported that are read in
             if not all(
@@ -657,6 +665,12 @@ class HeliosDataset(Dataset):
                 if not modality.ignore_when_parsing
             ):
                 logger.info("Skipping sample because it has unsupported modalities")
+                if has_naip:
+                    logger.info("Skipping sample because it has naip and unsupported modalities")
+                    continue
+                if has_landsat:
+                    logger.info("Skipping sample because it has landsat and unsupported modalities")
+                    continue
                 continue
 
             if not self.use_samples_with_missing_supported_modalities:
@@ -665,9 +679,21 @@ class HeliosDataset(Dataset):
                     for modality in self.supported_modalities
                 ):
                     logger.info("Skipping sample because all supported modalities are not present")
+                    if has_naip:
+                        logger.info("Skipping sample because it has naip and all supported modalities are not present")
+                        continue
+                    if has_landsat:
+                        logger.info("Skipping sample because it has landsat and all supported modalities are not present")
+                        continue
                     continue
             if sample.time_span != TimeSpan.YEAR:
                 logger.info("Skipping sample because it is not the yearly frequency data")
+                if has_naip:
+                    logger.info("Skipping sample because it has naip and is not the yearly frequency data")
+                    continue
+                if has_landsat:
+                    logger.info("Skipping sample because it has landsat and is not the yearly frequency data")
+                    continue
                 continue
             # check if sample modalities have s1 and s2
             has_s1 = Modality.SENTINEL1 in sample.modalities
@@ -681,6 +707,12 @@ class HeliosDataset(Dataset):
                 )
                 if sentinel1_months != 12:
                     logger.info("Skipping sample because it has less than 12 months of S1 data")
+                    if has_naip:
+                        logger.info("Skipping sample because it has naip and less than 12 months of S1 data")
+                        continue
+                    if has_landsat:
+                        logger.info("Skipping sample because it has landsat and less than 12 months of S1 data")
+                        continue
                     continue
             if has_s2:
                 sentinel2_months = len(
@@ -688,11 +720,23 @@ class HeliosDataset(Dataset):
                 )
                 if sentinel2_months != 12:
                     logger.info("Skipping sample because it has less than 12 months of S2 data")
+                    if has_naip:
+                        logger.info("Skipping sample because it has naip and less than 12 months of S2 data")
+                        continue
+                    if has_landsat:
+                        logger.info("Skipping sample because it has landsat and less than 12 months of S2 data")
+                        continue
                     continue
             if has_s1 and has_s2:
                 # Check if S1 and S2 all have the same 12 months of data
                 if sentinel1_months != sentinel2_months:
                     logger.info("Skipping sample because S1 and S2 have different number of months")
+                    if has_naip:
+                        logger.info("Skipping sample because it has naip and S1 and S2 have different number of months")
+                        continue
+                    if has_landsat:
+                        logger.info("Skipping sample because it has landsat and S1 and S2 have different number of months")
+                        continue
                     continue
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
