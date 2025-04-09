@@ -82,6 +82,12 @@ class TokensAndMasks(NamedTuple):
     latlon_mask: Tensor | None = None
     openstreetmap_raster: Tensor | None = None
     openstreetmap_raster_mask: Tensor | None = None
+    srtm: Tensor | None = None
+    srtm_mask: Tensor | None = None
+    landsat: Tensor | None = None
+    landsat_mask: Tensor | None = None
+    naip: Tensor | None = None
+    naip_mask: Tensor | None = None
 
     @property
     def device(self) -> torch.device:
@@ -120,7 +126,7 @@ class TokensAndMasks(NamedTuple):
     @property
     def modalities(self) -> list[str]:
         """Return all data fields."""
-        return [x for x in self._fields if not x.endswith("mask")]
+        return [x for x in self._fields if not x.endswith("mask") and x is not None]
 
     def get_shape_dict(self) -> dict[str, tuple]:
         """Return a dictionary of the shapes of the fields."""
@@ -345,6 +351,9 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         modalities_to_process = get_modalities_to_process(
             input_data.modalities, self.supported_modality_names
         )
+        logger.info(f"Input data modalities: {input_data.modalities}")
+        logger.info(f"Supported modalities: {self.supported_modality_names}")
+        logger.info(f"Modalities to process for patchification: {modalities_to_process}")
         for modality in modalities_to_process:
             modality_tokens, modality_masks = self.apply_embedding_to_modality(
                 modality, input_data, patch_size
@@ -1170,6 +1179,7 @@ class Encoder(FlexiHeliosBase):
         """
         # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
+        logger.info(f"Patchified tokens and masks srtm: {patchified_tokens_and_masks['srtm']}")
         if token_exit_cfg is None or any(
             [exit_depth > 0 for exit_depth in token_exit_cfg.values()]
         ):
@@ -1180,6 +1190,7 @@ class Encoder(FlexiHeliosBase):
                 input_res=input_res,
                 token_exit_cfg=token_exit_cfg,
             )
+        logger.info(f"Patchified tokens and masks srtm: {patchified_tokens_and_masks['srtm']}")
         return TokensAndMasks(**patchified_tokens_and_masks)
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
@@ -1459,7 +1470,10 @@ class Predictor(FlexiHeliosBase):
         modalities_to_process = get_modalities_to_process(
             available_modalities, self.supported_modality_names
         )
+        logger.info(f"Available modalities: {available_modalities}")
+        logger.info(f"Modalities to process: {modalities_to_process}")
         for modality in modalities_to_process:
+            logger.info(f"Processing modality: {modality}")
             x_modality = getattr(x, modality)
             # Are these normalizations masked correctly?
             x_modality = self.input_norm(x_modality)

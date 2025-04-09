@@ -53,7 +53,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     DECODER_NUM_HEADS = 8
     MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
-        supported_modality_names=common.supported_modality_names,
+        supported_modality_names=common.training_modalities,
         embedding_size=ENCODER_EMBEDDING_SIZE,
         max_patch_size=MAX_PATCH_SIZE,
         num_heads=ENCODER_NUM_HEADS,
@@ -70,7 +70,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         mlp_ratio=MLP_RATIO,
         num_heads=DECODER_NUM_HEADS,
         max_sequence_length=12,
-        supported_modality_names=common.supported_modality_names,
+        supported_modality_names=common.training_modalities,
         learnable_channel_embeddings=True,
     )
     model_config = LatentMIMConfig(
@@ -102,7 +102,7 @@ def build_train_module_config(
             "type": "patch_discrimination_new",  # TODO: Should be registered via enum names
         }
     )
-    token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
+    token_exit_cfg = {modality: 0 for modality in common.training_modalities}
 
     WARMUP_EPOCHS = 20
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
@@ -157,15 +157,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     return HeliosDatasetConfig(
         h5py_dir=h5py_dir,
         use_samples_with_missing_supported_modalities=True,
-        training_modalities=[
-            Modality.SENTINEL2_L2A.name,
-            Modality.SENTINEL1.name,
-            Modality.WORLDCOVER.name,
-            Modality.SRTM.name,
-            # Modality.NAIP.name,
-            # Modality.LANDSAT.name,
-            Modality.OPENSTREETMAP_RASTER.name,
-        ],
+        training_modalities=common.training_modalities,
         supported_modality_names=common.supported_modality_names,
         dtype=DType.float32,
     )

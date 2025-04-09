@@ -43,6 +43,7 @@ class CommonComponents(Config):
     save_folder: str
     supported_modality_names: list[str]
     launch: BeakerLaunchConfig
+    training_modalities: list[str]
     # callbacks: dict[str, Callback]
 
     def validate(self) -> None:
