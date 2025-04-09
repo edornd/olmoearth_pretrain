@@ -532,7 +532,7 @@ class InfoNCELoss(Loss):
         self.tau = tau
 
     def compute(
-        self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
+        self, predictions: torch.Tensor, targets: torch.Tensor, **kwargs: Any
     ) -> Tensor:
         """Compute InfoNCE between predictions and targets.
 
@@ -544,16 +544,16 @@ class InfoNCELoss(Loss):
         Returns:
             The computed loss value.
         """
-        online_encodings_a = predictions.pool_unmasked_tokens(
-            PoolingType.MEAN, spatial_pooling=False
-        )
-        online_encodings_b = predictions.pool_unmasked_tokens(
-            PoolingType.MEAN, spatial_pooling=False
-        )
-        logits = online_encodings_a @ online_encodings_b.transpose(-2, -1)
+        # online_encodings_a = predictions.pool_unmasked_tokens(
+        #     PoolingType.MEAN, spatial_pooling=False
+        # )
+        # online_encodings_b = predictions.pool_unmasked_tokens(
+        #     PoolingType.MEAN, spatial_pooling=False
+        # )
+        logits = predictions @ targets.transpose(-2, -1)
 
         # Positive keys are the entries on the diagonal
-        labels = torch.arange(len(online_encodings_a), device=online_encodings_a.device)
+        labels = torch.arange(len(predictions), device=predictions.device)
 
         return F.cross_entropy(logits / self.tau, labels)
 

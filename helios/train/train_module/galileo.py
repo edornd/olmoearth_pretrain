@@ -244,19 +244,23 @@ class GalileoTrainModule(HeliosTrainModule):
 
                 microbatch = self.transform.apply(microbatch).to_device(self.device)
 
-                loss_a, latent_a = self.apply_masks_and_compute_losses_and_latents(
-                    microbatch,
-                    self.masking_strategy_a.apply_mask,
-                    self.model_forward_a,
-                    patch_size,
-                    self.token_exit_cfg_a,
+                loss_a, latent_a, pooled_a = (
+                    self.apply_masks_and_compute_losses_and_latents(
+                        microbatch,
+                        self.masking_strategy_a.apply_mask,
+                        self.model_forward_a,
+                        patch_size,
+                        self.token_exit_cfg_a,
+                    )
                 )
-                loss_b, latent_b = self.apply_masks_and_compute_losses_and_latents(
-                    microbatch,
-                    self.masking_strategy_b.apply_mask,
-                    self.model_forward_b,
-                    patch_size,
-                    self.token_exit_cfg_b,
+                loss_b, latent_b, pooled_b = (
+                    self.apply_masks_and_compute_losses_and_latents(
+                        microbatch,
+                        self.masking_strategy_b.apply_mask,
+                        self.model_forward_b,
+                        patch_size,
+                        self.token_exit_cfg_b,
+                    )
                 )
 
                 loss = (loss_a + loss_b) / 2
@@ -273,7 +277,7 @@ class GalileoTrainModule(HeliosTrainModule):
                     )
 
                 if self.contrastive_loss is not None:
-                    contrastive_loss = self.contrastive_loss.compute(latent_a, latent_b)
+                    contrastive_loss = self.contrastive_loss.compute(pooled_a, pooled_b)
                     loss += contrastive_loss
                     total_batch_con += (
                         get_local_tensor(contrastive_loss) / num_microbatches
@@ -318,20 +322,24 @@ class GalileoTrainModule(HeliosTrainModule):
         model_forward_fn: Callable,
         patch_size: int,
         token_exit_cfg: dict[str, int],
-    ) -> tuple[torch.Tensor, TokensAndMasks]:
+    ) -> tuple[torch.Tensor, TokensAndMasks, torch.Tensor]:
         """Apply masks and compute losses and latents."""
         masked_batch = mask_fn(microbatch, patch_size=patch_size)
 
         # Run Encoder and decoder on the augmented input
-        loss, latent, _, _ = model_forward_fn(masked_batch, patch_size, token_exit_cfg)
-        return loss, latent
+        loss, latent, _, _, pooled = model_forward_fn(
+            masked_batch, patch_size, token_exit_cfg
+        )
+        return loss, latent, pooled
 
     def model_forward_a(
         self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]
-    ) -> tuple[torch.Tensor, TokensAndMasks, TokensAndMasks, TokensAndMasks]:
+    ) -> tuple[
+        torch.Tensor, TokensAndMasks, TokensAndMasks, TokensAndMasks, torch.Tensor
+    ]:
         """Run a forward pass."""
         with self._model_forward_context():
-            latent, decoded = self.model.forward_a(batch, patch_size)
+            latent, decoded, pooled = self.model.forward_a(batch, patch_size)
             with torch.no_grad():
                 logger.info("target encoder running here")
                 target_output = self.model.target_encoder.forward(
@@ -340,14 +348,16 @@ class GalileoTrainModule(HeliosTrainModule):
                     token_exit_cfg=token_exit_cfg,
                 )
             loss = self.loss_fn_a(decoded, target_output)
-            return loss, latent, decoded, target_output
+            return loss, latent, decoded, target_output, pooled
 
     def model_forward_b(
         self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]
-    ) -> tuple[torch.Tensor, TokensAndMasks, TokensAndMasks, TokensAndMasks]:
+    ) -> tuple[
+        torch.Tensor, TokensAndMasks, TokensAndMasks, TokensAndMasks, torch.Tensor
+    ]:
         """Run a forward pass."""
         with self._model_forward_context():
-            latent, decoded = self.model.forward_b(batch, patch_size)
+            latent, decoded, pooled = self.model.forward_b(batch, patch_size)
             with torch.no_grad():
                 logger.info("target encoder running here")
                 target_output = self.model.target_encoder.forward(
@@ -356,4 +366,4 @@ class GalileoTrainModule(HeliosTrainModule):
                     token_exit_cfg=token_exit_cfg,
                 )
             loss = self.loss_fn_b(decoded, target_output)
-            return loss, latent, decoded, target_output
+            return loss, latent, decoded, target_output, pooled
