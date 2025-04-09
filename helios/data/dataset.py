@@ -650,14 +650,14 @@ class HeliosDataset(Dataset):
         for sample in samples:
             has_landsat = Modality.LANDSAT in sample.modalities
             has_naip = Modality.NAIP in sample.modalities
-            if sample.grid_tile.resolution_factor != resolution_factor:
-                if has_naip:
-                    logger.info("Skipping sample because it has naip and resolution factor is not the same as sentinel2")
-                    continue
-                if has_landsat:
-                    logger.info("Skipping sample because it has landsat and resolution factor is not the same as sentinel2")
-                    continue
-                continue
+            # if sample.grid_tile.resolution_factor != resolution_factor:
+            #     if has_naip:
+            #         logger.info("Skipping sample because it has naip and resolution factor is not the same as sentinel2")
+            #         continue
+            #     if has_landsat:
+            #         logger.info("Skipping sample because it has landsat and resolution factor is not the same as sentinel2")
+            #         continue
+            #     continue
             # Check if all the modalities are supported that are read in
             if not all(
                 modality in self.supported_modalities

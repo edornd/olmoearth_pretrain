@@ -86,22 +86,22 @@ def compute_normalization_values(
 
     norm_dict["total_n"] = dataset_len
     norm_dict["sampled_n"] = len(indices_to_sample)
-    norm_dict["tile_path"] = str(dataset.tile_path)
+    path = dataset.h5py_dir or dataset.tile_path
+    norm_dict["tile_path"] = str(path)
 
     return norm_dict
 
 if __name__ == "__main__":
     prepare_cli_environment()
     args = argparse.ArgumentParser()
-
-    args.add_argument("--tile_path", type=str, required=True)
+    args.add_argument("--h5py_dir", type=str, required=True)
     args.add_argument("--supported_modalities", type=str, required=True)
     args.add_argument("--estimate_from", type=int, required=False, default=None)
     args.add_argument("--output_path", type=str, required=True)
     args_dict = args.parse_args().__dict__  # type: ignore
 
     logger.info(
-        f"Computing normalization stats for {args_dict['tile_path']} with modalities {args_dict['supported_modalities']}"
+        f"Computing normalization stats with modalities {args_dict['supported_modalities']}"
     )
 
 
@@ -114,8 +114,7 @@ if __name__ == "__main__":
     logger.info(f"Supported modalities: {supported_modalities}")
     # Use the config to build the dataset
     dataset_config = HeliosDatasetConfig(
-        # tile_path=UPath(args_dict["tile_path"]),
-        h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/102695",
+        h5py_dir=args_dict["h5py_dir"],
         supported_modality_names=supported_modalities,
         normalize=False,
     )
