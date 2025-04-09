@@ -546,6 +546,60 @@ class HeliosDataset(Dataset):
         logger.info(f"Setting h5py_dir to {self.h5py_dir}")
         os.makedirs(self.h5py_dir, exist_ok=True)
 
+    def save_sample_metadata(self, samples: list[SampleInformation]) -> None:
+        """Save metadata about which samples contain which modalities."""
+        csv_path = self.h5py_dir / "sample_metadata.csv"
+        logger.info(f"Writing metadata CSV to {csv_path}")
+
+        # Create a DataFrame to store the metadata
+        metadata_dict = {
+            "sample_index": [],
+        }
+
+        # Add columns for each supported modality
+        for modality in self.supported_modalities:
+            metadata_dict[modality.name] = []
+
+        # Populate the DataFrame with metadata from each sample
+        for i, sample in enumerate(samples):
+            metadata_dict["sample_index"].append(i)
+
+            # Set modality presence (1 if present, 0 if not)
+            for modality in self.supported_modalities:
+                metadata_dict[modality.name].append(1 if modality in sample.modalities else 0)
+
+        # Write the DataFrame to a CSV file
+        df = pd.DataFrame(metadata_dict)
+        df.to_csv(csv_path, index=False)
+
+    def _filter_sample_indices_for_training(self) -> None:
+        """Filter the sample indices for training.
+
+        Updates the sample indices numpy array to only include the indices we want to train on."""
+        # Read the metadata CSV
+        metadata_path = self.h5py_dir / "sample_metadata.csv"
+        metadata_df = pd.read_csv(metadata_path)
+        logger.info(f"Metadata CSV has {len(metadata_df)} samples")
+        logger.info(f"columns: {metadata_df.columns}")
+        # For now we want to filter out any samples that have NAIP DATA or don't have any of the training modalities
+        # Get the indices of samples that have NAIP data
+        naip_indices = metadata_df[metadata_df['naip'] == 1].index
+        self.naip_indices = naip_indices
+        logger.info(f"NAIP indices: {naip_indices}")
+
+        # Get the indices of samples that don't have any training modalities
+        no_training_indices = metadata_df[metadata_df[self.training_modalities].sum(axis=1) == 0].index
+        # Filter these indices out
+        logger.info(f"Filtering out {len(naip_indices)} samples with NAIP data")
+        logger.info(f"Filtering out {len(no_training_indices)} samples without any training modalities")
+        self.sample_indices = np.setdiff1d(self.sample_indices, naip_indices)
+        self.sample_indices = np.setdiff1d(self.sample_indices, no_training_indices)
+        # raise an error if any of the naip indices are still in the sample indices
+        if any(index in self.naip_indices for index in self.sample_indices):
+            raise ValueError("Some NAIP indices are still in the sample indices")
+        logger.info(f"Filtered {len(naip_indices) + len(no_training_indices)} samples to {self.sample_indices.shape} samples")
+
+
     def prepare(self, samples: list[SampleInformation] | None = None) -> None:
         """Prepare the dataset.
 
@@ -567,7 +621,7 @@ class HeliosDataset(Dataset):
             samples = self._filter_samples(samples)  # type: ignore
             num_samples = len(samples)
             self.set_h5py_dir(num_samples)
-
+            self.save_sample_metadata(samples)
             logger.info("Attempting to create H5 files may take some time...")
             self.create_h5_dataset(samples)
         else:
@@ -578,6 +632,7 @@ class HeliosDataset(Dataset):
             samples = []
         self.latlon_distribution = self.get_geographic_distribution(samples)
         self.sample_indices = np.arange(num_samples)
+        self._filter_sample_indices_for_training()
 
     @property
     def is_dataset_prepared(self) -> bool:
@@ -742,35 +797,6 @@ class HeliosDataset(Dataset):
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
         logger.info("Distribution of samples after filtering:")
         self._log_modality_distribution(filtered_samples)
-
-        # Create and write a csv saying what modalites are contained in each sample and the time span
-        # Each sample should have columns for each modality and a column for the start time and end time
-        # in the modality column 1 means the modality is present and 0 means it is not
-        csv_path = self.tile_path / self.h5py_folder / "samples_metadata.csv"
-        os.makedirs(csv_path.parent, exist_ok=True)
-        logger.info(f"Writing metadata CSV to {csv_path}")
-
-        # Create a DataFrame to store the metadata
-        metadata_dict = {
-            "sample_index": [],
-        }
-
-        # Add columns for each supported modality
-        for modality in self.supported_modalities:
-            metadata_dict[modality.name] = []
-
-        # Populate the DataFrame with metadata from each sample
-        for i, sample in enumerate(filtered_samples):
-            metadata_dict["sample_index"].append(i)
-
-            # Set modality presence (1 if present, 0 if not)
-            for modality in self.supported_modalities:
-                metadata_dict[modality.name].append(1 if modality in sample.modalities else 0)
-
-        # Write the DataFrame to a CSV file
-        df = pd.DataFrame(metadata_dict)
-        df.to_csv(csv_path, index=False)
-        logger.info(f"Created metadata CSV with {len(filtered_samples)} samples")
         return filtered_samples
 
     @classmethod
@@ -914,6 +940,10 @@ class HeliosDataset(Dataset):
 
     def _get_h5_file_path(self, index: int) -> UPath:
         """Get the h5 file path."""
+        index = self.sample_indices[index]
+        logger.info(f"Getting h5 file path for sample index {index}")
+        if index in self.naip_indices:
+            logger.info(f"Sample index {index} is in NAIP indices")
         return self.h5py_dir / f"sample_{index}.h5"
 
     def _create_h5_file(
@@ -975,6 +1005,9 @@ class HeliosDataset(Dataset):
                 logger.info(f"Reading h5 file {h5_file_path} with keys {h5file.keys()}")
                 # Not sure lat lon should be here
                 sample_dict = {k: v[()] for k, v in h5file.items() if k in self.training_modalities or k in ["latlon", "timestamps"]}
+        # log the shape of all modalities
+        for modality, data in sample_dict.items():
+            logger.info(f"Shape of modality {modality}: {data.shape}")
         return sample_dict
 
     def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:
@@ -993,7 +1026,8 @@ class HeliosDataset(Dataset):
         sample, missing_modalities = self.fill_sample_with_missing_values(sample_dict)
         subset_sample = self.apply_subset(sample, args)
         sample_dict = subset_sample.as_dict(ignore_nones=True)
-
+        logger.info(f"Sample args {args}")
+        logger.info(f"Sample dict keys {sample_dict.keys()}")
         # Sample modalities should be written into the metadata of the h5 dataset
         sample_modalities = list(
             [Modality.get(key) for key in sample_dict.keys() if key != "timestamps"]
@@ -1001,6 +1035,7 @@ class HeliosDataset(Dataset):
 
         if self.normalize:
             for modality in sample_modalities:
+                logger.info(f"Normalizing modality {modality.name}")
                 # DO NOT NORMALIZE MISSING MODALITIES otherwise the MISSING_VALUE will be normalized
                 if modality.name in missing_modalities:
                     continue
