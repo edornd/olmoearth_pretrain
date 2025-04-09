@@ -67,14 +67,21 @@ def build_launch_config(
     # We cannot mount Weka on Augusta.
     # We just check if the first cluster is Augusta here since we assume users
     # targeting Augusta won't target any other cluster.
-    if "augusta" in clusters[0]:
-        if len(clusters) > 1:
-            raise ValueError(
-                "Jobs targeting Augusta should not target other clusters since Weka will not be mounted"
-            )
-        weka_buckets = []
-    else:
-        weka_buckets = [DEFAULT_HELIOS_WEKA_BUCKET]
+    weka_buckets = [DEFAULT_HELIOS_WEKA_BUCKET]
+    pytorch_preinstall: str = ""
+    for c in clusters:
+        if "augusta" in c:
+            if len(clusters) > 1:
+                raise ValueError(
+                    "Jobs targeting Augusta should not target other clusters since Weka will not be mounted"
+                )
+            weka_buckets = []
+        if "titan" in c:
+            if len(clusters) > 1:
+                raise ValueError(
+                    "Jobs targeting Titan should not target other clusters since Titan uses pytorch 2.7"
+                )
+            pytorch_preinstall = "pip install torch==2.7.0 torchvision --index-url https://download.pytorch.org/whl/test/cu128"
 
     beaker_user = get_beaker_username()
     return BeakerLaunchConfig(
@@ -118,6 +125,8 @@ def build_launch_config(
             "git submodule update --init --recursive",
             # Setup python environment.
             "conda shell.bash activate base",
+            # Install torch==2.7 if we're targetting titan
+            pytorch_preinstall,
             "pip install -e '.[all]'",
             "pip install --upgrade beaker-py",
             # Quickly try a new version of PyTorch like this
