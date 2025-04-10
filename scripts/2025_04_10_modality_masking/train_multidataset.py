@@ -19,6 +19,7 @@ from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
 
+from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
@@ -152,14 +153,21 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
-    # NOTE: Change this directory based on the supported modalities
-    h5py_dir = "/weka/dfive-default/helios/dataset/presto/h5py_data/latlon_sentinel1_sentinel2_l2a_worldcover/102686"
-    return HeliosDatasetConfig(
-        h5py_dir=h5py_dir,
-        supported_modality_names=common.supported_modality_names,
-        use_samples_with_missing_supported_modalities=True,
-        dtype=DType.float32,
-    )
+    dataset_configs = [
+        HeliosDatasetConfig(
+            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data/latlon_sentinel1_sentinel2_l2a_worldcover/255819",
+            tile_path=None,
+            supported_modality_names=common.supported_modality_names,
+            dtype=DType.float32,
+        ),
+        HeliosDatasetConfig(
+            h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data/latlon_sentinel1_sentinel2_l2a_worldcover/102686",
+            tile_path=None,
+            supported_modality_names=common.supported_modality_names,
+            dtype=DType.float32,
+        ),
+    ]
+    return HeliosConcatDatasetConfig(dataset_configs=dataset_configs)
 
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
