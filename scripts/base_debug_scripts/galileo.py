@@ -124,6 +124,10 @@ def build_train_module_config(
         Modality.SENTINEL1.name: 4,
         Modality.WORLDCOVER.name: 0,
     }
+    if any(modality not in token_exit_cfg_a for modality in common.training_modalities):
+        raise ValueError(
+            f"All modalities must be in token_exit_cfg_a: {common.training_modalities}"
+        )
     token_exit_cfg_b = {modality: 0 for modality in common.training_modalities}
     WARMUP_EPOCHS = 10
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
@@ -177,11 +181,11 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
-    h5py_dir = "/weka/dfive-default/helios/dataset/presto/h5py_data/latlon_sentinel1_sentinel2_l2a_worldcover/98856"
+    h5py_dir = "/weka/dfive-default/helios/dataset/presto/h5py_data/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/118861"
     return HeliosDatasetConfig(
         h5py_dir=h5py_dir,
-        tile_path=None,
-        supported_modality_names=common.training_modalities,
+        training_modalities=common.training_modalities,
+        use_samples_with_missing_supported_modalities=True,
         dtype=DType.float32,
     )
 
