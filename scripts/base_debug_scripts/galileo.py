@@ -123,6 +123,9 @@ def build_train_module_config(
         Modality.LATLON.name: 4,
         Modality.SENTINEL1.name: 4,
         Modality.WORLDCOVER.name: 0,
+        Modality.SRTM.name: 2,
+        Modality.OPENSTREETMAP_RASTER.name: 0,
+        Modality.LANDSAT.name: 4,
     }
     if any(modality not in token_exit_cfg_a for modality in common.training_modalities):
         raise ValueError(
