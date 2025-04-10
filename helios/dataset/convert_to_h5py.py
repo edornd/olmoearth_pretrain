@@ -38,6 +38,7 @@ class ConvertToH5pyConfig(Config):
         return ConvertToH5py(
             tile_path=UPath(self.tile_path),
             supported_modalities=get_modality_specs_from_names(self.supported_modality_names),
+            multiprocessed_h5_creation=self.multiprocessed_h5_creation,
         )
 
 
@@ -255,15 +256,6 @@ class ConvertToH5py:
         for sample in samples:
             has_landsat = Modality.LANDSAT in sample.modalities
             has_naip = Modality.NAIP in sample.modalities
-            # if sample.grid_tile.resolution_factor != resolution_factor:
-            #     if has_naip:
-            #         logger.info("Skipping sample because it has naip and resolution factor is not the same as sentinel2")
-            #         continue
-            #     if has_landsat:
-            #         logger.info("Skipping sample because it has landsat and resolution factor is not the same as sentinel2")
-            #         continue
-            #     continue
-            # Check if all the modalities are supported that are read in
             if not all(
                 modality in self.supported_modalities
                 for modality in sample.modalities
@@ -287,6 +279,7 @@ class ConvertToH5py:
                 if len(sample.modalities[modality].images) != 12:
                     logger.info(f"Sk {modality} has less than 12 months of data")
                     sample.modalities.pop(modality)
+
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
         logger.info("Distribution of samples after filtering:")

@@ -64,30 +64,22 @@ class SampleInformation:
     def get_timestamps(self) -> np.ndarray:
         """Get the timestamps of the sample."""
         # Assume that all multitemporal modalities have the same timestamps
-        if Modality.SENTINEL2_L2A in self.modalities:
-            sample_sentinel2_l2a = self.modalities[Modality.SENTINEL2_L2A]
-            timestamps = [i.start_time for i in sample_sentinel2_l2a.images]
-            dt = pd.to_datetime(timestamps)
-        elif Modality.SENTINEL1 in self.modalities:
-            logger.info("Using Sentinel1 data for timestamps")
-            sample_sentinel1 = self.modalities[Modality.SENTINEL1]
-            timestamps = [i.start_time for i in sample_sentinel1.images]
-            dt = pd.to_datetime(timestamps)
-        elif Modality.LANDSAT in self.modalities:
-            logger.info("Using Landsat data for timestamps")
-            sample_landsat = self.modalities[Modality.LANDSAT]
-            timestamps = [i.start_time for i in sample_landsat.images]
-            dt = pd.to_datetime(timestamps)
-        elif Modality.NAIP in self.modalities:
-            logger.info("Using NAIP data for timestamps")
-            sample_naip = self.modalities[Modality.NAIP]
-            timestamps = [i.start_time for i in sample_naip.images]
-            dt = pd.to_datetime(timestamps)
-        else:
-            raise ValueError("Sample does not have any multitemporal modalities")
-        # Note that month should be 0-indexed
-        # Note that month should be 0-indexed
-        return np.array([dt.day, dt.month - 1, dt.year]).T
+        for modality in self.modalities:
+            if modality.is_multitemporal:
+                sample_modality = self.modalities[modality]
+                timestamps = [i.start_time for i in sample_modality.images]
+                dt = pd.to_datetime(timestamps)
+                return np.array([dt.day, dt.month - 1, dt.year]).T
+
+        # Now try non-multitemporal modalities as backups
+        for modality in self.modalities:
+            if not modality.is_multitemporal:
+                sample_modality = self.modalities[modality]
+                timestamps = [i.start_time for i in sample_modality.images]
+                dt = pd.to_datetime(timestamps)
+                return np.array([dt.day, dt.month - 1, dt.year]).T
+
+        raise ValueError("No multitemporal or non-multitemporal modalities found")
 
 
 def image_tiles_to_samples(

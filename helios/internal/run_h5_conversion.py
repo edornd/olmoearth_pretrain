@@ -46,3 +46,5 @@ def main(config_builder=build_default_config, *args):
 
 if __name__ == "__main__":
     main()
+
+    crs,col,row,tile_time,image_idx,start_time,end_time
