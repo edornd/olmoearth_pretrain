@@ -112,12 +112,19 @@ def build_train_module_config(
             "decode_ratio": DECODE_RATIO,
         }
     )
-    loss_config = LossConfig(
+    mae_loss_config = LossConfig(
         loss_config={
             "type": "mae",
+            "loss_function": "SmoothL1Loss",
+            "beta": 0.1,
         }
     )
-    token_exit_cfg = {modality: 4 for modality in common.supported_modality_names}
+    latent_mim_loss_config = LossConfig(
+        loss_config={
+            "type": "patch_discrimination_new",
+        }
+    )
+    token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
     WARMUP_EPOCHS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
@@ -128,7 +135,8 @@ def build_train_module_config(
         optim_config=optim_config,
         masking_config=masking_config,
         warmup_duration=Duration.epochs(WARMUP_EPOCHS),
-        loss_config=loss_config,
+        mae_loss_config=mae_loss_config,
+        latent_mim_loss_config=latent_mim_loss_config,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
         token_exit_cfg=token_exit_cfg,
         autocast_precision=DType.bfloat16,
