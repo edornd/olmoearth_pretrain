@@ -86,7 +86,7 @@ def build_train_module_config(
     """Build the train module config for an experiment."""
     LR = 0.0001
     RANK_MICROBATCH_SIZE = 32
-    ENCODE_RATIO = 0.05
+    ENCODE_RATIO = 0.8
     DECODE_RATIO = 0.2
     WD = 0.02
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)

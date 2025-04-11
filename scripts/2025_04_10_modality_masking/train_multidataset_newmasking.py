@@ -91,10 +91,10 @@ def build_train_module_config(
     masking_config = MaskingConfig(
         strategy_config={
             "type": "selectable_random_range_modality",
-            "min_encode_ratio": 0.0,
-            "max_encode_ratio": 0.0,
-            "min_decode_ratio": 0.01,
-            "max_decode_ratio": 0.7,
+            "min_encode_ratio": 0.1,
+            "max_encode_ratio": 0.8,
+            "min_decode_ratio": 0.2,
+            "max_decode_ratio": 0.2,
             "decodable_modalities": ["worldcover"],
             "fully_mask_modalities": ["sentinel2_l2a", "sentinel1"],
             "max_to_mask": 1,
