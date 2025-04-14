@@ -732,10 +732,6 @@ class HeliosDatasetConfig(Config):
         # Validate supported_modalities
         if not isinstance(self.training_modalities, list):
             raise ValueError("training_modalities must be a list")
-        # if not all(isinstance(m, ModalitySpec) for m in self.training_modalities):
-        #     raise ValueError(
-        #         "All elements in supported_modalities must be ModalitySpec"
-        #     )
 
     @property
     def h5py_dir_upath(self) -> UPath:
