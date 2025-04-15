@@ -89,9 +89,11 @@ def build_train_module_config(
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(
         strategy_config={
-            "type": "random",
-            "encode_ratio": 0.1,
-            "decode_ratio": 0.75,
+            "type": "random_range",
+            "min_encode_ratio": 0.1,
+            "max_encode_ratio": 0.1,
+            "min_decode_ratio": 0.75,
+            "max_decode_ratio": 0.75,
         }
     )
     loss_config = LossConfig(
@@ -171,7 +173,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "2025_04_10_modality_masking"
+    WANDB_PROJECT = "2025_04_15_random_range"
     checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
     wandb_callback = HeliosWandBCallback(
         name=common.run_name,
