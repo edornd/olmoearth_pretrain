@@ -117,11 +117,7 @@ class PatchDiscriminationLossNew(Loss):
 
     name = "PatchDisc"
 
-    def __init__(
-        self,
-        tau: float = 0.1,
-        pred2unit: bool = False,
-    ):
+    def __init__(self, tau: float = 0.1, pred2unit: bool = False):
         """Initialize patch discrimination loss.
 
         Args:
@@ -433,11 +429,24 @@ class L2Loss(Loss):
         return F.mse_loss(pred, target)
 
 
-@LOSS_REGISTRY.register("imagel2")
-class ImageL2Loss(Loss):
-    """Loss function for L2 (mean squared error) over images."""
+@LOSS_REGISTRY.register("mae")
+class MAELoss(Loss):
+    """Loss function masked auto-encoding (reconstruction)."""
 
-    name = "ImageL2"
+    name = "MAE"
+
+    def __init__(
+        self, loss_function: str = "MSELoss", only_decode: bool = False, **kwargs: Any
+    ):
+        """Initialize MAE loss.
+
+        Args:
+            loss_function: pytorch loss to use
+            only_decode: only calculate loss on DECODER masked tokens, otherwise all
+            **kwargs: arguments for pytorch loss constructor
+        """
+        self.only_decode = only_decode
+        self.loss = getattr(torch.nn, loss_function)(reduction="sum", **kwargs)
 
     # data: [B, H, W, T, C]
     def _flatten_helios_data(self, data: TokensAndMasks) -> tuple[Tensor, Tensor]:
@@ -465,7 +474,7 @@ class ImageL2Loss(Loss):
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
     ) -> Tensor:
-        """Compute L2 loss between predictions and targets.
+        """Compute MAE loss between predictions and targets.
 
         Args:
             predictions: Model predictions.
@@ -484,10 +493,13 @@ class ImageL2Loss(Loss):
                 valid_dict[masked_name] = getattr(targets, masked_name)
         valid_targets = TokensAndMasks(**valid_dict)
         labels, label_masks = self._flatten_helios_data(valid_targets)
-        decode = label_masks == MaskValue.DECODER.value
+        if self.only_decode:
+            decode = label_masks == MaskValue.DECODER.value
+        else:
+            decode = label_masks != MaskValue.MISSING.value
         data = data * decode
         labels = labels * decode
-        return F.mse_loss(data, labels, reduction="sum") / torch.count_nonzero(decode)
+        return self.loss(data, labels) / torch.count_nonzero(decode)
 
 
 @LOSS_REGISTRY.register("cross_entropy")
@@ -515,6 +527,51 @@ class CrossEntropyLoss(Loss):
         target = all_targets[all_masks == MaskValue.DECODER.value]
 
         return F.cross_entropy(pred, target.squeeze())
+
+
+@LOSS_REGISTRY.register("InfoNCE")
+class InfoNCELoss(Loss):
+    """Loss function for InfoNCE."""
+
+    name = "InfoNCE"
+
+    def __init__(self, tau: float = 0.1, weight: float = 1):
+        """Initialize InfoNCE loss.
+
+        Args:
+            tau: the softmax temperature
+            weight: the weight to apply to this loss
+        """
+        self.tau = tau
+        self.weight = weight
+
+    def compute(
+        self, predictions: torch.Tensor, targets: torch.Tensor, **kwargs: Any
+    ) -> Tensor:
+        """Compute InfoNCE between predictions and targets.
+
+        Args:
+            predictions: Model predictions.
+            targets: Ground truth targets.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            The computed loss value.
+        """
+        # online_encodings_a = predictions.pool_unmasked_tokens(
+        #     PoolingType.MEAN, spatial_pooling=False
+        # )
+        # online_encodings_b = predictions.pool_unmasked_tokens(
+        #     PoolingType.MEAN, spatial_pooling=False
+        # )
+        predictions = F.normalize(predictions, p=2, dim=-1)
+        targets = F.normalize(targets, p=2, dim=-1)
+        logits = predictions @ targets.transpose(-2, -1)
+
+        # Positive keys are the entries on the diagonal
+        labels = torch.arange(len(predictions), device=predictions.device)
+
+        return self.weight * F.cross_entropy(logits / self.tau, labels)
 
 
 @LOSS_REGISTRY.register("KoLeo")

@@ -227,7 +227,7 @@ class Modality:
             BandSet(["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9", "B10", "B11"], 32),
         ],
         is_multitemporal=True,
-        ignore_when_parsing=True,
+        ignore_when_parsing=False,
     )
 
     WORLDCOVER = ModalitySpec(
@@ -332,6 +332,28 @@ class Modality:
         ],
         is_multitemporal=False,
         ignore_when_parsing=False,
+    )
+
+    ERA5 = ModalitySpec(
+        name="era5",
+        tile_resolution_factor=256,
+        band_sets=[
+            BandSet(
+                [
+                    "snow-cover",
+                    "snow-depth",
+                    "soil-temperature-level-1",
+                    "10m-u-component-of-wind",
+                    "10m-v-component-of-wind",
+                    "2m-temperature",
+                    "skin-temperature",
+                    "total-precipitation",
+                ],
+                256,
+            ),
+        ],
+        is_multitemporal=True,
+        ignore_when_parsing=True,
     )
 
     LATLON = ModalitySpec(
