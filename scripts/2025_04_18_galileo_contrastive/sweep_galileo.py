@@ -7,7 +7,7 @@
 import subprocess  # nosec
 
 DECODER_DEPTHS = [2, 4]
-LEARNING_RATES = [0.0001, 0.004]
+LEARNING_RATES = [0.00001, 0.0001, 0.004]
 
 
 BASE_COMMAND = (
