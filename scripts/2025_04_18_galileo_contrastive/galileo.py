@@ -28,6 +28,7 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
+from helios.internal.utils import MODEL_SIZE_ARGS
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.galileo import GalileoConfig
 from helios.train.callbacks import (
@@ -49,13 +50,14 @@ NUM_DATA_LOADER_WORKERS = 4
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 192
-    DECODER_EMBEDDING_SIZE = 192
-    ENCODER_DEPTH = 12
-    DECODER_DEPTH = 12
-    ENCODER_NUM_HEADS = 3
-    DECODER_NUM_HEADS = 3
-    MLP_RATIO = 4.0
+    base_model_args = MODEL_SIZE_ARGS["base"]
+    ENCODER_EMBEDDING_SIZE = int(base_model_args["encoder_embedding_size"])
+    DECODER_EMBEDDING_SIZE = int(base_model_args["decoder_embedding_size"])
+    ENCODER_DEPTH = int(base_model_args["encoder_depth"])
+    DECODER_DEPTH = int(base_model_args["decoder_depth"])
+    ENCODER_NUM_HEADS = int(base_model_args["encoder_num_heads"])
+    DECODER_NUM_HEADS = int(base_model_args["decoder_num_heads"])
+    MLP_RATIO = float(base_model_args["mlp_ratio"])
 
     encoder_config = EncoderConfig(
         supported_modality_names=common.training_modalities,
@@ -120,14 +122,15 @@ def build_train_module_config(
         }
     )
     # Maybe we want to increase token exit for base model?
+    base_model_args = MODEL_SIZE_ARGS["base"]
     token_exit_cfg_a = {
-        Modality.SENTINEL2_L2A.name: 4,
-        Modality.LATLON.name: 4,
-        Modality.SENTINEL1.name: 4,
+        Modality.SENTINEL2_L2A.name: int(base_model_args["encoder_depth"]),
+        Modality.LATLON.name: int(base_model_args["encoder_depth"]),
+        Modality.SENTINEL1.name: int(base_model_args["encoder_depth"]),
         Modality.WORLDCOVER.name: 0,
-        Modality.SRTM.name: 2,
+        Modality.SRTM.name: int(base_model_args["encoder_depth"]),
         Modality.OPENSTREETMAP_RASTER.name: 0,
-        Modality.LANDSAT.name: 4,
+        Modality.LANDSAT.name: int(base_model_args["encoder_depth"]),
     }
     if any(modality not in token_exit_cfg_a for modality in common.training_modalities):
         raise ValueError(
@@ -135,7 +138,11 @@ def build_train_module_config(
         )
     token_exit_cfg_b = {modality: 0 for modality in common.training_modalities}
     WARMUP_EPOCHS = 20
-    dp_config = DataParallelConfig(name=DataParallelType.fsdp)
+    dp_config = DataParallelConfig(
+        name=DataParallelType.fsdp,
+        param_dtype=DType.bfloat16,
+        reduce_dtype=DType.float32,
+    )
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
@@ -213,8 +220,8 @@ def build_dataset_config(common: CommonComponents) -> Config:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(400)
-    METRICS_COLLECT_INTERVAL = 1
-    CANCEL_CHECK_INTERVAL = 1
+    METRICS_COLLECT_INTERVAL = 10
+    CANCEL_CHECK_INTERVAL = 25
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "2025_04_18_galileo_contrastive"
