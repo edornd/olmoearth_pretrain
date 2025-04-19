@@ -53,7 +53,7 @@ for model_name, model_config in MODEL_CONFIGS.items():
     for decoder_depth in DECODER_DEPTHS:
         for lr in LEARNING_RATES:
             for contrastive_weight in CONTRASTIVE_WEIGHTS:
-                run_name = f"galileo_contrastive_{model_name}_decoder_{decoder_depth}_lr_{lr}_contrastive_weight_{contrastive_weight}"
+                run_name = f"galileo_contrastive_{model_name}_decoder_{decoder_depth}_lr_{lr}_weight_{contrastive_weight}"
                 command = BASE_COMMAND.format(
                     run_name=run_name,
                     **model_config,
