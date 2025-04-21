@@ -52,7 +52,7 @@ class ConvertToH5pyConfig(Config):
 class ConvertToH5py:
     """Class for converting a dataset of GeoTiffs into a training dataset set up of h5py files."""
 
-    h5py_folder: str = "h5py_data"
+    h5py_folder: str = "h5py_data_rerun"
     latlon_distribution_fname: str = "latlon_distribution.npy"
     sample_metadata_fname: str = "sample_metadata.csv"
     sample_file_pattern: str = "sample_{index}.h5"
@@ -240,7 +240,6 @@ class ConvertToH5py:
             / "_".join(
                 sorted([modality.name for modality in self.supported_modalities])
             )
-            / "rerun"
             / str(num_samples)
         )
         logger.info(f"Setting h5py_dir to {self.h5py_dir}")
