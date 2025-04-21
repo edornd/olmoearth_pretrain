@@ -1,5 +1,6 @@
 """Finetune the Helios model on a downstream task."""
 
+import argparse
 import json
 import logging
 from copy import deepcopy
@@ -28,17 +29,22 @@ from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
 
-
+# Fine-tuning learning rates
 FT_LRs = [1e-5, 3e-5, 6e-5, 1e-4, 3e-4, 6e-4, 1e-3, 3e-3, 6e-3]
+# Linear probing learning rates
+LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
 
 
 def finetune_and_eval_cls(
     task_name: str,
     checkpoint_path: Path,
+    freeze_encoder: bool,
     patch_size: int,
     pooling_type: PoolingType,
     lr: float,
     epochs: int,
+    batch_size: int,
+    num_workers: int,
     device: torch.device,
 ) -> float:
     """Finetune the Helios model on a classification task and evaluate it.
@@ -46,10 +52,13 @@ def finetune_and_eval_cls(
     Args:
         task_name: The name of the task to finetune on.
         checkpoint_path: The path to the checkpoint to use for training.
+        freeze_encoder: Whether to freeze the encoder, if True, it will be linear probing.
         patch_size: The patch size to use for training.
         pooling_type: The pooling type to use for training.
         lr: The learning rate to use for training.
         epochs: The number of epochs to train for.
+        batch_size: The batch size to use for training.
+        num_workers: The number of workers to use for training.
         device: The device to use for training.
 
     Returns:
@@ -66,8 +75,8 @@ def finetune_and_eval_cls(
             partition="default",
         ),
         collate_fn=eval_collate_fn,
-        batch_size=128,
-        num_workers=8,
+        batch_size=batch_size,
+        num_workers=num_workers,
     )
     val_loader = DataLoader(
         get_eval_dataset(
@@ -76,13 +85,14 @@ def finetune_and_eval_cls(
             partition="default",
         ),
         collate_fn=eval_collate_fn,
-        batch_size=128,
-        num_workers=8,
+        batch_size=batch_size,
+        num_workers=num_workers,
     )
     finetuned_model = finetune_cls(
         task_config=task_config,
         data_loader=train_loader,
         checkpoint_path=checkpoint_path,
+        freeze_encoder=freeze_encoder,
         lr=lr,
         epochs=epochs,
         patch_size=patch_size,
@@ -101,10 +111,13 @@ def finetune_and_eval_cls(
 def finetune_and_eval_seg(
     task_name: str,
     checkpoint_path: Path,
+    freeze_encoder: bool,
     patch_size: int,
     pooling_type: PoolingType,
     lr: float,
     epochs: int,
+    batch_size: int,
+    num_workers: int,
     device: torch.device,
 ) -> float:
     """Finetune the Helios model on a segmentation task and evaluate it.
@@ -112,10 +125,13 @@ def finetune_and_eval_seg(
     Args:
         task_name: The name of the task to finetune on.
         checkpoint_path: The path to the checkpoint to use for training.
+        freeze_encoder: Whether to freeze the encoder, if True, it will be linear probing.
         patch_size: The patch size to use for training.
         pooling_type: The pooling type to use for training.
         lr: The learning rate to use for training.
         epochs: The number of epochs to train for.
+        batch_size: The batch size to use for training.
+        num_workers: The number of workers to use for training.
         device: The device to use for training.
 
     Returns:
@@ -132,8 +148,8 @@ def finetune_and_eval_seg(
             partition="default",
         ),
         collate_fn=eval_collate_fn,
-        batch_size=128,
-        num_workers=8,
+        batch_size=batch_size,
+        num_workers=num_workers,
     )
     val_loader = DataLoader(
         get_eval_dataset(
@@ -142,13 +158,14 @@ def finetune_and_eval_seg(
             partition="default",
         ),
         collate_fn=eval_collate_fn,
-        batch_size=128,
-        num_workers=8,
+        batch_size=batch_size,
+        num_workers=num_workers,
     )
     finetuned_model = finetune_seg(
         task_config=task_config,
         data_loader=train_loader,
         checkpoint_path=checkpoint_path,
+        freeze_encoder=freeze_encoder,
         lr=lr,
         epochs=epochs,
         patch_size=patch_size,
@@ -159,6 +176,7 @@ def finetune_and_eval_seg(
         task_config=task_config,
         data_loader=val_loader,
         finetuned_model=finetuned_model,
+        patch_size=patch_size,
         device=device,
     )
     return val_miou
@@ -170,6 +188,7 @@ class EncoderWithHead(nn.Module):
     def __init__(
         self,
         encoder: Encoder,
+        freeze_encoder: bool,
         task_type: TaskType,
         num_classes: int,
         patch_size: int,
@@ -179,6 +198,7 @@ class EncoderWithHead(nn.Module):
 
         Args:
             encoder: The encoder to use.
+            freeze_encoder: Whether to freeze the encoder, if True, it will be linear probing.
             task_type: The type of task to perform (classification or segmentation).
             num_classes: The number of classes to predict.
             patch_size: The patch size to use.
@@ -187,6 +207,9 @@ class EncoderWithHead(nn.Module):
         super().__init__()
 
         self.encoder = deepcopy(encoder)
+        if freeze_encoder:
+            for param in self.encoder.parameters():
+                param.requires_grad = False
         self.task_type = task_type
         self.patch_size = patch_size
         self.pooling_type = pooling_type
@@ -228,11 +251,12 @@ def finetune_cls(
     task_config: EvalDatasetConfig,
     data_loader: DataLoader,
     checkpoint_path: Path,
-    lr: float = 1e-4,
-    epochs: int = 50,
-    patch_size: int = 4,
-    pooling_type: PoolingType = PoolingType.MEAN,
-    device: torch.device = torch.device("cuda"),
+    freeze_encoder: bool,
+    lr: float,
+    epochs: int,
+    patch_size: int,
+    pooling_type: PoolingType,
+    device: torch.device,
 ) -> nn.Module:
     """Finetune the Helios model on classification task.
 
@@ -240,6 +264,7 @@ def finetune_cls(
         task_config: The config of the task to finetune on.
         data_loader: The data loader to use for training.
         checkpoint_path: The path to the checkpoint to use for training.
+        freeze_encoder: Whether to freeze the encoder, if True, it will be linear probing.
         lr: The learning rate to use for training.
         epochs: The number of epochs to train for.
         patch_size: The patch size to use for training.
@@ -258,6 +283,7 @@ def finetune_cls(
 
     finetuned_model = EncoderWithHead(
         encoder=encoder,
+        freeze_encoder=freeze_encoder,
         task_type=task_config.task_type,
         num_classes=task_config.num_classes,
         patch_size=patch_size,
@@ -273,7 +299,7 @@ def finetune_cls(
         loss_function = nn.CrossEntropyLoss()
 
     for epoch in range(epochs):
-        # print(f"Epoch {epoch} of {epochs}")
+        logger.info(f"Epoch {epoch} of {epochs}")
         for i, batch in enumerate(data_loader):
             masked_helios_sample, label = batch
             label = label.to(device=device)
@@ -294,7 +320,7 @@ def finetune_cls(
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
                 logits = finetuned_model(masked_helios_sample)
                 loss = loss_function(logits, label)
-                # print(f"Loss: {loss.item()}")
+                logger.info(f"Loss: {loss.item()}")
 
             loss.backward()
             adjust_learning_rate(
@@ -371,9 +397,10 @@ def finetune_seg(
     task_config: EvalDatasetConfig,
     data_loader: DataLoader,
     checkpoint_path: Path,
-    lr: float = 1e-4,
-    epochs: int = 50,
-    patch_size: int = 4,
+    freeze_encoder: bool,
+    lr: float,
+    epochs: int,
+    patch_size: int,
     pooling_type: PoolingType = PoolingType.MEAN,
     device: torch.device = torch.device("cuda"),
 ) -> nn.Module:
@@ -383,6 +410,7 @@ def finetune_seg(
         task_config: The config of the task to finetune on.
         data_loader: The data loader to use for training.
         checkpoint_path: The path to the checkpoint to use for training.
+        freeze_encoder: Whether to freeze the encoder, if True, it will be linear probing.
         lr: The learning rate to use for training.
         epochs: The number of epochs to train for.
         patch_size: The patch size to use for training.
@@ -396,11 +424,12 @@ def finetune_seg(
     model_config = load_config(checkpoint_path)
     model = model_config.build()
 
-    # load_model_and_optim_state(checkpoint_path / "model_and_optim", model)
+    load_model_and_optim_state(checkpoint_path / "model_and_optim", model)
     encoder = model.encoder
 
     finetuned_model = EncoderWithHead(
         encoder=encoder,
+        freeze_encoder=freeze_encoder,
         task_type=task_config.task_type,
         num_classes=task_config.num_classes,
         patch_size=patch_size,
@@ -413,7 +442,7 @@ def finetune_seg(
     loss_function = nn.CrossEntropyLoss(ignore_index=-1)
 
     for epoch in range(epochs):
-        # print(f"Epoch {epoch} of {epochs}")
+        logger.info(f"Epoch {epoch} of {epochs}")
         for i, batch in enumerate(data_loader):
             masked_helios_sample, label = batch
             label = label.to(device=device)
@@ -452,10 +481,9 @@ def finetune_seg(
                     align_corners=True,
                 )  # (bs, num_classes, H, W)
                 loss = loss_function(logits, label)
-                # print(f"Loss: {loss.item()}")
+                logger.info(f"Loss: {loss.item()}")
 
             loss.backward()
-            # TODO: change to min/max lr
             adjust_learning_rate(
                 optimizer=optimizer,
                 epoch=epoch + (i / len(data_loader)),
@@ -475,6 +503,7 @@ def evaluate_seg(
     task_config: EvalDatasetConfig,
     data_loader: DataLoader,
     finetuned_model: nn.Module,
+    patch_size: int,
     device: torch.device,
 ) -> float:
     """Evaluate the finetuned model on a segmentation task.
@@ -483,6 +512,7 @@ def evaluate_seg(
         task_config: The config of the task to evaluate on.
         data_loader: The data loader to use for evaluation.
         finetuned_model: The finetuned model to evaluate.
+        patch_size: The patch size to use for evaluation.
         device: The device to use for evaluation.
 
     Returns:
@@ -543,49 +573,160 @@ def evaluate_seg(
     return miou
 
 
-if __name__ == "__main__":
-    final_scores = []
-    num_runs = 1
-    # task_name = "m-eurosat"  # 94%
-    task_name = "mados"  # 75%
-    # task_name = "sen1floods11"  # 77%
-    # task_name = "pastis"  # 54.9%
+def sweep_lr(
+    task_name: str,
+    checkpoint_path: Path,
+    freeze_encoder: bool,
+    patch_size: int,
+    pooling_type: PoolingType,
+    batch_size: int,
+    num_workers: int,
+    epochs: int,
+    num_runs: int,
+    device: torch.device,
+) -> None:
+    """Sweep the learning rate for a given task.
+
+    Args:
+        task_name: The name of the task to finetune on.
+        checkpoint_path: The path to the checkpoint to use for training.
+        freeze_encoder: Whether to freeze the encoder, if True, it will be linear probing.
+        patch_size: The patch size to use for training.
+        pooling_type: The pooling type to use for training.
+        batch_size: The batch size to use for training.
+        num_workers: The number of workers to use for training.
+        epochs: The number of epochs to train for.
+        num_runs: The number of runs to sweep the learning rate over.
+        device: The device to use for training.
+    """
+    if task_name not in DATASET_TO_CONFIG:
+        raise ValueError(f"Task {task_name} not found")
     task_config = DATASET_TO_CONFIG[task_name]
     task_type = task_config.task_type
-    checkpoint_path = "/weka/dfive-default/helios/checkpoints/henryh/missing_mosality_test_updated_2/step197250"
-    patch_size = 4
-    pooling_type = PoolingType.MEAN
-    epochs = 50
-    device = torch.device("cuda")
 
-    # TODO: warning about supported modalities
-    # TODO: need norm type, worker, batch size, etc.
-
+    final_scores = {}
+    # Set learning rates based on whether we are freezing the encoder
+    lrs = LP_LRs if freeze_encoder else FT_LRs
     for _ in range(num_runs):
-        for lr in FT_LRs:
+        for lr in lrs:
             if task_type == TaskType.CLASSIFICATION:
-                print(f"Finetuning on {task_name} with lr {lr}")
+                logger.info(f"Finetuning on {task_name} with lr {lr}")
                 val_score = finetune_and_eval_cls(
                     task_name=task_name,
                     checkpoint_path=Path(checkpoint_path),
+                    freeze_encoder=freeze_encoder,
                     patch_size=patch_size,
                     pooling_type=pooling_type,
                     lr=lr,
                     epochs=epochs,
+                    batch_size=batch_size,
+                    num_workers=num_workers,
                     device=device,
                 )
             elif task_type == TaskType.SEGMENTATION:
-                print(f"Finetuning on {task_name} with lr {lr}")
+                logger.info(f"Finetuning on {task_name} with lr {lr}")
                 val_score = finetune_and_eval_seg(
                     task_name=task_name,
                     checkpoint_path=Path(checkpoint_path),
+                    freeze_encoder=freeze_encoder,
                     patch_size=patch_size,
                     pooling_type=pooling_type,
                     lr=lr,
                     epochs=epochs,
+                    batch_size=batch_size,
+                    num_workers=num_workers,
                     device=device,
                 )
-            print(f"Val score: {val_score}")
-            final_scores.append(val_score)
+            logger.info(f"Val score: {val_score}")
+            final_scores[lr] = val_score
 
-    print(final_scores)
+    logger.info(
+        f"Task: {task_name}, Freeze encoder: {freeze_encoder}, Final scores: {final_scores}"
+    )
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser(
+        description="Finetune and evaluate Helios checkpoint on task"
+    )
+    parser.add_argument(
+        "--task_name",
+        type=str,
+        required=True,
+        help="The name of the task to finetune on",
+    )
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        required=True,
+        help="The path to the checkpoint to use for training",
+    )
+    parser.add_argument(
+        "--freeze_encoder",
+        action="store_true",
+        help="Whether to freeze the encoder, if True, it will be linear probing",
+    )
+    parser.add_argument(
+        "--patch_size",
+        type=int,
+        required=False,
+        default=4,
+        help="The patch size to use for training",
+    )
+    parser.add_argument(
+        "--pooling_type",
+        type=PoolingType,
+        required=False,
+        default=PoolingType.MEAN,
+        help="The pooling type to use for training",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        required=False,
+        default=128,
+        help="The batch size to use for training",
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        required=False,
+        default=8,
+        help="The number of workers to use for training",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        required=False,
+        default=100,
+        help="The number of epochs to train for",
+    )
+    parser.add_argument(
+        "--num_runs",
+        type=int,
+        required=False,
+        default=1,
+        help="The number of runs to sweep the learning rate over",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        required=False,
+        default="cuda",
+        help="The device to use for training",
+    )
+    args = parser.parse_args()
+
+    sweep_lr(
+        task_name=args.task_name,
+        checkpoint_path=args.checkpoint_path,
+        freeze_encoder=args.freeze_encoder,
+        patch_size=args.patch_size,
+        pooling_type=args.pooling_type,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        epochs=args.epochs,
+        num_runs=args.num_runs,
+        device=torch.device(args.device),
+    )
