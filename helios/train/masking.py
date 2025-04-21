@@ -622,6 +622,35 @@ class SpaceTimeMaskingStrategy(MaskingStrategy):
             return self.time_strategy.apply_mask(batch, patch_size, **kwargs)
 
 
+@MASKING_STRATEGY_REGISTRY.register("random_space")
+class RandomSpaceMaskingStrategy(MaskingStrategy):
+    """Randomly select space or random masking."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+    ) -> None:
+        """Initialize the masking strategy."""
+        self._encode_ratio = encode_ratio
+        self._decode_ratio = decode_ratio
+        self.generator = np.random.default_rng(0)
+
+        self.random_strategy = RandomMaskingStrategy(encode_ratio, decode_ratio)
+        self.space_strategy = SpaceMaskingStrategy(encode_ratio, decode_ratio)
+
+    def apply_mask(
+        self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
+    ) -> MaskedHeliosSample:
+        """Apply space or time masking to the input data."""
+        if self.generator.random() < 0.5:
+            logger.info("Applying space masking")
+            return self.space_strategy.apply_mask(batch, patch_size, **kwargs)
+        else:
+            logger.info("Applying random masking")
+            return self.random_strategy.apply_mask(batch, patch_size, **kwargs)
+
+
 @MASKING_STRATEGY_REGISTRY.register("modality_space_time")
 class ModalitySpaceTimeMaskingStrategy(MaskingStrategy):
     """Randomly select modality, space or time masking and apply it to the input data."""
