@@ -152,7 +152,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     # NOTE: Change this directory based on the supported modalities
     dataset_configs = [
         HeliosDatasetConfig(
-            h5py_dir="gs://ai2-helios-us-central1/ai2-helios-us-central1/dataset/presto/h5py_data/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/118861",
+            h5py_dir="gs://ai2-helios-us-central1/dataset/presto/h5py_data/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/118861",
             training_modalities=common.training_modalities,
             use_samples_with_missing_supported_modalities=False,
             dtype=DType.float32,
