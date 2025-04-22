@@ -378,6 +378,10 @@ class Reconstructor(nn.Module):
                 self._get_patch_reconstruction_module_for_modality(modality)
             )
 
+    def apply_compile(self) -> None:
+        """Apply torch.compile to the model."""
+        self.decoder.apply_compile()
+
     @staticmethod
     def _get_reconstruction_module_name(modality: str, idx: int) -> str:
         """Get the reconstruction module name.
@@ -463,14 +467,16 @@ class Reconstructor(nn.Module):
 
     def forward(
         self,
-        input_data: TokensAndMasks,
+        x: TokensAndMasks,
+        timestamps: Tensor,
         patch_size: int,
+        input_res: int = BASE_GSD,
     ) -> TokensAndMasks:
         """Return flexibly patchified reconstruction for each modality of the input data.
 
         Given a [B, H, W, (T), b_s, D] inputs, returns a [B, H, W, (T), C] output.
         """
-        input_data = self.decoder(input_data)
+        input_data = self.decoder(x, timestamps, patch_size, input_res)
         output_dict = {}
         modalities_to_process = get_modalities_to_process(
             input_data.modalities, [m.name for m in self.supported_modalities]

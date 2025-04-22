@@ -8,7 +8,7 @@ import torch
 from helios.data.constants import Modality, ModalitySpec
 from helios.nn.flexihelios import Encoder, Predictor, Reconstructor, TokensAndMasks
 from helios.nn.mae import MAE
-from helios.train.loss import MAELoss
+from helios.train.loss import MAELoss, PatchDiscriminationLossNew
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)
@@ -130,31 +130,45 @@ def test_mae_with_loss(
         max_patch_size=MAX_PATCH_SIZE,
     )
     mae = MAE(encoder, predictor, reconstructor)
-    _, _, output = mae.forward(x, patch_size)
-    assert output.sentinel2_l2a is not None
-    assert output.sentinel2_l2a_mask is not None
+    latent, decoded, reconstructed = mae.forward(x, patch_size)
+
+    assert reconstructed.sentinel2_l2a is not None
+    assert reconstructed.sentinel2_l2a_mask is not None
     assert x.sentinel2_l2a is not None
     assert x.sentinel2_l2a_mask is not None
-    assert output.sentinel2_l2a.shape == x.sentinel2_l2a.shape
-    assert output.sentinel2_l2a_mask.shape == x.sentinel2_l2a_mask.shape
+    assert reconstructed.sentinel2_l2a.shape == x.sentinel2_l2a.shape
+    assert reconstructed.sentinel2_l2a_mask.shape == x.sentinel2_l2a_mask.shape
 
-    assert output.worldcover is not None
-    assert output.worldcover_mask is not None
+    assert reconstructed.worldcover is not None
+    assert reconstructed.worldcover_mask is not None
     assert x.worldcover is not None
     assert x.worldcover_mask is not None
-    assert output.worldcover.shape == x.worldcover.shape
-    assert output.worldcover_mask.shape == x.worldcover_mask.shape
+    assert reconstructed.worldcover.shape == x.worldcover.shape
+    assert reconstructed.worldcover_mask.shape == x.worldcover_mask.shape
 
-    assert (output.worldcover_mask == x.worldcover_mask).all()
-    assert (output.sentinel2_l2a_mask == x.sentinel2_l2a_mask).all()
+    assert (reconstructed.worldcover_mask == x.worldcover_mask).all()
+    assert (reconstructed.sentinel2_l2a_mask == x.sentinel2_l2a_mask).all()
 
     # this reflects the forward_model function in mae
-    loss_fn = MAELoss()
-    reconstructed = output
+    loss_mae = MAELoss()
     labels = x.as_dict()
     labels.pop("timestamps")
     target_output = TokensAndMasks(**labels)
-    loss = loss_fn.compute(reconstructed, target_output)
+    loss = loss_mae.compute(reconstructed, target_output)
+
+    loss_mim = PatchDiscriminationLossNew()
+    with torch.no_grad():
+        logger.info("target encoder running here")
+        target_output = mae.encoder.forward(
+            x.unmask(),
+            patch_size=patch_size,
+            token_exit_cfg={
+                modality: 0 for modality in mae.encoder.supported_modality_names
+            },
+        )
+
+    loss += loss_mim.compute(target_output, decoded)
+
     loss.backward()
 
     for name, param in mae.encoder.named_parameters():
@@ -169,13 +183,25 @@ def test_mae_with_loss(
             ]
         ):
             assert param.grad is not None, name
-    for name, param in mae.decoder.named_parameters():
-        # sentinel2_l2a is "masked" from the decoder
-        if not any(
-            ignore_param in name
-            for ignore_param in [
-                "pos_embed",
-                "month_embed",
-            ]
-        ):
-            assert param.grad is not None, name
+    if mae.decoder is not None:
+        for name, param in mae.decoder.named_parameters():
+            # sentinel2_l2a is "masked" from the decoder
+            if not any(
+                ignore_param in name
+                for ignore_param in [
+                    "pos_embed",
+                    "month_embed",
+                ]
+            ):
+                assert param.grad is not None, name
+    if mae.reconstructor is not None:
+        for name, param in mae.reconstructor.named_parameters():
+            # sentinel2_l2a is "masked" from the decoder
+            if not any(
+                ignore_param in name
+                for ignore_param in [
+                    "pos_embed",
+                    "month_embed",
+                ]
+            ):
+                assert param.grad is not None, name
