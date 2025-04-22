@@ -10,7 +10,7 @@
             "IR"
           ],
           "dtype": "uint8",
-          "zoom_offset": 16
+          "zoom_offset": 4
         }
       ],
       "data_source": {
