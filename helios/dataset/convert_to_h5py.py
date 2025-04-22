@@ -35,7 +35,7 @@ class ConvertToH5pyConfig(Config):
     tile_path: str
     supported_modality_names: list[
         str
-    ]  # List of modality names (e.g., ["SENTINEL2_L2A", "SENTINEL1"])
+    ]  # List of modality names (e.g., ["sentinel2_l2a", "sentinel1"])
     multiprocessed_h5_creation: bool = True
 
     def build(self) -> "ConvertToH5py":
