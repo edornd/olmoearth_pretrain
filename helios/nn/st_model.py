@@ -663,6 +663,11 @@ class STEncoder(STBase):
         # set masked values to 0 (not really necessary since we'll ignore them anyway)
         x = x * sorted_mask.unsqueeze(-1)
 
+        if sorted_mask.sum(-1).min() == 0:
+            print("WARNING GOT LENGTH 0!!")
+        elif sorted_mask.sum(-1).min() == 1:
+            print("WARNING GOT LENGTH 1!!")
+
         # cut off to the length of the longest sequence
         max_length = sorted_mask.sum(-1).max()
         x = x[:, :max_length]
