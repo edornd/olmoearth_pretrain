@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
-NUM_DATA_LOADER_WORKERS = 32
+NUM_DATA_LOADER_WORKERS = 64
 
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
@@ -87,15 +87,16 @@ def build_train_module_config(
     """Build the train module config for an experiment."""
     LR = 0.0001
     RANK_MICROBATCH_SIZE = 64
-    ENCODE_RATIO = 0.4
-    DECODE_RATIO = 0.6
     WD = 0.02
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(
         strategy_config={
-            "type": "random",
-            "encode_ratio": ENCODE_RATIO,
-            "decode_ratio": DECODE_RATIO,
+            "type": "random_increasing",
+            "initial_encode_ratio": 0.6,
+            "initial_decode_ratio": 0.35,
+            "final_encode_ratio": 0.1,
+            "final_decode_ratio": 0.85,
+            "steps": 1000,
         }
     )
     loss_config = LossConfig(
