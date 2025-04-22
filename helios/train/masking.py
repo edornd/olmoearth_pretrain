@@ -752,17 +752,14 @@ class RandomIncreasingMaskingStrategy(RandomMaskingStrategy):
             self._encode_ratio = self.final_encode_ratio
             self._decode_ratio = self.final_decode_ratio
         else:
+            factor = self.elapsed / self.steps
             self._encode_ratio = (
                 self.initial_encode_ratio
-                + (self.final_encode_ratio - self.initial_encode_ratio)
-                * self.elapsed
-                // self.steps
+                + (self.final_encode_ratio - self.initial_encode_ratio) * factor
             )
             self._decode_ratio = (
                 self.initial_decode_ratio
-                + (self.final_decode_ratio - self.initial_decode_ratio)
-                * self.elapsed
-                // self.steps
+                + (self.final_decode_ratio - self.initial_decode_ratio) * factor
             )
         return super().apply_mask(batch, patch_size, **kwargs)
 
