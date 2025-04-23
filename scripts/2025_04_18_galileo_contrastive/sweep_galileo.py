@@ -11,7 +11,7 @@ LEARNING_RATES = [0.00001, 0.0001, 0.004]
 
 
 BASE_COMMAND = (
-    "python3 scripts/2025_04_18_galileo_contrastive/galileo.py launch {run_name} ai2/titan-cirrascale "  # Modify cluster name
+    "python3 scripts/2025_04_18_galileo_contrastive/galileo_base.py launch {run_name} ai2/titan-cirrascale "  # Modify cluster name
     "--model.decoder_config.depth={decoder_depth} "
     "--train_module.optim_config.lr={lr} "
     "--launch.num_gpus=8"
