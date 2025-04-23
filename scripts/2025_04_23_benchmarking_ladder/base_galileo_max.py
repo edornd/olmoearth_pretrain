@@ -90,7 +90,7 @@ def build_train_module_config(
     """Build the train module config for an experiment."""
     base_model_args = MODEL_SIZE_ARGS["base"]
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 64
+    RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
