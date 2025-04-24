@@ -120,7 +120,7 @@ the egress fee.
 
 First copy the res_10 windows to the AWS machine:
 
-    rsync -av --exclude layers $DATASET_PATH/windows/res_10/ ubuntu@X:/mnt/rslearn_dataset/windows/res_10/
+    rsync -av --exclude layers --exclude items.json $DATASET_PATH/windows/res_10/ ubuntu@X:/mnt/rslearn_dataset/windows/res_10/
 
 Then materialize the data on the AWS machine:
 
