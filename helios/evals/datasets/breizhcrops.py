@@ -151,7 +151,7 @@ class BreizhCropsDataset(Dataset):
             EVAL_TO_HELIOS_S2_BANDS,
         ]
         if self.norm_stats_from_pretrained:
-            image = self.normalizer_computed.normalize(Modality.SENTINEL2, image)
+            image = self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, image)
 
         masked_sample = MaskedHeliosSample.from_heliossample(
             HeliosSample(
