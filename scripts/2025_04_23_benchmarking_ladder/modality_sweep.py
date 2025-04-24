@@ -55,7 +55,6 @@ def main() -> None:
     base_command = (
         "python3 scripts/2025_04_23_benchmarking_ladder/base_galileo_max.py "
         "dry_run {run_name} titan-cirrascale "
-        "--dataset.h5py_dir=/weka/dfive-default/helios/dataset/presto/h5py_data/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/118861 "
         "{modality_args}"
     )
     print(len(MODALITY_COMBINATIONS))
