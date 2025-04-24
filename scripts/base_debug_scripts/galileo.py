@@ -227,6 +227,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             eval_interval=Duration.epochs(1),
+            patch_size=1,
         ),
         "mados": DownstreamTaskConfig(
             dataset="mados",
