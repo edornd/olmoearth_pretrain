@@ -289,6 +289,7 @@ class GalileoTrainModule(HeliosTrainModule):
                 loss_val = get_local_tensor(loss.detach())
                 total_batch_loss += loss_val
                 # Skip bad batches
+                # this does not work with fsdp need skip step optimizer instead of loss
                 if torch.isnan(loss).any() or torch.isinf(loss).any():
                     logger.warning(
                         f"NaN or Inf detected in loss at microbatch {microbatch_idx}. "
@@ -298,11 +299,9 @@ class GalileoTrainModule(HeliosTrainModule):
                     self.trainer.record_metric(
                         "step_skipped", 1, ReduceType.sum, namespace="optim"
                     )
-                    # Temporary hack to skip bad batches by zeroing out the loss
-                    # Eventually may want to switch to skip step optimizer
-                    # This may be modality related
-                    loss = torch.zeros_like(loss)
-
+                    if self.is_fsdp:
+                        raise ValueError("FSDP does not support skipping bad batches as the backwards pass will not sync correctly")
+                    break
                 del latent_a, latent_b
                 loss.backward()
 

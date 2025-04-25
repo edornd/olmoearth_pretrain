@@ -166,7 +166,7 @@ def build_train_module_config(
 
 def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     """Build the dataloader config for an experiment."""
-    GLOBAL_BATCH_SIZE = 128
+    GLOBAL_BATCH_SIZE = 512
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
     SAMPLE_HW_P_LIST = list(range(5, 13))
@@ -212,8 +212,8 @@ def build_dataset_config(common: CommonComponents) -> Config:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(400)
-    METRICS_COLLECT_INTERVAL = 10  # SHould be turned off for final run
-    CANCEL_CHECK_INTERVAL = 25  # should be turned off for final run
+    METRICS_COLLECT_INTERVAL = 1  # SHould be turned off for final run
+    CANCEL_CHECK_INTERVAL = 1  # should be turned off for final run
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "2025-04-23-galileo-contrastive-ladder"

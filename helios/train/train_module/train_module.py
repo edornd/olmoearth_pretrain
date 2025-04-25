@@ -284,6 +284,11 @@ class HeliosTrainModule(TrainModule):
         return get_dp_process_group(self.world_mesh)
 
     @property
+    def is_fsdp(self) -> bool:
+        """Check if the model is FSDP."""
+        return self._dp_config is not None and self._dp_config.name in (DataParallelType.fsdp)
+
+    @property
     def eval_batch_spec(self) -> EvalBatchSpec:
         """Get the evaluation batch spec."""
         # Determine the number of micro-batches.
