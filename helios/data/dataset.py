@@ -667,17 +667,18 @@ class HeliosDataset(Dataset):
                 missing_modalities.append(modality)
             modality_data = sample_dict[modality]
             # Landsat Currently has some misssing timesteps that are all zeros
-            if modality == Modality.LANDSAT.name:
-                num_timesteps = modality_data.shape[2]
-                # Create a mask for timesteps that are all zeros
-                zero_timesteps = np.all(modality_data == 0, axis=(0, 1, 3))  # Shape: [T]
-                if np.any(zero_timesteps):
-                    logger.debug(f"Filling {modality} timesteps with missing values")
-                    logger.debug(f"Filling missing timesteps for {modality} with shape {modality_data.shape} for zero timesteps {zero_timesteps.sum()}")
-                    # Create a broadcastable mask
-                    # Fill in missing values where mask is True
-                    modality_data[..., zero_timesteps, :] = MISSING_VALUE
-                pass
+            # if modality == Modality.LANDSAT.name:
+            # Create a mask for timesteps that are all zeros
+            zero_timesteps = np.all(modality_data == 0, axis=(0, 1, 3))  # Shape: [T]
+            if np.any(zero_timesteps):
+                logger.info(f"Filling {modality} timesteps with missing values")
+                logger.info(
+                    f"Filling missing timesteps for {modality} with shape {modality_data.shape} for zero timesteps {zero_timesteps.sum()}"
+                )
+                # Create a broadcastable mask
+                # Fill in missing values where mask is True
+                modality_data[..., zero_timesteps, :] = MISSING_VALUE
+            pass
         return HeliosSample(**sample_dict), missing_modalities
 
     def apply_subset(self, sample: HeliosSample, args: GetItemArgs) -> HeliosSample:
