@@ -785,7 +785,10 @@ class HeliosDataset(Dataset):
         sample_dict = self.read_h5_file(h5_file_path)
 
         # Fill any training modalities that are not present in the h5 file with missing values
+        start_time = time.perf_counter()
         sample, missing_modalities = self.fill_sample_with_missing_values(sample_dict)
+        end_time = time.perf_counter()
+        logger.info(f"Time to fill sample with missing values: {end_time - start_time:.6f}s")
 
         subset_sample = self.apply_subset(sample, args)
         sample_dict = subset_sample.as_dict(ignore_nones=True)
