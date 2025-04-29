@@ -180,6 +180,8 @@ class HeliosSample(NamedTuple):
     def height(self) -> int:
         """Get the height of the data."""
         for modality in self.modalities:
+            if modality == "timestamps":
+                continue
             modality_spec = Modality.get(modality)
             if not modality_spec.is_spatial:
                 continue
@@ -198,6 +200,8 @@ class HeliosSample(NamedTuple):
     def width(self) -> int:
         """Get the height of the data."""
         for modality in self.modalities:
+            if modality == "timestamps":
+                continue
             modality_spec = Modality.get(modality)
             if not modality_spec.is_spatial:
                 continue
