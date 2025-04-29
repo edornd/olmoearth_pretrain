@@ -179,8 +179,10 @@ class HeliosSample(NamedTuple):
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
-        for modality in height_width_time_modalities:
+        for modality in self.modalities:
+            modality_spec = Modality.get(modality)
+            if not modality_spec.is_spatial:
+                continue
             x = getattr(self, modality)
             if x is not None:
                 if len(x.shape) == 5:
@@ -195,8 +197,10 @@ class HeliosSample(NamedTuple):
     @property
     def width(self) -> int:
         """Get the height of the data."""
-        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
-        for modality in height_width_time_modalities:
+        for modality in self.modalities:
+            modality_spec = Modality.get(modality)
+            if not modality_spec.is_spatial:
+                continue
             x = getattr(self, modality)
             if x is not None:
                 if len(x.shape) == 5:
@@ -667,7 +671,6 @@ class HeliosDataset(Dataset):
                 )
                 missing_modalities.append(modality)
 
-
             modality_data = sample_dict[modality]
 
             if modality == Modality.SRTM.name:
@@ -679,8 +682,12 @@ class HeliosDataset(Dataset):
 
             missing_timesteps = []
             # Check all timesteps at once for zeros
-            all_zeros_mask = np.all(modality_data[..., :, :] == 0, axis=(-1, -3, -4))  # Checks H, W, bands dimensions
-            missing_timesteps = np.where(all_zeros_mask)[0]  # Get indices where all values are 0
+            all_zeros_mask = np.all(
+                modality_data[..., :, :] == 0, axis=(-1, -3, -4)
+            )  # Checks H, W, bands dimensions
+            missing_timesteps = np.where(all_zeros_mask)[
+                0
+            ]  # Get indices where all values are 0
 
             if len(missing_timesteps) > 0:
                 logger.debug(
@@ -786,16 +793,18 @@ class HeliosDataset(Dataset):
             for modality in sample_modalities:
                 # DO NOT NORMALIZE MISSING MODALITIES otherwise the MISSING_VALUE will be normalized
                 if modality.name in missing_modalities:
-                    logger.info(f"Skipping normalization for {modality.name} because it is in missing_modalities")
+                    logger.info(
+                        f"Skipping normalization for {modality.name} because it is in missing_modalities"
+                    )
                     continue
                 logger.info(f"Normalizing {modality.name}")
                 modality_data = sample_dict[modality.name]
                 missing_mask = modality_data == MISSING_VALUE
-                normalized_data = self.normalize_image(
-                    modality, modality_data
-                )
+                normalized_data = self.normalize_image(modality, modality_data)
                 # Sentinel Values must be reset after normalization so they can be recognized by missing mask
-                sample_dict[modality.name] = np.where(missing_mask, modality_data, normalized_data)
+                sample_dict[modality.name] = np.where(
+                    missing_mask, modality_data, normalized_data
+                )
 
         return args.patch_size, HeliosSample(**sample_dict)
 
