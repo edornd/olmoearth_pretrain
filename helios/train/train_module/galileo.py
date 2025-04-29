@@ -264,9 +264,21 @@ class GalileoTrainModule(HeliosTrainModule):
                         self.token_exit_cfg_b,
                     )
                 )
-
-                loss = (loss_a + loss_b) / 2
-                logger.info(f"loss before contrastive loss: loss_a: {loss_a}, loss_b: {loss_b}, loss: {loss}")
+                losses = []
+                for loss in (loss_a, loss_b):
+                    if torch.isnan(loss).any() or torch.isinf(loss).any():
+                        logger.warning(
+                            f"loss is nan or inf: {loss} not adding to total loss"
+                        )
+                        self.trainer.record_metric(
+                            "step_skipped", 1, ReduceType.sum, namespace="optim"
+                        )
+                        continue
+                    losses.append(loss)
+                loss = sum(losses) / len(losses)
+                logger.info(
+                    f"loss before contrastive loss: loss_a: {loss_a}, loss_b: {loss_b}, loss: {loss}"
+                )
 
                 # Scale loss by number of microbatches
                 reg_term_a = self.compute_regularization(latent_a)
@@ -283,10 +295,20 @@ class GalileoTrainModule(HeliosTrainModule):
 
                 if self.contrastive_loss is not None:
                     contrastive_loss = self.contrastive_loss.compute(pooled_a, pooled_b)
-                    loss += contrastive_loss
-                    total_batch_con += (
-                        get_local_tensor(contrastive_loss.detach()) / num_microbatches
-                    )
+                    logger.info(f"contrastive loss: {contrastive_loss}")
+                    if (
+                        torch.isnan(contrastive_loss).any()
+                        or torch.isinf(contrastive_loss).any()
+                    ):
+                        logger.warning(
+                            f"contrastive loss is nan or inf: {contrastive_loss} not adding to total loss"
+                        )
+                    else:
+                        loss += contrastive_loss
+                        total_batch_con += (
+                            get_local_tensor(contrastive_loss.detach())
+                            / num_microbatches
+                        )
 
                 loss = loss / num_microbatches
                 loss_val = get_local_tensor(loss.detach())
@@ -303,7 +325,9 @@ class GalileoTrainModule(HeliosTrainModule):
                         "step_skipped", 1, ReduceType.sum, namespace="optim"
                     )
                     if self.is_fsdp:
-                        raise ValueError("FSDP does not support skipping bad batches as the backwards pass will not sync correctly")
+                        raise ValueError(
+                            "FSDP does not support skipping bad batches as the backwards pass will not sync correctly"
+                        )
                     break
                 del latent_a, latent_b
                 loss.backward()
