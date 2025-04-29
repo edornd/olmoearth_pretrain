@@ -214,8 +214,8 @@ def build_dataset_config(common: CommonComponents) -> Config:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(400)
-    METRICS_COLLECT_INTERVAL = 10  # SHould be turned off for final run
-    CANCEL_CHECK_INTERVAL = 25  # should be turned off for final run
+    METRICS_COLLECT_INTERVAL = 1  # SHould be turned off for final run
+    CANCEL_CHECK_INTERVAL = 1 # should be turned off for final run
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "2025-04-23-galileo-contrastive-ladder"
@@ -306,14 +306,14 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
 def build_common_components_limited_modalities(*args: Any) -> CommonComponents:
     """Build the common components for an experiment."""
     config = build_common_components(*args)
-    # config.training_modalities = [
-    #     Modality.SENTINEL1.name,
-    #     Modality.SENTINEL2_L2A.name,
-    #     Modality.WORLDCOVER.name,
+    config.training_modalities = [
+        Modality.SENTINEL1.name,
+        Modality.SENTINEL2_L2A.name,
+        Modality.WORLDCOVER.name,
     #     Modality.LANDSAT.name,
     #     Modality.OPENSTREETMAP_RASTER.name,
     #     Modality.SRTM.name,
-    # ]
+    ]
     return config
 
 
