@@ -148,16 +148,15 @@ class DownstreamEvaluatorCallback(Callback):
             # )
             # if self.step <= 1 or self.step % eval_interval_steps != 0:
             #     continue
-            if self.step <= 1:
-                logger.info(f"Running {evaluator.dataset} evaluations...")
-                start_time = time.monotonic()
-                val_result = evaluator.val()
-                self.trainer.record_metric(f"eval/{evaluator.dataset}", val_result)
-                logger.info(
-                    f"Finished {evaluator.dataset} evaluations in {time.monotonic() - start_time:.1f} seconds."
-                )
-                torch.cuda.empty_cache()
-                gc.collect()
+            logger.info(f"Running {evaluator.dataset} evaluations...")
+            start_time = time.monotonic()
+            val_result = evaluator.val()
+            self.trainer.record_metric(f"eval/{evaluator.dataset}", val_result)
+            logger.info(
+                f"Finished {evaluator.dataset} evaluations in {time.monotonic() - start_time:.1f} seconds."
+            )
+            torch.cuda.empty_cache()
+            gc.collect()
 
 
 @dataclass
