@@ -293,6 +293,7 @@ class TestEncoder:
             if not any(
                 ignore_param in name
                 for ignore_param in [
+                    "project_and_aggregate",
                     "pos_embed",
                     "month_embed",
                     "composite_encodings.per_modality_channel_embeddings.latlon",
@@ -392,6 +393,7 @@ class TestEncoder:
                 any(
                     ignore_param in name
                     for ignore_param in [
+                        "project_and_aggregate",
                         "pos_embed",
                         "month_embed",
                         "composite_encodings.per_modality_channel_embeddings.latlon",
@@ -495,6 +497,7 @@ class TestEncoder:
                         "month_embed",
                         "composite_encodings.per_modality_channel_embeddings.latlon",
                         "patch_embeddings.per_modality_embeddings.latlon",
+                        "project_and_aggregate",
                     ]
                 )
                 or ("block" in name)
@@ -700,6 +703,7 @@ class TestPredictor:
                     "pos_embed",
                     "month_embed",
                     "composite_encodings.per_modality_channel_embeddings.latlon",
+                    "project_and_aggregate",
                 ]
             ):
                 assert param.grad is not None, name
@@ -819,6 +823,7 @@ def test_end_to_end_with_exit_config(
                 "pos_embed",
                 "month_embed",
                 "composite_encodings.per_modality_channel_embeddings.latlon",
+                "project_and_aggregate",
             ]
         ):
             assert param.grad is not None, name
