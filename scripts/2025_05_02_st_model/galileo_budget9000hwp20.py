@@ -23,14 +23,15 @@ def my_build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     train_module_config = build_train_module_config(common)
-    train_module_config.rank_microbatch_size = 8
+    train_module_config.rank_microbatch_size = 4
     return train_module_config
 
 
 def my_build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     """Build the dataloader config for an experiment."""
     dataloader_config = build_dataloader_config(common)
-    dataloader_config.token_budget = 6000
+    dataloader_config.token_budget = 9000
+    dataloader_config.sampled_hw_p_list = list(range(5, 20))
     return dataloader_config
 
 

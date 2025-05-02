@@ -31,6 +31,7 @@ def my_build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConf
     """Build the dataloader config for an experiment."""
     dataloader_config = build_dataloader_config(common)
     dataloader_config.token_budget = 6000
+    dataloader_config.sampled_hw_p_list = list(range(5, 20))
     return dataloader_config
 
 
