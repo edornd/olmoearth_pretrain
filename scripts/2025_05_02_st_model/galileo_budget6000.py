@@ -94,7 +94,7 @@ def build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.0001
-    RANK_MICROBATCH_SIZE = 16
+    RANK_MICROBATCH_SIZE = 8
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
