@@ -327,7 +327,7 @@ If running command on a local machine ie from a session, you can use the [b]loca
     # Visualize the dataset
     python train.py visualize
     """.strip()
-
+    logger.info(f"Running {sys.argv}")
     if len(sys.argv) < 4 or sys.argv[1] not in set(SubCmd):
         import rich
 
