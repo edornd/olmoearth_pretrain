@@ -211,7 +211,7 @@ def load_image_for_sample(
     logger.info(f"image_tile.grid_tile.resolution_factor={image_tile.grid_tile.resolution_factor}")
     logger.info(f"sample.grid_tile.resolution_factor={sample.grid_tile.resolution_factor}")
     factor = (
-        image_tile.grid_tile.resolution_factor / sample.grid_tile.resolution_factor)
+        image_tile.grid_tile.resolution_factor // sample.grid_tile.resolution_factor)
     # Read the modality image one band set at a time.
     # For now we resample all bands to the grid resolution of the modality.
     band_set_images = []
