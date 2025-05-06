@@ -85,9 +85,7 @@ class GeobenchDataset(Dataset):
 
         # hack: https://github.com/ServiceNow/geo-bench/issues/22
         task.get_dataset_dir = MethodType(
-            lambda self: geobench_dir
-            / f"{config.task_type.value}_v1.0"
-            / self.dataset_name,
+            lambda self: geobench_dir / f"{config.task_type.value}_v1.0" / dataset,
             task,
         )
 
