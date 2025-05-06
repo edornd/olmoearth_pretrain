@@ -315,7 +315,6 @@ class ConvertToH5py:
         """Filter samples to adjust to the HeliosSample format."""
         logger.info(f"Number of samples before filtering: {len(samples)}")
         filtered_samples = []
-        has_naip_list = []
         for sample in samples:
             if not all(
                 modality in self.supported_modalities
@@ -352,14 +351,10 @@ class ConvertToH5py:
                 continue
 
             filtered_samples.append(sample)
-            if Modality.NAIP_10 in sample.modalities:
-                has_naip_list.append(True)
-            else:
-                has_naip_list.append(False)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
         logger.info("Distribution of samples after filtering:")
         self._log_modality_distribution(filtered_samples)
-        return filtered_samples, has_naip_list
+        return filtered_samples
 
     def get_and_filter_samples(self) -> list[SampleInformation]:
         """Get and filter samples.
@@ -367,24 +362,9 @@ class ConvertToH5py:
         This parses csvs, loads images, and filters samples to adjust to the HeliosSample format.
         """
         samples = self._get_samples()
-        import time
-        time.sleep(10000)
-        filtered_samples, has_naip_list = self._filter_samples(samples)
-        samples = []
-        min_naip_samples = 5000
-        num_naip_samples = 0
-        for i in range(len(filtered_samples)):
-            if has_naip_list[i]:
-                samples.append(filtered_samples[i])
-                num_naip_samples += 1
-            else:
-                if num_naip_samples > min_naip_samples:
-                    samples.append(filtered_samples[i])
-            if len(samples) >= 30000 and num_naip_samples >= min_naip_samples:
-                break
-        logger.info(f"Number of samples after filtering: {len(samples)}")
-        self._log_modality_distribution(samples)
-        return samples
+        filtered_samples= self._filter_samples(samples)
+        self._log_modality_distribution(filtered_samples)
+        return filtered_samples
 
     def save_compression_settings(self) -> None:
         """Save compression settings to a JSON file."""
@@ -420,4 +400,4 @@ class ConvertToH5py:
     def run(self) -> None:
         """Run the conversion."""
         samples = self.get_and_filter_samples()
-        # self.prepare_h5_dataset(samples)
+        self.prepare_h5_dataset(samples)
