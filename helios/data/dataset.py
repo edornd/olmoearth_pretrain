@@ -288,6 +288,7 @@ class HeliosSample(NamedTuple):
                 to determine the maximum number of timesteps possible for a given
                 height and width.
             sampled_hw_p: The number of tokens in the height and width dimensions.
+            missing_timesteps_dict: A dictionary of missing timesteps for each modality.
 
         The returned sample will have shape:
             height = hw_t * patch_size
@@ -331,12 +332,6 @@ class HeliosSample(NamedTuple):
             elif modality_spec.is_static_in_space_and_time:
                 new_data_dict[attribute] = modality
         return HeliosSample(**new_data_dict)
-
-
-# def find_timesteps_with_at_least_one_modality_present(sample: HeliosSample, missing_timesteps_dict: dict[str, list[int]]) -> list[int]:
-#     """Find the timesteps with at least one modality present."""
-#     # what we actually want is different start_t and max_t combinations that are eligible for subsetting
-#     pass
 
 
 def collate_helios(batch: list[tuple[int, HeliosSample]]) -> tuple[int, HeliosSample]:
@@ -502,7 +497,7 @@ class HeliosDataset(Dataset):
         logger.info(f"columns: {metadata_df.columns}")
         # For now we want to filter out any samples that have NAIP DATA or don't have any of the training modalities
         # Get the indices of samples that have NAIP data
-        if  "naip_10" in metadata_df.columns:
+        if "naip_10" in metadata_df.columns:
             naip_indices = metadata_df[(metadata_df["naip_10"] == 1)].index
             self.naip_indices = naip_indices
         else:
