@@ -16,6 +16,7 @@ from helios.internal.experiment import CommonComponents, main
 from helios.internal.utils import MODEL_SIZE_ARGS
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
 from helios.nn.galileo import GalileoConfig
+from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 MIN_PATCH_SIZE = 1
 MAX_PATCH_SIZE = 8
@@ -60,11 +61,20 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
     return model_config
 
 
+def my_build_train_module_config(
+    common: CommonComponents,
+) -> GalileoTrainModuleConfig:
+    """Build the train module config for an experiment."""
+    train_module_config = build_train_module_config(common)
+    train_module_config.rank_microbatch_size = 16
+    return train_module_config
+
+
 if __name__ == "__main__":
     main(
         common_components_builder=build_common_components_limited_modalities,
         model_config_builder=build_model_config,
-        train_module_config_builder=build_train_module_config,
+        train_module_config_builder=my_build_train_module_config,
         dataset_config_builder=build_dataset_config,
         dataloader_config_builder=build_dataloader_config,
         trainer_config_builder=build_trainer_config,
