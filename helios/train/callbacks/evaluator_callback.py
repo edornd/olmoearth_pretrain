@@ -37,6 +37,7 @@ class DownstreamEvaluator:
         norm_stats_from_pretrained: bool = True,
         device: torch.device | None = None,
         probe_lr: float | None = None,
+        input_modalities: list[str] = field(default_factory=list),
     ) -> None:
         """Initialize the downstream evaluator."""
         self.dataset = dataset
@@ -50,6 +51,7 @@ class DownstreamEvaluator:
         self.norm_stats_from_pretrained = norm_stats_from_pretrained
         self.probe_lr = probe_lr
         self.patch_size = patch_size
+        self.input_modalities = input_modalities
 
     def _get_data_loader(self, split: str) -> DataLoader:
         """Get the data loader for the given split."""
@@ -59,6 +61,7 @@ class DownstreamEvaluator:
                 split=split,
                 partition="default",
                 norm_stats_from_pretrained=self.norm_stats_from_pretrained,
+                input_modalities=self.input_modalities,
             ),
             collate_fn=eval_collate_fn,
             batch_size=self.batch_size,
@@ -166,6 +169,7 @@ class DownstreamTaskConfig:
     num_workers: int = 8
     pooling_type: PoolingType = PoolingType.MEAN
     norm_stats_from_pretrained: bool = True
+    input_modalities: list[str] = field(default_factory=list)
     # for MADOS and a default partition, the following lrs
     # did best for Galileo:
     # ViT-nano = 0.8 or 0.5
@@ -190,12 +194,22 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
             return None
 
         evaluators: list[DownstreamEvaluator] = []
-        # check that probe_lr is set for segmentation tasks
+        # Check that probe_lr is set for segmentation tasks
         for evaluation_name, task in self.tasks.items():
             config = DATASET_TO_CONFIG[task.dataset]
             if config.task_type == TaskType.SEGMENTATION:
                 if task.probe_lr is None:
                     raise ValueError(f"probe_lr cannot be None for {task.dataset}")
+
+            # Check that input_modalities is only set for multimodal tasks
+            if (
+                task.dataset not in ["pastis", "sickle"]
+                and len(task.input_modalities) > 0
+            ):
+                raise ValueError(
+                    f"input_modalities must be set for multimodal tasks, got {task.dataset}"
+                )
+
             evaluators.append(
                 DownstreamEvaluator(
                     dataset=task.dataset,
@@ -204,6 +218,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
                     num_workers=task.num_workers,
                     pooling_type=task.pooling_type,
                     norm_stats_from_pretrained=task.norm_stats_from_pretrained,
+                    input_modalities=task.input_modalities,
                     device=trainer.device,
                     probe_lr=task.probe_lr,
                     patch_size=task.patch_size,

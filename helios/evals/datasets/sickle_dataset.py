@@ -58,7 +58,8 @@ MONTH_TO_INT = {
 }
 
 # Minimum number of months of data required for each modality
-# The growing season is usually 5 or 6 months
+# The growing season is either 5 or 6 months
+# TODO: Use dynamic number of months instead of fixed to 5
 MIN_MONTHS = 5
 
 # Original bands from the SICKLE dataset
@@ -492,9 +493,9 @@ class SICKLEDataset(Dataset):
         path_to_splits: Path = SICKLE_DIR,
         split: str = "train",
         partition: str = "default",
-        is_multimodal: bool = True,
         norm_stats_from_pretrained: bool = True,
         norm_method: str = "norm_no_clip",
+        input_modalities: list[str] = [],
     ):
         """Init SICKLE dataset.
 
@@ -502,14 +503,23 @@ class SICKLEDataset(Dataset):
             path_to_splits: Path where .pt objects returned by process_sickle have been saved
             split: Split to use
             partition: Partition to use
-            is_multimodal: If True, use S2 + S1 + L8, if False, use L8 only
             norm_stats_from_pretrained: Whether to use normalization stats from pretrained model
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
+            input_modalities: List of modalities to use, must be a subset of ["sentinel2", "sentinel1", "landsat"]
         """
         assert split in ["train", "valid"]
         split = "val" if split == "valid" else split
 
-        self.is_multimodal = is_multimodal
+        assert len(input_modalities) > 0, "input_modalities must be set"
+        assert len(input_modalities) == len(
+            set(input_modalities)
+        ), "input_modalities must be unique"
+        assert all(
+            modality in ["sentinel2", "sentinel1", "landsat8"]
+            for modality in input_modalities
+        ), "input_modalities must be a subset of ['sentinel2', 'sentinel1', 'landsat8']"
+
+        self.input_modalities = input_modalities
 
         self.s2_means, self.s2_stds = self._get_norm_stats(
             S2_BAND_STATS, EVAL_S2_L2A_BAND_NAMES
@@ -559,18 +569,13 @@ class SICKLEDataset(Dataset):
         l8_image = einops.rearrange(l8_image, "t c h w -> h w t c")  # (32, 32, 5, 11)
         l8_image = l8_image[:, :, :, EVAL_TO_HELIOS_L8_BANDS]
 
-        if self.is_multimodal:
-            s2_image = torch.load(self.s2_images_dir / f"{idx}.pt")
-            s2_image = einops.rearrange(
-                s2_image, "t c h w -> h w t c"
-            )  # (32, 32, 5, 13)
-            s2_image = s2_image[:, :, :, EVAL_TO_HELIOS_S2_L2A_BANDS]
+        s2_image = torch.load(self.s2_images_dir / f"{idx}.pt")
+        s2_image = einops.rearrange(s2_image, "t c h w -> h w t c")  # (32, 32, 5, 13)
+        s2_image = s2_image[:, :, :, EVAL_TO_HELIOS_S2_L2A_BANDS]
 
-            s1_image = torch.load(self.s1_images_dir / f"{idx}.pt")
-            s1_image = einops.rearrange(
-                s1_image, "t c h w -> h w t c"
-            )  # (32, 32, 5, 2)
-            s1_image = s1_image[:, :, :, EVAL_TO_HELIOS_S1_BANDS]
+        s1_image = torch.load(self.s1_images_dir / f"{idx}.pt")
+        s1_image = einops.rearrange(s1_image, "t c h w -> h w t c")  # (32, 32, 5, 2)
+        s1_image = s1_image[:, :, :, EVAL_TO_HELIOS_S1_BANDS]
 
         labels = self.labels[idx]  # (32, 32)
         months = self.months[idx]  # (5)
@@ -579,22 +584,18 @@ class SICKLEDataset(Dataset):
             l8_image = normalize_bands(
                 l8_image.numpy(), self.l8_means, self.l8_stds, self.norm_method
             )
-            if self.is_multimodal:
-                s2_image = normalize_bands(
-                    s2_image.numpy(), self.s2_means, self.s2_stds, self.norm_method
-                )
-                s1_image = normalize_bands(
-                    s1_image.numpy(), self.s1_means, self.s1_stds, self.norm_method
-                )
+            s2_image = normalize_bands(
+                s2_image.numpy(), self.s2_means, self.s2_stds, self.norm_method
+            )
+            s1_image = normalize_bands(
+                s1_image.numpy(), self.s1_means, self.s1_stds, self.norm_method
+            )
         else:
             l8_image = self.normalizer_computed.normalize(Modality.LANDSAT, l8_image)
-            if self.is_multimodal:
-                s2_image = self.normalizer_computed.normalize(
-                    Modality.SENTINEL2_L2A, s2_image
-                )
-                s1_image = self.normalizer_computed.normalize(
-                    Modality.SENTINEL1, s1_image
-                )
+            s2_image = self.normalizer_computed.normalize(
+                Modality.SENTINEL2_L2A, s2_image
+            )
+            s1_image = self.normalizer_computed.normalize(Modality.SENTINEL1, s1_image)
 
         timestamps = []
         for month in months:
@@ -606,7 +607,8 @@ class SICKLEDataset(Dataset):
             )
         timestamps = torch.stack(timestamps)
 
-        if self.is_multimodal:
+        # Support the combinations in Table 3 from the SICKLE paper
+        if self.input_modalities == ["sentinel2", "sentinel1", "landsat8"]:
             masked_sample = MaskedHeliosSample.from_heliossample(
                 HeliosSample(
                     sentinel2_l2a=torch.tensor(s2_image).float(),
@@ -615,11 +617,28 @@ class SICKLEDataset(Dataset):
                     timestamps=timestamps,
                 )
             )
-        else:
+        elif self.input_modalities == ["sentinel2"]:
+            masked_sample = MaskedHeliosSample.from_heliossample(
+                HeliosSample(
+                    sentinel2_l2a=torch.tensor(s2_image).float(),
+                    timestamps=timestamps,
+                )
+            )
+        elif self.input_modalities == ["sentinel1"]:
+            masked_sample = MaskedHeliosSample.from_heliossample(
+                HeliosSample(
+                    sentinel1=torch.tensor(s1_image).float(),
+                    timestamps=timestamps,
+                )
+            )
+        elif self.input_modalities == ["landsat8"]:
             masked_sample = MaskedHeliosSample.from_heliossample(
                 HeliosSample(
                     landsat=torch.tensor(l8_image).float(),
                     timestamps=timestamps,
                 )
             )
+        else:
+            raise ValueError(f"Invalid input modalities: {self.input_modalities}")
+
         return masked_sample, labels.long()

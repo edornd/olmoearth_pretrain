@@ -19,11 +19,18 @@ def get_eval_dataset(
     eval_dataset: str,
     split: str,
     norm_stats_from_pretrained: bool = False,
+    input_modalities: list[str] = [],
     partition: str = "default",
 ) -> Dataset:
     """Retrieve an eval dataset from the dataset name."""
     if eval_dataset not in ALL_DATASETS:
         raise ValueError(f"Unrecognized dataset {eval_dataset}")
+
+    if input_modalities:
+        if eval_dataset not in ["pastis", "sickle"]:
+            raise ValueError(
+                f"input_modalities is only supported for multimodal tasks, got {eval_dataset}"
+            )
 
     if eval_dataset.startswith("m-"):
         # m- == "modified for geobench"
@@ -53,22 +60,12 @@ def get_eval_dataset(
             norm_stats_from_pretrained=norm_stats_from_pretrained,
         )
     elif eval_dataset == "pastis":
-        # PASTIS is the single-modal version of PASTIS (S2 only)
         return PASTISRDataset(
             path_to_splits=PASTIS_DIR,
             split=split,
             partition=partition,
             norm_stats_from_pretrained=norm_stats_from_pretrained,
-            is_multimodal=False,
-        )
-    elif eval_dataset == "pastis-r":
-        # PASTIS-R is the multimodal version of PASTIS (S1, S2)
-        return PASTISRDataset(
-            path_to_splits=PASTIS_DIR,
-            split=split,
-            partition=partition,
-            norm_stats_from_pretrained=norm_stats_from_pretrained,
-            is_multimodal=True,
+            input_modalities=input_modalities,
         )
     elif eval_dataset == "breizhcrops":
         return BreizhCropsDataset(
@@ -78,22 +75,12 @@ def get_eval_dataset(
             norm_stats_from_pretrained=norm_stats_from_pretrained,
         )
     elif eval_dataset == "sickle":
-        # SICKLE is the single-modal version of SICKLE (L8 only)
         return SICKLEDataset(
             path_to_splits=SICKLE_DIR,
             split=split,
             partition=partition,
-            is_multimodal=False,
             norm_stats_from_pretrained=norm_stats_from_pretrained,
-        )
-    elif eval_dataset == "sickle-r":
-        # SICKLE-R is the multimodal version of SICKLE (S1, S2, L8)
-        return SICKLEDataset(
-            path_to_splits=SICKLE_DIR,
-            split=split,
-            partition=partition,
-            is_multimodal=True,
-            norm_stats_from_pretrained=norm_stats_from_pretrained,
+            input_modalities=input_modalities,
         )
     else:
         raise ValueError(f"Unrecognized eval_dataset {eval_dataset}")
