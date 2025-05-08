@@ -159,7 +159,6 @@ def image_tiles_to_samples(
                 )
                 continue
 
-            # Why are we downscaling here?
             downscale_factor = (
                 modality.tile_resolution_factor // sample.grid_tile.resolution_factor
             )
@@ -180,7 +179,6 @@ def image_tiles_to_samples(
                 resolution_factor=modality.tile_resolution_factor,
                 col=grid_tile.col // downscale_factor,
                 row=grid_tile.row // downscale_factor,
-                image_tile_size_factor=modality.image_tile_size_factor,
             )
 
             index_key = (modality, modality_grid_tile, lookup_time_span)
@@ -261,7 +259,7 @@ def load_image_for_sample(
                 # If the tile size is greater we want to keep that extent
                 desired_subtile_size = int(
                     IMAGE_TILE_SIZE
-                    * image_tile.grid_tile.image_tile_size_factor
+                    * image_tile.modality.image_tile_size_factor
                     // factor
                 )
                 if desired_subtile_size < subtile_size:
