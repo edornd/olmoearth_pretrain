@@ -116,7 +116,7 @@ DATASET_TO_CONFIG = {
         task_type=TaskType.SEGMENTATION,
         imputes=[],
         num_classes=2,
-        is_multilabel=True,
+        is_multilabel=False,
         height_width=32,
     ),
 }
