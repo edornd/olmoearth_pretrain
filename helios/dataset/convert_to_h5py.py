@@ -456,5 +456,5 @@ class ConvertToH5py:
 
     def run(self) -> None:
         """Run the conversion."""
-        samples = self.get_and_filter_samples()
-        # self.prepare_h5_dataset(samples)
+        samples = self.get_and_filter_samples()[:75000]
+        self.prepare_h5_dataset(samples)
