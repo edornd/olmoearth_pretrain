@@ -205,7 +205,41 @@ class ConvertToH5py:
         """Create the h5 file."""
         sample_dict = {}
         sample_dict["latlon"] = sample.get_latlon().astype(np.float32)
-        sample_dict["timestamps"] = sample.get_timestamps()
+
+        multi_temporal_timestamps_dict = sample.get_timestamps()
+
+        # Determine the longest timestamp array to be used as the reference
+        longest_timestamps_array = np.array([])
+        if multi_temporal_timestamps_dict:
+            # Find the ModalitySpec corresponding to the timestamp array with the maximum number of entries
+            longest_ts_modality_spec = max(
+                multi_temporal_timestamps_dict,
+                key=lambda k: len(multi_temporal_timestamps_dict[k])
+            )
+            longest_timestamps_array = multi_temporal_timestamps_dict[longest_ts_modality_spec]
+
+        sample_dict["timestamps"] = longest_timestamps_array
+
+        # Identify names of modalities with multi-temporal data
+        multitemporal_modality_names = [
+            mod_spec.name for mod_spec in multi_temporal_timestamps_dict.keys()
+        ]
+
+        # Create masks for missing timesteps for each multi-temporal modality
+        missing_timesteps_masks_data: dict[str, np.ndarray] = {}
+        if longest_timestamps_array.size > 0: # Proceed only if there's a reference timestamp array
+            for mod_spec, mod_timestamps in multi_temporal_timestamps_dict.items():
+                # Create a boolean mask indicating presence of each timestamp from longest_timestamps_array
+                # in the current modality's timestamps.
+                # np.all(..., axis=1) checks for full row match (day, month, year)
+                # np.any(...) checks if any of mod_timestamps' rows match the current longest_ts
+                mask = np.array([
+                    np.any(np.all(longest_ts == mod_timestamps, axis=1))
+                    for longest_ts in longest_timestamps_array
+                ], dtype=bool)
+                missing_timesteps_masks_data[mod_spec.name] = mask
+
+        # Load image data for all modalities in the sample
         for modality in sample.modalities:
             sample_modality = sample.modalities[modality]
             image = self.load_sample(sample_modality, sample)
@@ -213,30 +247,40 @@ class ConvertToH5py:
             if modality == Modality.SENTINEL1:
                 image = convert_to_db(image)
             sample_dict[modality.name] = image
-        # Need to see how the data with missing timestamps comes in
+
         # w+b as sometimes metadata needs to be read as well for different chunking/compression settings
         with h5_file_path.open("w+b") as f:
             with h5py.File(f, "w") as h5file:
-                for modality_name, image in sample_dict.items():
+                # Store the list of multi-temporal modality names as a file attribute
+                h5file.attrs["multitemporal_modalities"] = multitemporal_modality_names
+
+                # Write datasets for latlon, timestamps, and modality images
+                for item_name, data_item in sample_dict.items():
                     logger.info(
-                        f"Writing modality {modality_name} to h5 file path {h5_file_path}"
+                        f"Writing item {item_name} to h5 file path {h5_file_path}"
                     )
                     # Create dataset with optional compression
                     create_kwargs: dict[str, Any] = {}
-
                     if self.compression is not None:
                         create_kwargs["compression"] = self.compression
-                        # Only use compression_opts with gzip
                         if (
                             self.compression == "gzip"
                             and self.compression_opts is not None
                         ):
                             create_kwargs["compression_opts"] = self.compression_opts
-                        # Only use shuffle with compression
-                        if self.shuffle is not None:
+                        if self.shuffle is not None: # Shuffle is typically used with compression
                             create_kwargs["shuffle"] = self.shuffle
+                    h5file.create_dataset(item_name, data=data_item, **create_kwargs)
 
-                    h5file.create_dataset(modality_name, data=image, **create_kwargs)
+                # Store missing timesteps masks in a dedicated group
+                if missing_timesteps_masks_data:
+                    masks_group = h5file.create_group("missing_timesteps_masks")
+                    for mod_name, mask_array in missing_timesteps_masks_data.items():
+                        logger.info(
+                            f"Writing missing timesteps mask for {mod_name} to h5 file path {h5_file_path}"
+                        )
+                        # Boolean masks typically don't benefit from compression/shuffle
+                        masks_group.create_dataset(mod_name, data=mask_array)
         return sample_dict
 
     def _log_modality_distribution(self, samples: list[SampleInformation]) -> None:
@@ -316,6 +360,8 @@ class ConvertToH5py:
         """Filter samples to adjust to the HeliosSample format."""
         logger.info(f"Number of samples before filtering: {len(samples)}")
         filtered_samples = []
+        num_samples_without_12_months = 0
+        missing_month_lens = []
         for sample in samples:
             if not all(
                 modality in self.supported_modalities
@@ -337,13 +383,15 @@ class ConvertToH5py:
             ]
             total_multitemporal_modalities = len(multitemporal_modalities)
             # Pop off any modalities that don't have 12 months of data
-            # for modality in multitemporal_modalities:
-            #     if len(sample.modalities[modality].images) != 12:
-            #         logger.info(
-            #             f"Skipping {modality} because it has less than 12 months of data"
-            #         )
-            #         sample.modalities.pop(modality)
-            #         total_multitemporal_modalities -= 1
+            for modality in multitemporal_modalities:
+                if len(sample.modalities[modality].images) != 12:
+                    logger.info(
+                        f"Skipping {modality} because it has less than 12 months of data"
+                    )
+                    num_samples_without_12_months += 1
+                    missing_month_lens.append(len(sample.modalities[modality].images))
+                    # sample.modalities.pop(modality)
+                    # total_multitemporal_modalities -= 1
             # If there's no multitemporal modalities, skip the sample
             if total_multitemporal_modalities == 0:
                 logger.info(
@@ -353,6 +401,16 @@ class ConvertToH5py:
 
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
+        logger.info(f"Number of samples without 12 months: {num_samples_without_12_months}")
+        # log min max mean and std of the missing month lengths
+        logger.info(f"Min missing month length: {min(missing_month_lens)}")
+        logger.info(f"Max missing month length: {max(missing_month_lens)}")
+        logger.info(f"Mean missing month length: {np.mean(missing_month_lens)}")
+        logger.info(f"Std missing month length: {np.std(missing_month_lens)}")
+        logger.info(f"10th percentile missing month length: {np.percentile(missing_month_lens, 10)}")
+        logger.info(f"25th percentile missing month length: {np.percentile(missing_month_lens, 25)}")
+        logger.info(f"75th percentile missing month length: {np.percentile(missing_month_lens, 75)}")
+        logger.info(f"90th percentile missing month length: {np.percentile(missing_month_lens, 90)}")
         logger.info("Distribution of samples after filtering:")
         self._log_modality_distribution(filtered_samples)
         return filtered_samples
@@ -394,9 +452,9 @@ class ConvertToH5py:
         self.save_sample_metadata(samples)
         self.save_latlon_distribution(samples)
         logger.info("Attempting to create H5 files may take some time...")
-        # self.create_h5_dataset(samples)
+        self.create_h5_dataset(samples)
 
     def run(self) -> None:
         """Run the conversion."""
         samples = self.get_and_filter_samples()
-        self.prepare_h5_dataset(samples)
+        # self.prepare_h5_dataset(samples)
