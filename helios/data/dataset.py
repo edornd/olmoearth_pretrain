@@ -372,8 +372,8 @@ class HeliosDataset(Dataset):
         h5py_dir: UPath,
         training_modalities: list[str],
         dtype: DType,
+        use_modalities_with_missing_timesteps: bool = True,
         normalize: bool = True,
-        use_samples_with_missing_supported_modalities: bool = False,
         cache_dir: UPath | None = None,
         samples_per_sec: float | None = None,
     ):
@@ -392,7 +392,6 @@ class HeliosDataset(Dataset):
             dtype: The dtype of the data.
             normalize: If True, apply normalization to the data, if False, do not apply
                 normalization.
-            use_samples_with_missing_supported_modalities: If True, use samples that are missing a supported modality.
             cache_dir: optional local directory to cache the H5 files.
             samples_per_sec: throttle to reading this many samples per second. This
                 throttling only applies when reading from the h5py_dir, not the
@@ -409,9 +408,7 @@ class HeliosDataset(Dataset):
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.training_modalities = training_modalities
-        self.use_samples_with_missing_supported_modalities = (
-            use_samples_with_missing_supported_modalities
-        )
+        self.use_modalities_with_missing_timesteps = use_modalities_with_missing_timesteps
 
         self.dtype = dtype
         self.normalize = normalize
@@ -675,6 +672,7 @@ class HeliosDataset(Dataset):
                     dtype=self.dtype,
                 )
                 missing_modalities.append(modality)
+                continue
 
             modality_data = sample_dict[modality]
             # cast to appropriate dtype to prevent overflow from missing values
@@ -687,25 +685,32 @@ class HeliosDataset(Dataset):
 
                 # If we have any missing timesteps (where mask is False)
                 if not np.all(mask):
-                    # Get the shape of the data to create properly sized temporal layers
-                    h, w, t, c = modality_data.shape
+                    if self.use_modalities_with_missing_timesteps:
+                        modality_data = np.full(
+                            sample.get_expected_shape(modality),
+                            fill_value=MISSING_VALUE,
+                            dtype=self.dtype,
+                        )
+                    else:
+                        # Get the shape of the data to create properly sized temporal layers
+                        h, w, t, c = modality_data.shape
 
-                    # Create a new array with all timesteps (both present and missing)
-                    # This will have the same shape as the original but with all timesteps
-                    full_timesteps_data = np.full((h, w, len(mask), c), MISSING_VALUE, dtype=self.dtype)
+                        # Create a new array with all timesteps (both present and missing)
+                        # This will have the same shape as the original but with all timesteps
+                        full_timesteps_data = np.full((h, w, len(mask), c), MISSING_VALUE, dtype=self.dtype)
 
-                    # Copy the existing data to the appropriate timestep positions
-                    present_indices = np.where(mask)[0]
-                    for i, idx in enumerate(present_indices):
-                        if i < t:  # Only copy if we have data for this timestep
-                            full_timesteps_data[..., idx, :] = modality_data[..., i, :]
+                        # Copy the existing data to the appropriate timestep positions
+                        present_indices = np.where(mask)[0]
+                        for i, idx in enumerate(present_indices):
+                            if i < t:  # Only copy if we have data for this timestep
+                                full_timesteps_data[..., idx, :] = modality_data[..., i, :]
 
-                    logger.info(
-                        f"Imputed {modality} data: added {np.sum(~mask)} missing timestep layers"
-                    )
+                        logger.info(
+                            f"Imputed {modality} data: added {np.sum(~mask)} missing timestep layers"
+                        )
 
-                    # Replace the original data with the imputed version
-                    modality_data = full_timesteps_data
+                        # Replace the original data with the imputed version
+                        modality_data = full_timesteps_data
 
             # Update the sample dictionary with the potentially imputed data
             sample_dict[modality] = modality_data
@@ -834,7 +839,6 @@ class HeliosDatasetConfig(Config):
     training_modalities: list[str]
     dtype: DType = DType.float32
     normalize: bool = True
-    use_samples_with_missing_supported_modalities: bool = False
     cache_dir: str | None = None
     samples_per_sec: float | None = None
 
