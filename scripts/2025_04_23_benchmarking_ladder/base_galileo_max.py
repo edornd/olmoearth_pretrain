@@ -21,7 +21,6 @@ from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 
-from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
@@ -202,13 +201,13 @@ def build_dataset_config(common: CommonComponents) -> Config:
         HeliosDatasetConfig(
             h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_gzip_3_shuffle/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/75000",
             training_modalities=common.training_modalities,
-            use_modalities_with_missing_timesteps=True, # False,
+            use_modalities_with_missing_timesteps=True,  # False,
             dtype=DType.float32,
             # cache_dir="/helios_cache/osm_sampling",
             # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
         ),
     ]
-    return HeliosConcatDatasetConfig(dataset_configs=dataset_configs)
+    return dataset_configs[0]
 
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
