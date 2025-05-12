@@ -152,7 +152,7 @@ class HeliosDataLoader(DataLoaderBase):
             total_num_batches = len(all_indices) // self.rank_batch_size
 
             naip_every = num_non_naip_batches // num_naip_batches
-
+            logger.info(f"There will be a NAIP batch every {naip_every} batches.")
             cur_non_naip_batch = 0
             cur_naip_batch = 0
 
