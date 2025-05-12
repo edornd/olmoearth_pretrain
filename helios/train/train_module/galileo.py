@@ -266,13 +266,15 @@ class GalileoTrainModule(HeliosTrainModule):
                 loss = (loss_a + loss_b) / 2
 
                 # Scale loss by number of microbatches
-                reg_term_a = self.compute_regularization(latent_a)
-                reg_term_b = self.compute_regularization(latent_b)
+                reg_term_a = self.compute_regularization(pooled_a)
+                reg_term_b = self.compute_regularization(pooled_b)
                 if reg_term_a is not None:
                     assert reg_term_b is not None
                     loss = loss + (reg_term_a + reg_term_b) / 2
                     total_batch_reg += (
-                        get_local_tensor((reg_term_a + reg_term_b) / 2)
+                        get_local_tensor(
+                            (reg_term_a.detach() + reg_term_b.detach()) / 2
+                        )
                         / num_microbatches
                     )
 
@@ -280,11 +282,11 @@ class GalileoTrainModule(HeliosTrainModule):
                     contrastive_loss = self.contrastive_loss.compute(pooled_a, pooled_b)
                     loss += contrastive_loss
                     total_batch_con += (
-                        get_local_tensor(contrastive_loss) / num_microbatches
+                        get_local_tensor(contrastive_loss.detach()) / num_microbatches
                     )
 
                 loss = loss / num_microbatches
-                loss_val = get_local_tensor(loss)
+                loss_val = get_local_tensor(loss.detach())
                 total_batch_loss += loss_val
 
                 # Skip bad batches
@@ -300,7 +302,7 @@ class GalileoTrainModule(HeliosTrainModule):
 
         if dry_run:
             return
-
+        # Remember to detach the loss before recording
         self.trainer.record_metric(
             f"train/{self.total_loss_name}",
             total_batch_loss,
@@ -342,7 +344,7 @@ class GalileoTrainModule(HeliosTrainModule):
             latent, decoded, pooled = self.model.forward_a(batch, patch_size)
             with torch.no_grad():
                 logger.info("target encoder running here")
-                target_output = self.model.target_encoder.forward(
+                target_output, _ = self.model.target_encoder.forward(
                     batch.unmask(),
                     patch_size=patch_size,
                     token_exit_cfg=token_exit_cfg,
@@ -360,7 +362,7 @@ class GalileoTrainModule(HeliosTrainModule):
             latent, decoded, pooled = self.model.forward_b(batch, patch_size)
             with torch.no_grad():
                 logger.info("target encoder running here")
-                target_output = self.model.target_encoder.forward(
+                target_output, _ = self.model.target_encoder.forward(
                     batch.unmask(),
                     patch_size=patch_size,
                     token_exit_cfg=token_exit_cfg,

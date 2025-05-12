@@ -12,9 +12,10 @@ from olmo_core.launch.beaker import (
     OLMoCoreBeakerImage,
 )
 from olmo_core.utils import generate_uuid
+from upath import UPath
 
 from helios.data.constants import Modality
-from helios.internal.experiment import CommonComponents, SubCmd
+from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, SubCmd
 
 logger = logging.getLogger(__name__)
 BUDGET = "ai2/d5"
@@ -24,6 +25,15 @@ DEFAULT_HELIOS_WEKA_BUCKET = BeakerWekaBucket("dfive-default", "/weka/dfive-defa
 PROJECT_NAME = "helios"
 
 WEKA_CLUSTER_NAMES = ["jupiter", "saturn", "neptune", "ceres", "triton", "titan"]
+
+
+def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
+    """Build the visualize config for an experiment."""
+    return HeliosVisualizeConfig(
+        num_samples=50,
+        output_dir=str(UPath(common.save_folder) / "visualizations"),
+        std_multiplier=2.0,
+    )
 
 
 def get_root_dir(cluster: str) -> str:
@@ -76,12 +86,12 @@ def build_launch_config(
                     "Jobs targeting Augusta should not target other clusters since Weka will not be mounted"
                 )
             weka_buckets = []
-        if "titan" in c:
-            if len(clusters) > 1:
-                raise ValueError(
-                    "Jobs targeting Titan should not target other clusters since Titan uses pytorch 2.7"
-                )
-            pytorch_upgrade = "pip install --upgrade --no-cache-dir torch==2.7.0 torchvision --index-url https://download.pytorch.org/whl/test/cu128"
+        # if "titan" in c:
+        #     if len(clusters) > 1:
+        #         raise ValueError(
+        #             "Jobs targeting Titan should not target other clusters since Titan uses pytorch 2.7"
+        #         )
+        #     pytorch_upgrade = "pip install --upgrade --no-cache-dir torch==2.7.0 torchvision --index-url https://download.pytorch.org/whl/test/cu128"
 
     beaker_user = get_beaker_username()
     return BeakerLaunchConfig(
@@ -92,7 +102,7 @@ def build_launch_config(
         workspace=workspace,
         clusters=clusters,
         weka_buckets=weka_buckets,
-        beaker_image=f"henryh/{OLMoCoreBeakerImage.stable}",  # we can all use the same image for now
+        beaker_image=f"petew/{OLMoCoreBeakerImage.stable_cu128}",  # we can all use the same image for now trying petes to see if it works or we need a copy in our workspace
         num_nodes=1,
         num_gpus=1,
         shared_memory="256GiB",
@@ -127,7 +137,8 @@ def build_launch_config(
             "conda shell.bash activate base",
             # Install torch==2.7 if we're targetting titan
             "pip install -e '.[all]'",
-            "pip install --upgrade beaker-py",
+            # Don't auto upgrade beaker-py, there's conflict with olmo-core
+            # "pip install --upgrade beaker-py",
             # Quickly try a new version of PyTorch like this
             #  "pip install --upgrade --pre torch==2.6.0.dev20241112+cu121 --index-url https://download.pytorch.org/whl/nightly/cu121",
             pytorch_upgrade,
@@ -148,9 +159,10 @@ def build_common_components(
         Modality.SENTINEL2_L2A.name,
         Modality.SENTINEL1.name,
         Modality.WORLDCOVER.name,
+        Modality.LATLON.name,
         # Modality.SRTM.name,
         # Modality.NAIP.name,
-        # Modality.LANDSAT.name,
+        Modality.LANDSAT.name,
         # Modality.OPENSTREETMAP_RASTER.name,
     ]
     cmd_to_launch = SubCmd.train

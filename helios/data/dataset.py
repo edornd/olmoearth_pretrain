@@ -3,6 +3,8 @@
 import hashlib
 import logging
 import random
+import shutil
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
@@ -12,7 +14,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import torch
-from olmo_core.config import Config, DType
+from olmo_core.config import Config
 from torch.distributed import DeviceMesh
 from torch.distributed.tensor import distribute_tensor
 from torch.utils.data import Dataset
@@ -177,7 +179,12 @@ class HeliosSample(NamedTuple):
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        height_width_time_modalities = [
+            "sentinel2_l2a",
+            "sentinel1",
+            "worldcover",
+            "landsat",
+        ]
         for modality in height_width_time_modalities:
             x = getattr(self, modality)
             if x is not None:
@@ -193,7 +200,12 @@ class HeliosSample(NamedTuple):
     @property
     def width(self) -> int:
         """Get the height of the data."""
-        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        height_width_time_modalities = [
+            "sentinel2_l2a",
+            "sentinel1",
+            "worldcover",
+            "landsat",
+        ]
         for modality in height_width_time_modalities:
             x = getattr(self, modality)
             if x is not None:
@@ -356,9 +368,11 @@ class HeliosDataset(Dataset):
         self,
         h5py_dir: UPath,
         training_modalities: list[str],
-        dtype: DType,
+        dtype: np.dtype,
         normalize: bool = True,
         use_samples_with_missing_supported_modalities: bool = False,
+        cache_dir: UPath | None = None,
+        samples_per_sec: float | None = None,
     ):
         """Initialize the dataset.
 
@@ -376,6 +390,10 @@ class HeliosDataset(Dataset):
             normalize: If True, apply normalization to the data, if False, do not apply
                 normalization.
             use_samples_with_missing_supported_modalities: If True, use samples that are missing a supported modality.
+            cache_dir: optional local directory to cache the H5 files.
+            samples_per_sec: throttle to reading this many samples per second. This
+                throttling only applies when reading from the h5py_dir, not the
+                cache_dir (if set).
 
         Returns:
             None
@@ -383,6 +401,9 @@ class HeliosDataset(Dataset):
         self.h5py_dir = h5py_dir
         if not self.h5py_dir.exists():
             raise FileNotFoundError(f"H5PY directory does not exist: {self.h5py_dir}")
+        self.cache_dir = cache_dir
+        if self.cache_dir is not None:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.training_modalities = training_modalities
         self.use_samples_with_missing_supported_modalities = (
@@ -394,6 +415,12 @@ class HeliosDataset(Dataset):
         if self.normalize:
             self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+
+        if samples_per_sec is None:
+            self.sec_per_sample = None
+        else:
+            self.sec_per_sample = 1 / samples_per_sec
+        self.last_read_time = time.time()
 
         self.sample_indices: np.ndarray | None = None
         self.latlon_distribution: np.ndarray | None = None
@@ -421,6 +448,9 @@ class HeliosDataset(Dataset):
             supported_modalities.remove("raster")
             supported_modalities.remove("openstreetmap")
             supported_modalities.append("openstreetmap_raster")
+        # latlons are saved with every h5py file, see
+        # helios.dataset.convert_to_h5py.ConvertToH5py._create_h5_file
+        supported_modalities.append("latlon")
         num_samples = int(self.h5py_dir.name)
 
         tile_path = self.h5py_dir.parent.parent.parent
@@ -483,12 +513,13 @@ class HeliosDataset(Dataset):
         no_multitemporal_indices = metadata_df[
             metadata_df[multitemporal_training_modalities].sum(axis=1) == 0
         ].index
+
         # Filter these indices out
         logger.info(f"Filtering out {len(self.naip_indices)} samples with NAIP data")
+        self.sample_indices = np.setdiff1d(self.sample_indices, self.naip_indices)
         logger.info(
             f"Filtering out {len(no_multitemporal_indices)} samples without any training modalities"
         )
-        self.sample_indices = np.setdiff1d(self.sample_indices, self.naip_indices)
         self.sample_indices = np.setdiff1d(
             self.sample_indices, no_multitemporal_indices
         )
@@ -661,8 +692,40 @@ class HeliosDataset(Dataset):
             sample_subset = sample
         return sample_subset
 
+    def _apply_throttling(self) -> None:
+        """Apply read throttling.
+
+        This function is called when reading a sample from the h5py_dir, and it applies
+        the configured throttling.
+        """
+        if self.sec_per_sample is None:
+            return
+        elapsed = time.time() - self.last_read_time
+        time_to_sleep = self.sec_per_sample - elapsed
+        self.last_read_time = time.time()
+        logger.info(f"{elapsed} elapsed since last read, sleeping for {time_to_sleep}")
+        if time_to_sleep <= 0:
+            return
+        time.sleep(time_to_sleep)
+
     def read_h5_file(self, h5_file_path: UPath) -> dict[str, Any]:
         """Read the h5 file."""
+        if self.cache_dir is not None:
+            cache_file_path = self.cache_dir / h5_file_path.name
+            logger.info(f"Caching H5 file {h5_file_path} to {cache_file_path}")
+            if not cache_file_path.exists():
+                self._apply_throttling()
+                # Copy to a temp file first and then atomically rename it to avoid
+                # concurrency issues.
+                tmp_file_path = self.cache_dir / (h5_file_path.name + ".tmp")
+                with h5_file_path.open("rb") as src, tmp_file_path.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                tmp_file_path.rename(cache_file_path)
+            h5_file_path = cache_file_path
+
+        else:
+            self._apply_throttling()
+
         sample_dict = {}
         with h5_file_path.open("rb") as f:
             with h5py.File(f, "r") as h5file:
@@ -726,9 +789,11 @@ class HeliosDatasetConfig(Config):
 
     h5py_dir: str
     training_modalities: list[str]
-    dtype: DType = DType.float32
+    dtype: str = "float32"
     normalize: bool = True
     use_samples_with_missing_supported_modalities: bool = False
+    cache_dir: str | None = None
+    samples_per_sec: float | None = None
 
     def validate(self) -> None:
         """Validate the configuration and build kwargs.
@@ -743,15 +808,33 @@ class HeliosDatasetConfig(Config):
         if not isinstance(self.training_modalities, list):
             raise ValueError("training_modalities must be a list")
 
+    def get_numpy_dtype(self) -> np.dtype:
+        """Get the numpy dtype."""
+        if self.dtype == "float16":
+            return np.float16
+        elif self.dtype == "float32":
+            return np.float32
+        else:
+            raise ValueError(f"Unsupported dtype: {self.dtype}")
+
     @property
     def h5py_dir_upath(self) -> UPath:
         """Get the h5py directory."""
         return UPath(self.h5py_dir)
+
+    @property
+    def cache_dir_upath(self) -> UPath:
+        """Get the cache directory."""
+        return UPath(self.cache_dir)
 
     def build(self) -> "HeliosDataset":
         """Build the dataset."""
         self.validate()
         kwargs = self.as_dict(exclude_none=True, recurse=False)
         kwargs["h5py_dir"] = self.h5py_dir_upath
+        kwargs["cache_dir"] = (
+            self.cache_dir_upath if self.cache_dir is not None else None
+        )
+        kwargs["dtype"] = self.get_numpy_dtype()
         logger.info(f"HeliosDataset kwargs: {kwargs}")
         return HeliosDataset(**kwargs)
