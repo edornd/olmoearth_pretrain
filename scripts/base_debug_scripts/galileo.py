@@ -83,7 +83,9 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
         learnable_channel_embeddings=True,
     )
     reconstructor_config = ReconstructorConfig(
-        supported_modality_names=common.training_modalities,
+        supported_modality_names=[
+            m for m in common.training_modalities if m != Modality.LATLON.name
+        ],
         max_patch_size=MAX_PATCH_SIZE,
         decoder_config=decoder_config,
     )
