@@ -554,7 +554,7 @@ class HeliosDataset(Dataset):
         if "naip_10" not in metadata_df.columns:
             return None
 
-        return metadata_df[metadata_df["naip_10"] == 1].index
+        return np.array(metadata_df[metadata_df["naip_10"] == 1].index)
 
     def _filter_sample_indices_for_training(self) -> None:
         """Filter the sample indices for training.
