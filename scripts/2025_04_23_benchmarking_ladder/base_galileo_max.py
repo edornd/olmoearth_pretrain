@@ -190,18 +190,18 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 def build_dataset_config(common: CommonComponents) -> Config:
     """Build the dataset config for an experiment."""
     dataset_configs = [
-        # HeliosDatasetConfig(
-        #     h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_gzip_3_shuffle/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/118861",
-        #     training_modalities=common.training_modalities,
-        #     use_samples_with_missing_supported_modalities=True,  # Check if we want to set this to True
-        #     dtype=DType.float32,
-        #     # cache_dir="/helios_cache/presto",
-        #     # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
-        # ),
         HeliosDatasetConfig(
-            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_gzip_3_shuffle/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/75000",
+            h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_gzip_3/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473",
             training_modalities=common.training_modalities,
-            use_modalities_with_missing_timesteps=True,  # False,
+            use_samples_with_missing_supported_modalities=True,
+            dtype=DType.float32,
+            # cache_dir="/helios_cache/presto",
+            # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
+        ),
+        HeliosDatasetConfig(
+            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_gzip_3/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288",
+            training_modalities=common.training_modalities,
+            use_modalities_with_missing_timesteps=True,
             dtype=DType.float32,
             # cache_dir="/helios_cache/osm_sampling",
             # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
