@@ -21,6 +21,7 @@ from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 
+from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
@@ -206,7 +207,7 @@ def build_dataset_config(common: CommonComponents) -> Config:
             # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
         ),
     ]
-    return dataset_configs[0]
+    return HeliosConcatDatasetConfig(dataset_configs=dataset_configs)
 
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
@@ -264,6 +265,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
+            input_modalities=["sentinel2"],
         ),
         "sickle": DownstreamTaskConfig(
             dataset="sickle",
