@@ -590,12 +590,6 @@ class HeliosDataset(Dataset):
         # Get the shape of the data to create properly sized temporal layers
         h, w, t, c = modality_data.shape
 
-        # Create a new array with all timesteps (both present and missing)
-        # This will have the same shape as the original but with all timesteps
-        if len(missing_timestep_mask) < self.max_sequence_length:
-            logger.warning(
-                f"Mask length {len(missing_timestep_mask)} is less than max_sequence_length {self.max_sequence_length}. Padding with MISSING_VALUE"
-            )
         full_timesteps_data = np.full(
             (h, w, self.max_sequence_length, c),
             MISSING_VALUE,
