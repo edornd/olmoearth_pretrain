@@ -902,7 +902,7 @@ class RandomRangeMaskingStrategy(MaskingStrategy):
                         modality, instance.shape, patch_size, device
                     )
 
-                mask = self.fill_mask_with_missing_values(instance, mask)
+                mask = self.fill_mask_with_missing_values(instance, mask, modality)
                 output_dict[modality_name] = instance
                 output_dict[
                     MaskedHeliosSample.get_masked_modality_name(modality_name)
