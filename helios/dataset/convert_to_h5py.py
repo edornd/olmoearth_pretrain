@@ -65,6 +65,7 @@ class ConvertToH5py:
     sample_metadata_fname: str = "sample_metadata.csv"
     sample_file_pattern: str = "sample_{index}.h5"
     compression_settings_fname: str = "compression_settings.json"
+    missing_timesteps_mask_group_name: str = "missing_timesteps_masks"
 
     def __init__(
         self,
@@ -214,29 +215,31 @@ class ConvertToH5py:
             # Find the ModalitySpec corresponding to the timestamp array with the maximum number of entries
             longest_ts_modality_spec = max(
                 multi_temporal_timestamps_dict,
-                key=lambda k: len(multi_temporal_timestamps_dict[k])
+                key=lambda k: len(multi_temporal_timestamps_dict[k]),
             )
-            longest_timestamps_array = multi_temporal_timestamps_dict[longest_ts_modality_spec]
+            longest_timestamps_array = multi_temporal_timestamps_dict[
+                longest_ts_modality_spec
+            ]
 
         sample_dict["timestamps"] = longest_timestamps_array
 
-        # Identify names of modalities with multi-temporal data
-        multitemporal_modality_names = [
-            mod_spec.name for mod_spec in multi_temporal_timestamps_dict.keys()
-        ]
-
         # Create masks for missing timesteps for each multi-temporal modality
         missing_timesteps_masks_data: dict[str, np.ndarray] = {}
-        if longest_timestamps_array.size > 0: # Proceed only if there's a reference timestamp array
+        if (
+            longest_timestamps_array.size > 0
+        ):  # Proceed only if there's a reference timestamp array
             for mod_spec, mod_timestamps in multi_temporal_timestamps_dict.items():
                 # Create a boolean mask indicating presence of each timestamp from longest_timestamps_array
                 # in the current modality's timestamps.
                 # np.all(..., axis=1) checks for full row match (day, month, year)
                 # np.any(...) checks if any of mod_timestamps' rows match the current longest_ts
-                mask = np.array([
-                    np.any(np.all(longest_ts == mod_timestamps, axis=1))
-                    for longest_ts in longest_timestamps_array
-                ], dtype=bool)
+                mask = np.array(
+                    [
+                        np.any(np.all(longest_ts == mod_timestamps, axis=1))
+                        for longest_ts in longest_timestamps_array
+                    ],
+                    dtype=bool,
+                )
                 missing_timesteps_masks_data[mod_spec.name] = mask
 
         # Load image data for all modalities in the sample
@@ -251,9 +254,6 @@ class ConvertToH5py:
         # w+b as sometimes metadata needs to be read as well for different chunking/compression settings
         with h5_file_path.open("w+b") as f:
             with h5py.File(f, "w") as h5file:
-                # Store the list of multi-temporal modality names as a file attribute
-                h5file.attrs["multitemporal_modalities"] = multitemporal_modality_names
-
                 # Write datasets for latlon, timestamps, and modality images
                 for item_name, data_item in sample_dict.items():
                     logger.info(
@@ -268,13 +268,17 @@ class ConvertToH5py:
                             and self.compression_opts is not None
                         ):
                             create_kwargs["compression_opts"] = self.compression_opts
-                        if self.shuffle is not None: # Shuffle is typically used with compression
+                        if (
+                            self.shuffle is not None
+                        ):  # Shuffle is typically used with compression
                             create_kwargs["shuffle"] = self.shuffle
                     h5file.create_dataset(item_name, data=data_item, **create_kwargs)
 
                 # Store missing timesteps masks in a dedicated group
                 if missing_timesteps_masks_data:
-                    masks_group = h5file.create_group("missing_timesteps_masks")
+                    masks_group = h5file.create_group(
+                        self.missing_timesteps_mask_group_name
+                    )
                     for mod_name, mask_array in missing_timesteps_masks_data.items():
                         logger.info(
                             f"Writing missing timesteps mask for {mod_name} to h5 file path {h5_file_path}"

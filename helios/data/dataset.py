@@ -727,7 +727,6 @@ class HeliosDataset(Dataset):
         with h5_file_path.open("rb") as f:
             with h5py.File(f, "r") as h5file:
                 logger.info(f"Reading h5 file {h5_file_path} with keys {h5file.keys()}")
-                # Not sure lat lon should be here
                 # timestamps should not be a floating string
                 sample_dict = {
                     k: v[()]
@@ -735,10 +734,13 @@ class HeliosDataset(Dataset):
                     if k in self.training_modalities
                     or k in [Modality.LATLON.name, "timestamps"]
                 }
-                if "missing_timesteps_masks" in h5file:
+                if (
+                    missing_mask_group_name
+                    := ConvertToH5py.missing_timesteps_mask_group_name
+                ) in h5file:
                     missing_timesteps_masks = {
                         k: v[()]
-                        for k, v in h5file["missing_timesteps_masks"].items()
+                        for k, v in h5file[missing_mask_group_name].items()
                         if k in self.training_modalities
                     }
                 else:
