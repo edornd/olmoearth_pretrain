@@ -2,7 +2,6 @@
 
 import hashlib
 import logging
-import random
 import shutil
 import time
 from collections.abc import Sequence
@@ -18,11 +17,9 @@ from olmo_core.config import Config, DType
 from torch.distributed import DeviceMesh
 from torch.distributed.tensor import distribute_tensor
 from torch.utils.data import Dataset
-from tqdm import tqdm
 from upath import UPath
 
 from helios.data.constants import (
-    IMAGE_TILE_SIZE,
     MISSING_VALUE,
     TIMESTAMPS,
     Modality,
@@ -30,7 +27,6 @@ from helios.data.constants import (
 )
 from helios.data.normalize import Normalizer, Strategy
 from helios.dataset.convert_to_h5py import ConvertToH5py
-from helios.dataset.sample import SampleInformation
 from helios.types import ArrayTensor
 
 logger = logging.getLogger(__name__)
@@ -296,17 +292,15 @@ class HeliosSample(NamedTuple):
         of timesteps allowable so that the total tokens (per instance) is >=
         max_tokens_per_instance
         """
+        # TODO: Pick a start_t and a max_t such that there is at least one modality present at each timestep
+        # this may help us maximize the number os samples without missing modalities
         max_t = self._get_max_t_within_token_budget(
             sampled_hw_p, max_tokens_per_instance
         )
-        logger.info(f"Max t: {max_t}")
         sampled_hw = sampled_hw_p * patch_size
         start_h = np.random.choice(self.height - sampled_hw + 1)
         start_w = np.random.choice(self.width - sampled_hw + 1)
 
-        # TODO:Try to pick a start_t and a max_t such that there is at least one modality present at each timestep
-        if self.time < max_t:
-            raise ValueError(f"Max t: {max_t} is greater than the number of timesteps: {self.time}")
         start_t = np.random.choice(self.time - max_t + 1)
         logger.info(f"Start t: {start_t}")
         new_data_dict: dict[str, ArrayTensor] = {}
@@ -344,7 +338,6 @@ def collate_helios(batch: list[tuple[int, HeliosSample]]) -> tuple[int, HeliosSa
         # For partially missing samples we use MISSING_VALUE so we only check the first sample
         if getattr(batch[0][1], attr) is None:
             return None
-        logger.info(f"Stacked {attr}")
         stacked_tensor = torch.stack(
             [torch.from_numpy(getattr(sample, attr)) for _, sample in batch], dim=0
         )
@@ -395,6 +388,9 @@ class HeliosDataset(Dataset):
             h5py_dir: The path to the h5py directory containing preprocessed data.
             training_modalities: The modalities to use for training.
             dtype: The dtype of the data.
+            use_modalities_with_missing_timesteps: If True, use modalities that have missing timesteps.
+                Otherwise treat modalities with missing timesteps as entirely missing.
+            max_sequence_length: The maximum sequence length that we pad all time dimensions to.
             normalize: If True, apply normalization to the data, if False, do not apply
                 normalization.
             cache_dir: optional local directory to cache the H5 files.
@@ -413,7 +409,9 @@ class HeliosDataset(Dataset):
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.training_modalities = training_modalities
-        self.use_modalities_with_missing_timesteps = use_modalities_with_missing_timesteps
+        self.use_modalities_with_missing_timesteps = (
+            use_modalities_with_missing_timesteps
+        )
 
         self.dtype = dtype
         self.normalize = normalize
@@ -454,6 +452,10 @@ class HeliosDataset(Dataset):
             supported_modalities.remove("raster")
             supported_modalities.remove("openstreetmap")
             supported_modalities.append("openstreetmap_raster")
+        if "naip" in supported_modalities and "10" in supported_modalities:
+            supported_modalities.remove("naip")
+            supported_modalities.remove("10")
+            supported_modalities.append("naip_10")
         num_samples = int(self.h5py_dir.name)
 
         tile_path = self.h5py_dir.parent.parent.parent
@@ -492,7 +494,10 @@ class HeliosDataset(Dataset):
         logger.info(f"columns: {metadata_df.columns}")
         # For now we want to filter out any samples that have NAIP DATA or don't have any of the training modalities
         # Get the indices of samples that have NAIP data
-        if Modality.NAIP_10.name not in self.training_modalities or Modality.NAIP.name not in self.training_modalities:
+        if (
+            Modality.NAIP_10.name not in self.training_modalities
+            or Modality.NAIP.name not in self.training_modalities
+        ):
             if "naip_10" in metadata_df.columns:
                 naip_indices = metadata_df[(metadata_df["naip_10"] == 1)].index
                 naip_indices = naip_indices
@@ -501,7 +506,6 @@ class HeliosDataset(Dataset):
             else:
                 naip_indices = np.array([])
         self.naip_indices = naip_indices
-        logger.info(f"NAIP indices: {self.naip_indices}")
 
         # Get the indices of samples that don't have any training modalities that are
         # multi-temporal.
@@ -543,48 +547,10 @@ class HeliosDataset(Dataset):
             logger.info("Dataset is already prepared")
             return
 
-        logger.info("H5 files already exist, skipping creation")
-        logger.info(f"H5 files exist in {self.h5py_dir}")
         num_samples = int(self.h5py_dir.name)
         self.latlon_distribution = self.get_geographic_distribution()
         self.sample_indices = np.arange(num_samples)
         self._filter_sample_indices_for_training()
-
-
-    def _log_modality_distribution(self, samples: list[SampleInformation]) -> None:
-        """Log the modality distribution."""
-        # TODO: have a version that reads this from the sample metadata file
-        # Log modality distribution
-        modality_counts: dict[str, int] = {}
-        modality_combinations: dict[frozenset[str], int] = {}
-
-        for sample in samples:
-            # Count individual modalities
-            for modality in sample.modalities:
-                modality_counts[modality.name] = (
-                    modality_counts.get(modality.name, 0) + 1
-                )
-
-            # Count modality combinations
-            combination = frozenset(m.name for m in sample.modalities)
-            modality_combinations[combination] = (
-                modality_combinations.get(combination, 0) + 1
-            )
-
-        # Log individual modality counts
-        for modality_name, count in modality_counts.items():
-            percentage = (count / len(samples)) * 100
-            logger.info(
-                f"Modality {modality_name}: {count} samples ({percentage:.1f}%)"
-            )
-
-        # Log modality combinations
-        logger.info("\nModality combinations:")
-        for combination, count in modality_combinations.items():
-            percentage = (count / len(samples)) * 100
-            logger.info(
-                f"{'+'.join(sorted(combination))}: {count} samples ({percentage:.1f}%)"
-            )
 
     def get_geographic_distribution(self) -> np.ndarray:
         """Get the geographic distribution of the dataset.
@@ -596,52 +562,6 @@ class HeliosDataset(Dataset):
         if self.latlon_distribution_path.exists():
             with self.latlon_distribution_path.open("rb") as f:
                 return np.load(f)
-
-    def get_sample_data_for_histogram(
-        self, num_samples: int = 100, num_values: int = 100
-    ) -> dict[str, Any]:
-        """Get the sample data per modality per band for showing the histogram.
-
-        Args:
-            num_samples: The number of samples to sample from the dataset.
-            num_values: The number of values to sample from each modality per band.
-
-        Returns:
-            dict: A dictionary containing the sample data per modality per band.
-        """
-        if num_samples > len(self):
-            raise ValueError(
-                f"num_samples {num_samples} is greater than the number of samples in the dataset {len(self)}"
-            )
-        indices_to_sample = random.sample(list(range(len(self))), k=num_samples)
-        sample_data: dict[str, Any] = {}
-
-        # Assume samples could include different modalities and bands
-        # TODO: compute the histogram for each modality and band directly
-        for i in tqdm(indices_to_sample):
-            get_item_args = GetItemArgs(
-                idx=i, patch_size=1, sampled_hw_p=IMAGE_TILE_SIZE
-            )
-            _, sample = self[get_item_args]
-            for modality in sample.modalities:
-                if modality == "timestamps" or modality == "latlon":
-                    continue
-                modality_data = sample.as_dict(ignore_nones=True)[modality]
-                if modality_data is None:
-                    continue
-                modality_spec = Modality.get(modality)
-                modality_bands = modality_spec.band_order
-                if modality not in sample_data:
-                    sample_data[modality] = {band: [] for band in modality_bands}
-                # for each band, flatten the data and extend the list
-                for idx, band in enumerate(modality_bands):
-                    sample_data[modality][band].extend(
-                        random.sample(
-                            modality_data[:, :, :, idx].flatten().tolist(), num_values
-                        )
-                    )
-
-        return sample_data
 
     def __len__(self) -> int:
         """Get the length of the dataset."""
@@ -662,7 +582,9 @@ class HeliosDataset(Dataset):
         self, sample_dict: dict[str, Any], missing_timesteps_masks: dict[str, Any]
     ) -> tuple[HeliosSample, list[str]]:
         """Fill the sample with missing values."""
-        assert sample_dict["timestamps"].shape[0] == self.max_sequence_length, f"Timestamps shape {sample_dict['timestamps'].shape[0]} does not match max_sequence_length {self.max_sequence_length}"
+        assert (
+            sample_dict["timestamps"].shape[0] == self.max_sequence_length
+        ), f"Timestamps shape {sample_dict['timestamps'].shape[0]} does not match max_sequence_length {self.max_sequence_length}"
         missing_modalities = []
         sample = HeliosSample(**sample_dict)
         for modality in self.training_modalities:
@@ -694,14 +616,22 @@ class HeliosDataset(Dataset):
                         # Create a new array with all timesteps (both present and missing)
                         # This will have the same shape as the original but with all timesteps
                         if len(mask) < self.max_sequence_length:
-                            logger.warning(f"Mask length {len(mask)} is less than max_sequence_length {self.max_sequence_length}. Padding with MISSING_VALUE")
-                        full_timesteps_data = np.full((h, w, self.max_sequence_length, c), MISSING_VALUE, dtype=self.dtype)
+                            logger.warning(
+                                f"Mask length {len(mask)} is less than max_sequence_length {self.max_sequence_length}. Padding with MISSING_VALUE"
+                            )
+                        full_timesteps_data = np.full(
+                            (h, w, self.max_sequence_length, c),
+                            MISSING_VALUE,
+                            dtype=self.dtype,
+                        )
 
                         # Copy the existing data to the appropriate timestep positions
                         present_indices = np.where(mask)[0]
                         for i, idx in enumerate(present_indices):
                             if i < t:  # Only copy if we have data for this timestep
-                                full_timesteps_data[..., idx, :] = modality_data[..., i, :]
+                                full_timesteps_data[..., idx, :] = modality_data[
+                                    ..., i, :
+                                ]
 
                         logger.info(
                             f"Imputed {modality} data: added {np.sum(~mask)} missing timestep layers"
@@ -727,9 +657,7 @@ class HeliosDataset(Dataset):
         if current_length < self.max_sequence_length:
             pad_width = ((0, self.max_sequence_length - current_length), (0, 0))
             padded_timestamps = np.pad(
-                timestamps_data,
-                pad_width=pad_width,
-                mode='edge'
+                timestamps_data, pad_width=pad_width, mode="edge"
             )
             sample_dict["timestamps"] = padded_timestamps
         return sample_dict
@@ -766,7 +694,9 @@ class HeliosDataset(Dataset):
             return
         time.sleep(time_to_sleep)
 
-    def read_h5_file(self, h5_file_path: UPath) -> dict[str, Any]:
+    def read_h5_file(
+        self, h5_file_path: UPath
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Read the h5 file."""
         if self.cache_dir is not None:
             cache_file_path = self.cache_dir / h5_file_path.name
@@ -793,12 +723,14 @@ class HeliosDataset(Dataset):
                 sample_dict = {
                     k: v[()]
                     for k, v in h5file.items()
-                    if k in self.training_modalities or k in [Modality.LATLON.name, "timestamps"]
+                    if k in self.training_modalities
+                    or k in [Modality.LATLON.name, "timestamps"]
                 }
                 if "missing_timesteps_masks" in h5file:
                     missing_timesteps_masks = {
                         k: v[()]
-                        for k, v in h5file["missing_timesteps_masks"].items() if k in self.training_modalities
+                        for k, v in h5file["missing_timesteps_masks"].items()
+                        if k in self.training_modalities
                     }
                 else:
                     # To preserve backwards compatibility, we set missing_timesteps_masks to an empty dict if it doesn't exist in file
@@ -825,16 +757,22 @@ class HeliosDataset(Dataset):
         sample_dict, missing_timesteps_masks = self.read_h5_file(h5_file_path)
         sample_dict = self._pad_timestamps(sample_dict)
         # fill sample currently takes like .08 seconds which may bottleneck smaller models
-        sample, missing_modalities = self.fill_sample_with_missing_values(sample_dict, missing_timesteps_masks)
+        sample, missing_modalities = self.fill_sample_with_missing_values(
+            sample_dict, missing_timesteps_masks
+        )
 
         # Debugging where we are getting the collate shape mismatch
         for modality in sample.modalities:
-             if modality == "timestamps":
+            if modality == "timestamps":
                 continue
-             if Modality.get(modality).is_multitemporal:
-                logger.info(f"Modality {modality} has {sample.shape(modality)[2]} timesteps")
+            if Modality.get(modality).is_multitemporal:
+                logger.info(
+                    f"Modality {modality} has {sample.shape(modality)[2]} timesteps"
+                )
                 if sample.shape(modality)[2] < self.max_sequence_length:
-                    raise ValueError(f"Modality {modality} has {sample.shape(modality)[2]} timesteps, expected {self.max_sequence_length}")
+                    raise ValueError(
+                        f"Modality {modality} has {sample.shape(modality)[2]} timesteps, expected {self.max_sequence_length}"
+                    )
         subset_sample = self.apply_subset(sample, args)
 
         sample_dict = subset_sample.as_dict(ignore_nones=True)
