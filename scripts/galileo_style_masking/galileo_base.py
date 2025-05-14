@@ -5,7 +5,6 @@ These Settings are meant to help you get quick results on a single GPU in minima
 
 import logging
 
-from helios.internal.utils import MODEL_SIZE_ARGS
 from olmo_core.config import DType
 from olmo_core.distributed.parallel.data_parallel import (
     DataParallelConfig,
@@ -28,6 +27,7 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
+from helios.internal.utils import MODEL_SIZE_ARGS
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.galileo import GalileoConfig
 from helios.train.callbacks import (
@@ -46,6 +46,7 @@ MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
 MIN_PATCH_SIZE = 1
 
 base_model_args = MODEL_SIZE_ARGS["base_super_shallow_decoder"]
+
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
@@ -89,8 +90,8 @@ def build_train_module_config(
     common: CommonComponents,
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
-    LR = 0.002
-    RANK_MICROBATCH_SIZE = 64
+    LR = 0.0001
+    RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -167,7 +168,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # TODO: Include collate function here
 
     NUM_WORKERS = 8
-    GLOBAL_BATCH_SIZE = 128
+    GLOBAL_BATCH_SIZE = 512
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
     SAMPLE_HW_P_LIST = list(range(5, 13))
