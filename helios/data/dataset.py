@@ -338,6 +338,7 @@ def collate_helios(batch: list[tuple[int, HeliosSample]]) -> tuple[int, HeliosSa
         # For partially missing samples we use MISSING_VALUE so we only check the first sample
         if getattr(batch[0][1], attr) is None:
             return None
+        logger.info(f"Stacking {attr}")
         stacked_tensor = torch.stack(
             [torch.from_numpy(getattr(sample, attr)) for _, sample in batch], dim=0
         )
@@ -613,8 +614,10 @@ class HeliosDataset(Dataset):
         self, sample: HeliosSample, modality: str
     ) -> HeliosSample:
         """Fill an array of shape of modality with the missing value."""
+        expected_shape = sample.get_expected_shape(modality)
+        logger.info(f"Filling {modality} with shape {expected_shape}")
         return np.full(
-            sample.get_expected_shape(modality),
+            expected_shape,
             fill_value=MISSING_VALUE,
             dtype=self.dtype,
         )
@@ -655,8 +658,8 @@ class HeliosDataset(Dataset):
                     else:
                         # Treat a modality with missing timesteps as entirely missing
                         modality_data = self._fill_missing_modality(sample, modality)
-            # Update the sample dictionary with the potentially imputed data
-            sample_dict[modality] = modality_data
+                # Update the sample dictionary with the potentially imputed data
+                sample_dict[modality] = modality_data
         return HeliosSample(**sample_dict), missing_modalities
 
     def _pad_timestamps(self, sample_dict: dict[str, Any]) -> dict[str, Any]:
@@ -791,7 +794,11 @@ class HeliosDataset(Dataset):
                 sample_dict[modality_name] = np.where(
                     missing_mask, modality_data, normalized_data
                 )
-
+        # log the shape of every modality at the end of get item
+        for modality_name in sample_dict.keys():
+            modality_data = sample_dict[modality_name]
+            if modality_data is not None:
+                logger.info(f"{modality_name} shape: {modality_data.shape}")
         return args.patch_size, HeliosSample(**sample_dict)
 
 
