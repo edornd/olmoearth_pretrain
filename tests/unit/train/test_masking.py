@@ -835,7 +835,6 @@ def test_space_cross_modality_masking() -> None:
     masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
     logger.info(f"masked_sample: {masked_sample}")
     # Check that the worldcover mask has the expected values
-
     # Check that latlon mask has the expected values
     expected_latlon_mask = torch.tensor([[2], [2], [2], [2]])
     expected_worldcover_mask = torch.tensor(
