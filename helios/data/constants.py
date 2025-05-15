@@ -131,10 +131,6 @@ class ModalitySpec:
             offset += num_bands
         return indices
 
-    def get_channel_indices_for_bandset(self, bandset_idx: int) -> list[int]:
-        """Get the channel indices for a given bandset index."""
-        return self.bandsets_as_indices()[bandset_idx]
-
     @property
     def band_order(self) -> list[str]:
         """Get band order."""
