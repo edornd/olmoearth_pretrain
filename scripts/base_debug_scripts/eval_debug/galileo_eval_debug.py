@@ -347,6 +347,7 @@ def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
     )
 
 
+
 if __name__ == "__main__":
     main(
         common_components_builder=build_common_components,
