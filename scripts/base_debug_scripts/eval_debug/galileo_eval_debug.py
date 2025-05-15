@@ -354,9 +354,9 @@ def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
     )
 
 
-def build_common_components_debug_eval() -> CommonComponents:
+def build_common_components_debug_eval(*args) -> CommonComponents:
     """Build the common components for an experiment."""
-    common_components = build_common_components()
+    common_components = build_common_components(*args)
     return CommonComponents(
         run_name=common_components.run_name,
         save_folder=common_components.save_folder,
