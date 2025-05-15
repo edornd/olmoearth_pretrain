@@ -375,19 +375,25 @@ class HeliosTrainModule(TrainModule):
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
         """Load the state dict."""
-        dist_cp_sd.set_model_state_dict(
-            self.model,
-            state_dict["model"],
-            options=self.state_dict_load_opts,
-        )
-        gc_cuda()
-        dist_cp_sd.set_optimizer_state_dict(
-            self.model,
-            self.optimizer,
-            state_dict["optim"],
-            options=self.state_dict_load_opts,
-        )
-        gc_cuda()
+        try:
+            dist_cp_sd.set_model_state_dict(
+                self.model,
+                state_dict["model"],
+                options=self.state_dict_load_opts,
+            )
+            gc_cuda()
+        except Exception as e:
+            raise RuntimeError("Failed to set model state dict") from e
+        try:
+            dist_cp_sd.set_optimizer_state_dict(
+                self.model,
+                self.optimizer,
+                state_dict["optim"],
+                options=self.state_dict_load_opts,
+            )
+            gc_cuda()
+        except Exception as e:
+            raise RuntimeError("Failed to set optimizer state dict") from e
 
     def zero_grads(self) -> None:
         """Zero the gradients."""
@@ -485,12 +491,19 @@ class HeliosTrainModule(TrainModule):
     def _get_state_dict(
         self, sd_options: dist_cp_sd.StateDictOptions
     ) -> dict[str, Any]:
-        return {
-            "model": dist_cp_sd.get_model_state_dict(self.model, options=sd_options),
-            "optim": dist_cp_sd.get_optimizer_state_dict(
+        try:
+            model_state_dict = dist_cp_sd.get_model_state_dict(
+                self.model, options=sd_options
+            )
+            optim_state_dict = dist_cp_sd.get_optimizer_state_dict(
                 self.model, self.optimizer, options=sd_options
-            ),
-        }
+            )
+            return {
+                "model": model_state_dict,
+                "optim": optim_state_dict,
+            }
+        except Exception as e:
+            raise RuntimeError("Failed to get state dicts") from e
 
     def _clip_grad_norm(
         self,
