@@ -811,54 +811,52 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             modality_spec = Modality.get(modality)
             modality_num_bandsets = modality_spec.num_band_sets
             modality_mask = masked_batch_dict[masked_modality_name]
-            # For static in space data ignore all previous masking decisions and clam
-            if self.overide_random_mask_condition(modality_spec):
-                logger.info(
-                    f"Clamping {modality} to min {MaskValue.TARGET_ENCODER_ONLY.value} for all bandsets"
-                )
-                modality_mask = torch.clamp(
-                    modality_mask, min=MaskValue.TARGET_ENCODER_ONLY.value
-                )
-
+            missing_mask = modality_mask == MaskValue.MISSING.value
             for bandset_idx in range(modality_num_bandsets):
                 is_encoded = (modality, bandset_idx) in encoded_bandset_list
-                # what about time based data and static data?
-                if not is_encoded:
-                    modality_mask[..., bandset_idx] = torch.clamp(
-                        modality_mask[..., bandset_idx],
-                        min=MaskValue.TARGET_ENCODER_ONLY.value,
+                is_decoded = (modality, bandset_idx) in decoded_bandset_idxs
+
+                # we could also check for not missing here
+                if not is_encoded and not is_decoded:
+                    modality_mask[..., bandset_idx] = (
+                        MaskValue.TARGET_ENCODER_ONLY.value
                     )
-                # We explictly set the online encoder masking value for non spatial data
-                # We do this because non spatial data is randomly masked and we want it to be masked based
-                # on the modality channels instead
-                if is_encoded and self.overide_random_mask_condition(modality_spec):
+
+                if not is_encoded:
+                    # Supress all encoded values for a not encoded bandset
+                    online_encoder_mask = (
+                        modality_mask[..., bandset_idx]
+                        == MaskValue.ONLINE_ENCODER.value
+                    )
+                    modality_mask[..., bandset_idx] = torch.where(
+                        online_encoder_mask,
+                        MaskValue.TARGET_ENCODER_ONLY.value,
+                        modality_mask[..., bandset_idx],
+                    )
+
+                if not is_decoded:
+                    decoder_mask = (
+                        modality_mask[..., bandset_idx] == MaskValue.DECODER.value
+                    )
+                    modality_mask[..., bandset_idx] = torch.where(
+                        decoder_mask,
+                        MaskValue.TARGET_ENCODER_ONLY.value,
+                        modality_mask[..., bandset_idx],
+                    )
+
+                if self.overide_random_mask_condition(modality_spec):
+                    # assumes the mask is random so we
+                    if is_encoded:
+                        forced_mask_value = MaskValue.ONLINE_ENCODER.value
+                    elif is_decoded:
+                        forced_mask_value = MaskValue.DECODER.value
                     logger.info(
                         f"Setting {modality} bandset {bandset_idx} to {MaskValue.ONLINE_ENCODER.value}"
                     )
-                    modality_mask[..., bandset_idx] = MaskValue.ONLINE_ENCODER.value
+                    modality_mask[..., bandset_idx] = forced_mask_value
 
-                # handle the decoding bandset clamping
-                # For static in space data ignore all previous masking decisions and clamp
-                if self.overide_random_mask_condition(modality_spec):
-                    logger.info(
-                        f"Clamping {modality} to max {MaskValue.TARGET_ENCODER_ONLY.value} for all bandsets"
-                    )
-                    modality_mask[..., bandset_idx] = torch.clamp(
-                        modality_mask[..., bandset_idx],
-                        max=MaskValue.TARGET_ENCODER_ONLY.value,
-                    )
-
-                is_decoded = (modality, bandset_idx) in decoded_bandset_idxs
-                if not is_decoded:
-                    modality_mask[..., bandset_idx] = torch.clamp(
-                        modality_mask[..., bandset_idx],
-                        max=MaskValue.TARGET_ENCODER_ONLY.value,
-                    )
-                # We explictly set the decoder masking value for non spatial data
-                # We do this because non spatial data is randomly masked and we want it to be masked based
-                # on the modality channels instead
-                if is_decoded and self.overide_random_mask_condition(modality_spec):
-                    modality_mask[..., bandset_idx] = MaskValue.DECODER.value
+            # Reset the missing mask to the original missing mask
+            modality_mask[missing_mask] = MaskValue.MISSING.value
             masked_batch_dict[masked_modality_name] = modality_mask
 
         masked_batch = MaskedHeliosSample(**masked_batch_dict)
