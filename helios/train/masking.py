@@ -821,7 +821,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                     elif is_decoded:
                         forced_mask_value = MaskValue.DECODER.value
                     logger.info(
-                        f"Setting {modality} bandset {bandset_idx} to {MaskValue.ONLINE_ENCODER.value}"
+                        f"Setting {modality} bandset {bandset_idx} to {forced_mask_value}"
                     )
                     not_missing_mask = (
                         modality_mask[..., bandset_idx] != MaskValue.MISSING.value
