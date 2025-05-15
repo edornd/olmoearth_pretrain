@@ -709,7 +709,7 @@ class ModalitySpaceTimeMaskingStrategy(MaskingStrategy):
 
 
 class ModalityCrossMaskingStrategy(MaskingStrategy):
-    """Abstract base class for masking strategies that select a seperate set of bandsets to encode and decode on top of another masking strategy."""
+    """Abstract class for masking strategies that select a seperate set of bandsets to encode and decode on top of another masking strategy."""
 
     def __init__(
         self,
@@ -749,7 +749,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             low=self.min_encoding_bandsets, high=self.max_encoding_bandsets
         )
         idxs_list = list(range(len(bandset_list)))
-        encoded_bandset_idxs = self.generator.choice(
+        encoded_bandset_idxs = np.random.choice(
             idxs_list, size=num_bandsets_to_encode, replace=False
         ).tolist()
         encoded_bandset_list = [bandset_list[i] for i in encoded_bandset_idxs]
@@ -807,6 +807,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
 
     def overide_random_mask_condition(self, modality_spec: ModalitySpec) -> bool:
         """Overide the random mask  for the given modality by the encoding and decoding bandsets."""
+        # Defaults to not overiding anything that may be random masked
         return False
 
     def clamp_unclamp_mask(
@@ -1012,7 +1013,6 @@ class ModalityCrossSpaceTimeMaskingStrategy(MaskingStrategy):
             encode_ratio,
             decode_ratio,
         )
-        self.strategy_chooser = np.random.default_rng(0)
         self.generator = np.random.default_rng(0)
 
     def apply_mask(
