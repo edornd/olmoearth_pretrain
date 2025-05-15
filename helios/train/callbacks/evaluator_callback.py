@@ -6,11 +6,9 @@ import time
 from dataclasses import dataclass, field
 
 import torch
-from olmo_core.distributed.utils import get_rank
 from olmo_core.train.callbacks.callback import Callback, CallbackConfig
 from olmo_core.train.common import Duration
 from olmo_core.train.trainer import Trainer
-from torch.distributed import barrier
 from torch.utils.data import DataLoader
 
 from helios.evals.datasets import get_eval_dataset
@@ -166,16 +164,14 @@ class DownstreamEvaluatorCallback(Callback):
         """Run the evaluators."""
         for evaluator in self.evaluators:
             eval_interval_steps = self.trainer.convert_duration_to_steps(
-                    evaluator.eval_interval
-        )
+                evaluator.eval_interval
+            )
             if self.step <= 1 or self.step % eval_interval_steps != 0:
                 return
             logger.info(f"Running {evaluator.evaluation_name} evaluations...")
             start_time = time.monotonic()
             val_result = evaluator.val()
-            self.trainer.record_metric(
-                f"eval/{evaluator.evaluation_name}", val_result
-            )
+            self.trainer.record_metric(f"eval/{evaluator.evaluation_name}", val_result)
             eval_time = time.monotonic() - start_time
             self.trainer.record_metric(
                 f"eval_time/{evaluator.evaluation_name}", eval_time

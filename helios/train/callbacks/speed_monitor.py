@@ -66,15 +66,17 @@ class HeliosSpeedMonitorCallback(SpeedMonitorCallback):
                 "MAETrainModule, LatentMIMTrainModule or GalileoTrainModule"
             )
 
-    def pre_load_batch(self):
+    def pre_load_batch(self) -> None:
+        """Pre-load batch callback for the speed monitor."""
         if hasattr(self, "callback_start_time"):
+            self.callback_start_time: float
             # This is based on the assumption that this callback is the first one
             # to run. We are measuring the time between this callback ending in post step and starting the next pre load step.
             self.trainer.record_metric(
                 "throughput/callback time (s)",
                 time.perf_counter() - self.callback_start_time,
             )
-        self._batch_load_start = time.perf_counter()
+        super().pre_load_batch()
 
     def pre_step(self, batch: Any) -> None:
         """Pre-step callback for the speed monitor."""
