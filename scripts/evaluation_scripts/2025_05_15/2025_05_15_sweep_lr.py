@@ -20,7 +20,7 @@ CHECKPOINT_PATHS = {
 
 # Base command template
 BASE_COMMAND = (
-    "python3 scripts/evaluation_scrips/2025_05_15/galileo_eval.py launch {run_name} ai2/jupiter-cirrascale-2 "
+    "python3 scripts/evaluation_scripts/2025_05_15/galileo_eval.py launch {run_name} ai2/jupiter-cirrascale-2 "
     "--model.encoder_config.embedding_size={encoder_embedding_size} "
     "--model.encoder_config.depth={encoder_depth} "
     "--model.encoder_config.num_heads={encoder_num_heads} "
@@ -46,7 +46,7 @@ BASE_COMMAND = (
 )
 
 # Learning rates to sweep for linear probe
-LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
+LP_LRs = [1e-4]  # , 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
 
 for lr in LP_LRs:
     for model_size in MODEL_SIZES:
