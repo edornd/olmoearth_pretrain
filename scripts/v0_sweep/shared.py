@@ -317,7 +317,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
             training_modalities=TRAINING_MODALITIES,
             use_samples_with_missing_supported_modalities=False,
             dtype=DType.float32,
-            cache_dir="/helios_cache/presto",
+            # cache_dir="/helios_cache/presto",
         ),
         # osm_sampling
         HeliosDatasetConfig(
@@ -325,7 +325,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
             training_modalities=TRAINING_MODALITIES,
             use_samples_with_missing_supported_modalities=False,
             dtype=DType.float32,
-            cache_dir="/helios_cache/osm_sampling",
+            # cache_dir="/helios_cache/osm_sampling",
         ),
         # osmbig
         HeliosDatasetConfig(
@@ -333,7 +333,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
             training_modalities=TRAINING_MODALITIES,
             use_samples_with_missing_supported_modalities=False,
             dtype=DType.float32,
-            cache_dir="/helios_cache/osmbig",
+            # cache_dir="/helios_cache/osmbig",
         ),
     ]
     return HeliosConcatDatasetConfig(dataset_configs=dataset_configs)
