@@ -36,12 +36,12 @@ BASE_COMMAND = (
     "--train_module.token_exit_cfg_a.srtm={encoder_depth} "
     "--train_module.token_exit_cfg_a.landsat={encoder_depth} "
     "--trainer.load_path={checkpoint_path} "
-    "--trainer.callbacks.downstream_evaluator.tasks.mados.probe_lr={lr} "
-    "--trainer.callbacks.downstream_evaluator.tasks.sen1floods11.probe_lr={lr} "
-    "--trainer.callbacks.downstream_evaluator.tasks.pastis.probe_lr={lr} "
-    "--trainer.callbacks.downstream_evaluator.tasks.pastis_r.probe_lr={lr} "
-    "--trainer.callbacks.downstream_evaluator.tasks.sickle.probe_lr={lr} "
-    "--trainer.callbacks.downstream_evaluator.tasks.sickle_r.probe_lr={lr} "
+    # "--trainer.callbacks.downstream_evaluator.tasks.mados.probe_lr={lr} "
+    # "--trainer.callbacks.downstream_evaluator.tasks.sen1floods11.probe_lr={lr} "
+    # "--trainer.callbacks.downstream_evaluator.tasks.pastis.probe_lr={lr} "
+    # "--trainer.callbacks.downstream_evaluator.tasks.pastis_r.probe_lr={lr} "
+    # "--trainer.callbacks.downstream_evaluator.tasks.sickle.probe_lr={lr} "
+    # "--trainer.callbacks.downstream_evaluator.tasks.sickle_r.probe_lr={lr} "
     "--launch.priority=urgent "
 )
 
