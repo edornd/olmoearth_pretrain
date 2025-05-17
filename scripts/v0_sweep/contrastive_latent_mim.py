@@ -1,4 +1,4 @@
-"""Script for v0 sweep for Galileo."""
+"""Script for v0 sweep for Contrastive Latent MIM."""
 
 from shared import (
     build_dataloader_config,
@@ -16,10 +16,10 @@ if __name__ == "__main__":
     main(
         common_components_builder=build_common_components,
         model_config_builder=build_model_config_builder(
-            separate_attention=False, model="galileo"
+            separate_attention=False, model="contrastive_latentmim"
         ),
         train_module_config_builder=build_train_module_config_builder(
-            separate_attention=False, model="galileo"
+            separate_attention=False, model="contrastive_latentmim"
         ),
         dataset_config_builder=build_dataset_config,
         dataloader_config_builder=build_dataloader_config,
