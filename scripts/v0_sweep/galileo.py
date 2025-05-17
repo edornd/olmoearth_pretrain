@@ -18,9 +18,7 @@ if __name__ == "__main__":
         model_config_builder=build_model_config_builder(
             separate_attention=False, model="galileo"
         ),
-        train_module_config_builder=build_train_module_config_builder(
-            separate_attention=False, model="galileo"
-        ),
+        train_module_config_builder=build_train_module_config_builder(model="galileo"),
         dataset_config_builder=build_dataset_config,
         dataloader_config_builder=build_dataloader_config,
         trainer_config_builder=build_trainer_config,

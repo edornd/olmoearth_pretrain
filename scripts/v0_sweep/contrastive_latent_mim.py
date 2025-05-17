@@ -19,7 +19,7 @@ if __name__ == "__main__":
             separate_attention=False, model="contrastive_latentmim"
         ),
         train_module_config_builder=build_train_module_config_builder(
-            separate_attention=False, model="contrastive_latentmim"
+            model="contrastive_latentmim"
         ),
         dataset_config_builder=build_dataset_config,
         dataloader_config_builder=build_dataloader_config,

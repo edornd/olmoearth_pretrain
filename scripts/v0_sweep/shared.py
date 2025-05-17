@@ -275,10 +275,10 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
 
 
 def build_train_module_config_builder(
-    separate_attention: bool = False, model: str = "galileo"
+    model: str = "galileo",
 ) -> Callable[[CommonComponents], HeliosTrainModuleConfig]:
     """Builder for train module config builders."""
-    return lambda common: build_train_module_config(separate_attention, model)
+    return lambda common: build_train_module_config(model)
 
 
 def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
