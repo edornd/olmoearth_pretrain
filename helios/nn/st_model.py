@@ -851,7 +851,7 @@ class STEncoder(STBase):
                 input_res=input_res,
                 token_exit_cfg=token_exit_cfg,
             )
-        return TokensAndMasks(**patchified_tokens_and_masks), torch.tensor()
+        return TokensAndMasks(**patchified_tokens_and_masks), torch.tensor(0)
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
         """Apply FSDP to the model."""
