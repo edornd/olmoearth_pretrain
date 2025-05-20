@@ -19,6 +19,7 @@ from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
 
+from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
@@ -157,13 +158,23 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
-    return HeliosDatasetConfig(
-        h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_lz4_0/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/",
-        training_modalities=common.training_modalities,
-        use_modalities_with_missing_timesteps=True,  # False,
-        # cache_dir="/helios_cache/presto",
-        # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
-    )
+    configs = [
+        HeliosDatasetConfig(
+            h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_lz4_0/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/",
+            training_modalities=common.training_modalities,
+            use_modalities_with_missing_timesteps=True,  # False,
+            # cache_dir="/helios_cache/presto",
+            # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
+        ),
+        HeliosDatasetConfig(
+            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_gzip_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288/",
+            training_modalities=common.training_modalities,
+            use_modalities_with_missing_timesteps=True,  # False,
+            cache_dir="/helios_cache/osm_sampling",
+            # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
+        ),
+    ]
+    return HeliosConcatDatasetConfig(datasets=configs)
 
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
