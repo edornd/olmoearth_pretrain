@@ -380,13 +380,13 @@ class STBase(nn.Module):
                 # Now we can split it up into the windows.
                 flattened_tokens = rearrange(
                     cur_tokens,
-                    "b t d (hn hs) (wn ws) -> (b hn wn) (t hs ws) d",
+                    "b tbs d (hn hs) (wn ws) -> (b hn wn) (tbs hs ws) d",
                     hs=size,
                     ws=size,
                 )
                 flattened_masks = rearrange(
                     cur_masks,
-                    "b t (hn hs) (wn ws) -> (b hn wn) (t hs ws)",
+                    "b tbs (hn hs) (wn ws) -> (b hn wn) (tbs hs ws)",
                     hs=size,
                     ws=size,
                 )
