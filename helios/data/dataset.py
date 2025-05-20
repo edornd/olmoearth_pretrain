@@ -10,6 +10,8 @@ from math import floor
 from typing import Any, NamedTuple, cast
 
 import h5py
+
+# hdf5 plugin is needed to decompress the data for certain compression types
 import hdf5plugin  # noqa: F401
 import numpy as np
 import pandas as pd
@@ -31,8 +33,6 @@ from helios.dataset.convert_to_h5py import ConvertToH5py
 from helios.types import ArrayTensor
 
 logger = logging.getLogger(__name__)
-
-# check if hdf5plugin is installed
 
 
 class HeliosSample(NamedTuple):
