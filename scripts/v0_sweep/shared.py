@@ -206,13 +206,13 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
         }
     )
     token_exit_cfg_galileo = {
-        Modality.SENTINEL2_L2A.name: 6,
-        Modality.LATLON.name: 6,
-        Modality.SENTINEL1.name: 6,
+        Modality.SENTINEL2_L2A.name: 12,
+        Modality.LATLON.name: 12,
+        Modality.SENTINEL1.name: 12,
         Modality.WORLDCOVER.name: 0,
-        Modality.SRTM.name: 3,
+        Modality.SRTM.name: 6,
         Modality.OPENSTREETMAP_RASTER.name: 0,
-        Modality.LANDSAT.name: 6,
+        Modality.LANDSAT.name: 12,
     }
     if any(modality not in token_exit_cfg_galileo for modality in TRAINING_MODALITIES):
         raise ValueError(
@@ -387,6 +387,16 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             probe_lr=0.1,
             eval_interval=Duration.epochs(50),
             input_modalities=["sentinel2"],
+        ),
+        "sickle-s1": DownstreamTaskConfig(
+            dataset="sickle",
+            batch_size=8,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            probe_lr=0.1,
+            eval_interval=Duration.epochs(20),
+            input_modalities=["sentinel1"],
         ),
     }
     # Let us not use garbage collector fallback
