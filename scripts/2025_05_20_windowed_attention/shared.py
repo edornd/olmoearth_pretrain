@@ -225,7 +225,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            eval_interval=Duration.epochs(1),
+            eval_interval=Duration.epochs(5),
         ),
         "mados": DownstreamTaskConfig(
             dataset="mados",
@@ -233,8 +233,8 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=False,
-            probe_lr=0.01,
-            eval_interval=Duration.epochs(2),
+            probe_lr=0.1,
+            eval_interval=Duration.epochs(20),
         ),
         "pastis": DownstreamTaskConfig(
             dataset="pastis",
@@ -242,8 +242,9 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            probe_lr=0.01,
-            eval_interval=Duration.epochs(2),
+            probe_lr=0.1,
+            eval_interval=Duration.epochs(20),
+            input_modalities=["sentinel2"],
         ),
     }
     trainer_config = (
