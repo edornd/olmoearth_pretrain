@@ -405,6 +405,8 @@ class HeliosTrainModule(TrainModule):
             )
             if isinstance(self.optimizer, SkipStepOptimizer):
                 self.optimizer.latest_grad_norm = grad_norm
+
+
         # Maybe adjust learning rate.
         if self.scheduler is not None:
             for group_idx, group in enumerate(self.optimizer.param_groups):
@@ -521,10 +523,6 @@ class HeliosTrainModule(TrainModule):
         foreach: bool | None = None,
     ) -> torch.Tensor:
         """Clip the gradients."""
-        if isinstance(self.model, FSDP):
-            logger.info("Using FSDP grad clipping")
-            # I am not sure this is ever hit beccause we are using FSDP2
-            return self.model.clip_grad_norm_(max_grad_norm)
         # Pipeline parallel grad clipping required nightly torch
         return torch.nn.utils.clip_grad_norm_(
             self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
