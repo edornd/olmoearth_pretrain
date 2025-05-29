@@ -223,6 +223,23 @@ class HeliosSample(NamedTuple):
             raise ValueError("Timestamps are not present in the sample")
         return self.timestamps.shape[-2]
 
+    @property
+    def valid_time(self) -> int:
+        """Get the minimum number of valid time steps in the data."""
+        # Go through each sample, check the number of unique timesteps and get the minimum
+        # For imputed samples, the timestamps may be just copies of the last timestep
+        min_valid_time = 12
+        if self.timestamps is None:
+            raise ValueError("Timestamps are not present in the sample")
+        for i in range(self.timestamps.shape[0]):
+            unique_timesteps = torch.unique(self.timestamps[i])
+            min_valid_time = min(min_valid_time, unique_timesteps.shape[0])
+        if min_valid_time < self.time:
+            logger.debug(
+                f"valid_time is smaller than time: {min_valid_time} < {self.time}"
+            )
+        return min_valid_time
+
     def get_expected_shape(self, attribute: str) -> tuple[int, ...]:
         """Get the expected shape of an attribute."""
         modality_spec = Modality.get(attribute)
@@ -672,6 +689,7 @@ class HeliosDataset(Dataset):
         current_length = timestamps_data.shape[0]
         if current_length < self.max_sequence_length:
             pad_width = ((0, self.max_sequence_length - current_length), (0, 0))
+            # We pad at the end with copies of the last timestep
             padded_timestamps = np.pad(
                 timestamps_data, pad_width=pad_width, mode="edge"
             )

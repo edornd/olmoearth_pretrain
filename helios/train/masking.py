@@ -140,6 +140,21 @@ class MaskedHeliosSample(NamedTuple):
         """Get the number of time steps in the data."""
         return self.timestamps.shape[1]
 
+    @property
+    def valid_time(self) -> int:
+        """Get the minimum number of valid time steps in the data."""
+        # Go through each sample, check the number of unique timesteps and get the minimum
+        # For imputed samples, the timestamps may be just copies of the last timestep
+        min_valid_time = 12
+        for i in range(self.timestamps.shape[0]):
+            unique_timesteps = torch.unique(self.timestamps[i])
+            min_valid_time = min(min_valid_time, unique_timesteps.shape[0])
+        if min_valid_time < self.time:
+            logger.debug(
+                f"valid_time is smaller than time: {min_valid_time} < {self.time}"
+            )
+        return min_valid_time
+
     @staticmethod
     def get_masked_modality_name(modality: str) -> str:
         """Get the masked modality name."""
@@ -645,7 +660,7 @@ class SpaceTimeMaskingStrategy(MaskingStrategy):
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedHeliosSample:
         """Apply space or time masking to the input data."""
-        has_enough_timesteps = batch.time >= 3
+        has_enough_timesteps = batch.valid_time >= 3
         if (self.generator.random() < 0.5) or (not has_enough_timesteps):
             logger.info("Applying space masking")
             return self.space_strategy.apply_mask(batch, patch_size, **kwargs)
@@ -705,7 +720,7 @@ class ModalitySpaceTimeMaskingStrategy(MaskingStrategy):
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedHeliosSample:
         """Apply band or space or time masking to the input data."""
-        has_enough_timesteps = batch.time >= 3
+        has_enough_timesteps = batch.valid_time >= 3
         has_enough_modalities = (len(batch.as_dict()) - 1) >= 2
 
         possible_strategies: list[MaskingStrategy] = [self.space_strategy]
@@ -971,7 +986,7 @@ class ModalityCrossSpaceTimeMaskingStrategy(MaskingStrategy):
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedHeliosSample:
         """Apply space and time cross modality masking to the input data."""
-        has_enough_timesteps = batch.time >= 3
+        has_enough_timesteps = batch.valid_time >= 3
         if (self.generator.random() < 0.5) or (not has_enough_timesteps):
             logger.info("Applying space masking")
             return self.space_strategy.apply_mask(batch, patch_size, **kwargs)
