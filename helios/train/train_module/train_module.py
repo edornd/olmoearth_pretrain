@@ -8,6 +8,8 @@ from logging import getLogger
 from typing import Any, cast
 
 import torch
+from torch import nn
+from torch.distributed.tensor import DTensor
 import torch.distributed as dist
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 from olmo_core.config import Config, DType
@@ -524,9 +526,30 @@ class HeliosTrainModule(TrainModule):
     ) -> torch.Tensor:
         """Clip the gradients."""
         # Pipeline parallel grad clipping required nightly torch
-        return torch.nn.utils.clip_grad_norm_(
-            self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
+        # return torch.nn.utils.clip_grad_norm_(
+        #     self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
+        # )
+        parameters = [p for p in self.model.parameters()]
+        grads = [p.grad for p in parameters if p.grad is not None]
+        total_norm = nn.utils.get_total_norm(
+            grads, norm_type=norm_type, error_if_nonfinite=False, foreach=foreach
         )
+        logger.info(f"Total norm dtype: {total_norm.dtype}")
+
+        # If total_norm is a DTensor, the placements must be `torch.distributed._tensor.ops.math_ops._NormPartial`.
+        # We can simply reduce the DTensor to get the total norm in this tensor's process group
+        # and then convert it to a local tensor.
+        # NOTE: It has two purposes:
+        #       1. to make sure the total norm is computed correctly when PP is used (see below)
+        #       2. to return a reduced total_norm tensor whose .item() would return the correct value
+        if isinstance(total_norm, DTensor):
+            # Will reach here if any non-PP parallelism is used.
+            # If only using PP, total_norm will be a local tensor.
+            logger.info(f"Total norm is a DTensor {total_norm}")
+            total_norm = total_norm.full_tensor()
+
+        torch.nn.utils.clip_grads_with_norm_(parameters, max_grad_norm, total_norm, foreach=foreach)
+        return total_norm
 
     def update_target_encoder(self) -> None:
         """Update the target encoder."""

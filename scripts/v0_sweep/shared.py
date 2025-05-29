@@ -343,8 +343,8 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(200)
-    METRICS_COLLECT_INTERVAL = 10
-    CANCEL_CHECK_INTERVAL = 25
+    METRICS_COLLECT_INTERVAL = 1
+    CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "v0-sweep"
