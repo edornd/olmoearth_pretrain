@@ -99,7 +99,7 @@ def build_launch_config(
                 raise ValueError(
                     "Jobs targeting Titan should not target other clusters since Titan uses pytorch 2.7"
                 )
-            pytorch_upgrade = "pip install --upgrade --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128"
+            pytorch_upgrade = "pip install --pre --upgrade --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128"
 
     beaker_user = get_beaker_username()
     return BeakerLaunchConfig(
