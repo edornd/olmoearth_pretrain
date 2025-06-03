@@ -157,7 +157,7 @@ def train_probe(
                 optimizer=opt,
                 epoch=epoch + (i / len(data_loader)),
                 total_epochs=total_epochs,
-                warmup_epochs=0,  # 1, #int(total_epochs * 0.1),
+                warmup_epochs=int(total_epochs * 0.1),
                 max_lr=lr,
                 min_lr=1.0e-5,
             )
