@@ -43,7 +43,7 @@ class ConvertToH5pyConfig(Config):
     compression: str | None = None  # Compression algorithm
     compression_opts: int | None = None  # Compression level (0-9 for gzip)
     shuffle: bool | None = None  # Enable shuffle filter (only used with compression)
-    chunk_options: tuple | bool | None = (
+    chunk_options: tuple | None = (
         None  # Chunking configuration. None: disabled. True: auto (data_item.shape). tuple: specific shape.
     )
 
@@ -65,7 +65,7 @@ class ConvertToH5pyConfig(Config):
 class ConvertToH5py:
     """Class for converting a dataset of GeoTiffs into a training dataset set up of h5py files."""
 
-    h5py_folder: str = "h5py_data_w_missing_timesteps"
+    h5py_folder: str = "h5py_data_w_missing_timesteps_128"
     latlon_distribution_fname: str = "latlon_distribution.npy"
     sample_metadata_fname: str = "sample_metadata.csv"
     sample_file_pattern: str = "sample_{index}.h5"
@@ -306,7 +306,7 @@ class ConvertToH5py:
 
                         # Apply chunking based on self.chunk_options
                         if self.chunk_options is True:  # auto-chunk
-                            create_kwargs["chunks"] = True
+                            create_kwargs["chunks"] = True # need to configure
                         elif isinstance(
                             self.chunk_options, tuple
                         ):  # Specific chunk shape
@@ -318,6 +318,7 @@ class ConvertToH5py:
                                 else:
                                     # If chunk_options is shorter, pad with full data dimension size
                                     final_chunks_list.append(data_item.shape[i])
+                            logger.info(f"Final chunks list: {final_chunks_list}")
                             create_kwargs["chunks"] = tuple(final_chunks_list)
                         else:
                             create_kwargs["chunks"] = (
@@ -325,6 +326,7 @@ class ConvertToH5py:
                             )  # use the dataset item shape as the chunk so it effectively does no chunking
 
                     # Create the dataset per item
+                    logger.info(f"Creating dataset for {item_name} with kwargs: {create_kwargs}")
                     h5file.create_dataset(item_name, data=data_item, **create_kwargs)
 
                 # Store missing timesteps masks in a dedicated group
