@@ -593,8 +593,8 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         embedding_size: int,
         supported_modalities: list[ModalitySpec],
         max_sequence_length: int,
-        learnable_channel_embs: bool = True,
-        random_channel_embs: bool = False,
+        learnable_channel_embeddings: bool = True,
+        random_channel_embeddings: bool = False,
     ):
         """Initialize the composite encodings.
 
@@ -603,8 +603,8 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             supported_modalities: Which modalities from Modality this model
                 instantiation supports
             max_sequence_length: Maximum sequence length
-            learnable_channel_embs: Whether to use learnable channel embeddings
-            random_channel_embs: Initialize channel embeddings randomly (zeros if False)
+            learnable_channel_embeddings: Whether to use learnable channel embeddings
+            random_channel_embeddings: Initialize channel embeddings randomly (zeros if False)
         """
         super().__init__()
         self.embedding_size = embedding_size
@@ -632,7 +632,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         # M
         month_tab = get_month_encoding_table(self.embedding_dim_per_embedding_type)
         self.month_embed = nn.Embedding.from_pretrained(month_tab, freeze=True)
-        if learnable_channel_embs:
+        if learnable_channel_embeddings:
             args = {"requires_grad": True}
         else:
             args = {"requires_grad": False}
@@ -640,7 +640,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         self.per_modality_channel_embeddings = nn.ParameterDict()
         for modality in self.supported_modalities:
             shape = (len(modality.band_sets), self.embedding_dim_per_embedding_type)
-            if random_channel_embs:
+            if random_channel_embeddings:
                 channel_embeddings = nn.Parameter(torch.rand(shape), **args)
             else:
                 channel_embeddings = nn.Parameter(torch.zeros(shape), **args)
@@ -793,8 +793,8 @@ class FlexiHeliosBase(nn.Module):
         depth: int,
         drop_path: float,
         supported_modalities: list[ModalitySpec],
-        learnable_channel_embs: bool = True,
-        random_channel_embs: bool = False,
+        learnable_channel_embeddings: bool = True,
+        random_channel_embeddings: bool = False,
     ) -> None:
         """Initialize the FlexiHeliosBase class."""
         super().__init__()
@@ -805,8 +805,8 @@ class FlexiHeliosBase(nn.Module):
         logger.info(f"modalities being used by model: {self.supported_modality_names}")
 
         self.max_sequence_length = max_sequence_length
-        self.learnable_channel_embs = learnable_channel_embs
-        self.random_channel_embs = random_channel_embs
+        self.learnable_channel_embeddings = learnable_channel_embeddings
+        self.random_channel_embeddings = random_channel_embeddings
 
         self.blocks = nn.ModuleList(
             [
@@ -827,8 +827,8 @@ class FlexiHeliosBase(nn.Module):
             embedding_size,
             self.supported_modalities,
             max_sequence_length,
-            learnable_channel_embs,
-            random_channel_embs,
+            learnable_channel_embeddings,
+            random_channel_embeddings,
         )
         self.apply(self._init_weights)
 
@@ -974,8 +974,8 @@ class Encoder(FlexiHeliosBase):
         drop_path: float,
         supported_modalities: list[ModalitySpec],
         max_sequence_length: int,
-        learnable_channel_embs: bool = True,
-        random_channel_embs: bool = False,
+        learnable_channel_embeddings: bool = True,
+        random_channel_embeddings: bool = False,
         num_projection_layers: int = 1,
         aggregate_then_project: bool = True,
     ):
@@ -991,8 +991,8 @@ class Encoder(FlexiHeliosBase):
             drop_path: Drop path rate
             supported_modalities: list documenting modalities used in a given model instantiation
             max_sequence_length: Maximum sequence length
-            learnable_channel_embs: Whether to use learnable channel embeddings
-            random_channel_embs: Initialize channel embeddings randomly (zeros if False)
+            learnable_channel_embeddings: Whether to use learnable channel embeddings
+            random_channel_embeddings: Initialize channel embeddings randomly (zeros if False)
             num_projection_layers: The number of layers to use in the projection. If >1, then
                 a ReLU activation will be applied between layers
             aggregate_then_project: If True, then we will average the tokens before applying
@@ -1004,10 +1004,10 @@ class Encoder(FlexiHeliosBase):
             mlp_ratio=mlp_ratio,
             num_heads=num_heads,
             max_sequence_length=max_sequence_length,
-            learnable_channel_embs=learnable_channel_embs,
+            learnable_channel_embeddings=learnable_channel_embeddings,
             drop_path=drop_path,
             supported_modalities=supported_modalities,
-            random_channel_embs=random_channel_embs,
+            random_channel_embeddings=random_channel_embeddings,
         )
         self.min_patch_size = min_patch_size
         self.max_patch_size = max_patch_size
@@ -1281,8 +1281,8 @@ class Predictor(FlexiHeliosBase):
         num_heads: int = 8,
         max_sequence_length: int = 24,
         drop_path: float = 0.0,
-        learnable_channel_embs: bool = True,
-        random_channel_embs: bool = False,
+        learnable_channel_embeddings: bool = True,
+        random_channel_embeddings: bool = False,
         output_embedding_size: int | None = None,
     ):
         """Initialize the predictor.
@@ -1296,8 +1296,8 @@ class Predictor(FlexiHeliosBase):
             num_heads: Number of attention heads
             max_sequence_length: Maximum sequence length
             drop_path: Drop path rate
-            learnable_channel_embs: Whether to use learnable channel embeddings
-            random_channel_embs: Whether to randomly initialize channel embeddings
+            learnable_channel_embeddings: Whether to use learnable channel embeddings
+            random_channel_embeddings: Whether to randomly initialize channel embeddings
             output_embedding_size: Size of output embeddings
         """
         super().__init__(
@@ -1307,12 +1307,12 @@ class Predictor(FlexiHeliosBase):
             num_heads=num_heads,
             max_sequence_length=max_sequence_length,
             drop_path=drop_path,
-            learnable_channel_embs=learnable_channel_embs,
-            random_channel_embs=random_channel_embs,
+            learnable_channel_embeddings=learnable_channel_embeddings,
+            random_channel_embeddings=random_channel_embeddings,
             supported_modalities=supported_modalities,
         )
-        self.learnable_channel_embs = learnable_channel_embs
-        self.random_channel_embs = random_channel_embs
+        self.learnable_channel_embeddings = learnable_channel_embeddings
+        self.random_channel_embeddings = random_channel_embeddings
         self.encoder_embedding_size = encoder_embedding_size
         self.encoder_to_decoder_embed = nn.Linear(
             encoder_embedding_size, decoder_embedding_size, bias=True
@@ -1592,8 +1592,8 @@ class EncoderConfig(Config):
     depth: int = 2
     drop_path: float = 0.1
     max_sequence_length: int = 12
-    learnable_channel_embs: bool = True
-    random_channel_embs: bool = False
+    learnable_channel_embeddings: bool = True
+    random_channel_embeddings: bool = False
     num_projection_layers: int = 1
     aggregate_then_project: bool = True
 
@@ -1634,8 +1634,8 @@ class PredictorConfig(Config):
     num_heads: int = 2
     max_sequence_length: int = 12
     drop_path: float = 0.0
-    learnable_channel_embs: bool = True
-    random_channel_embs: bool = False
+    learnable_channel_embeddings: bool = True
+    random_channel_embeddings: bool = False
     output_embedding_size: int | None = None
 
     def validate(self) -> None:

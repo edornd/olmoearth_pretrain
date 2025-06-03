@@ -54,7 +54,6 @@ def latent_mim_model(
         depth=2,
         drop_path=0.1,
         max_sequence_length=12,
-        random_channel_embs=False,
     )
 
     # Create predictor config

@@ -39,7 +39,7 @@ class TestFlexiHeliosCompositeEncodings:
                 Modality.WORLDCOVER,
             ],
             max_sequence_length=12,
-            random_channel_embs=True,
+            random_channel_embeddings=True,
         )
         return flexi_helios_composite_encodings
 
