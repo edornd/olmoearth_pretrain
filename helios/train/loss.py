@@ -573,8 +573,6 @@ class InfoNCELoss(Loss):
         #     PoolingType.MEAN, spatial_pooling=False
         # )
 
-        # Remove cases when any one of predictions or targets is nan or inf
-        # Those cases will have no effect on the loss
         valid_mask = (
             torch.all(torch.isfinite(predictions), dim=-1)
             & torch.all(torch.isfinite(targets), dim=-1)
