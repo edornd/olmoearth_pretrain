@@ -574,6 +574,7 @@ class HeliosTrainModule(TrainModule):
             ):
                 if isinstance(p.data, DTensor):
                     # get the local shard, update it in place
+                    # what if the target encoder and the encoder split parameters differently?
                     p_local = p.data.to_local()
                     tp_local = tp.data.to_local()
                     tp_local.mul_(cur_ema_value).add_(

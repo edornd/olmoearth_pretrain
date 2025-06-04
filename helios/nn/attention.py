@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from olmo_core.nn.attention.flash_attn_api import dispatch_flash_attn
 from torch.distributed.fsdp import fully_shard
 from torch.jit import Final
 
@@ -36,6 +37,7 @@ class Attention(nn.Module):
         proj_drop: float = 0.0,
         norm_layer: nn.Module = nn.LayerNorm,
         cross_attn: bool = False,
+        flash_attn: bool = True,
     ) -> None:
         """Initialize the attention module.
 
@@ -48,6 +50,7 @@ class Attention(nn.Module):
             proj_drop: Output projection dropout rate
             norm_layer: Normalization layer
             cross_attn: Enable cross-attention
+            flash_attn: Use flash attention
         """
         super().__init__()
         assert dim % num_heads == 0, "dim should be divisible by num_heads"
@@ -57,7 +60,7 @@ class Attention(nn.Module):
 
         self.cross_attn = cross_attn
         self.fast_attn = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-
+        self.flash_attn = flash_attn
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.k = nn.Linear(dim, dim, bias=qkv_bias)
         self.v = nn.Linear(dim, dim, bias=qkv_bias)
@@ -74,6 +77,12 @@ class Attention(nn.Module):
         k: torch.Tensor,
         v: torch.Tensor,
         n: int,
+        cu_seqlens: torch.Tensor | None = None,
+        cuseq_lens_q: torch.Tensor | None = None,
+        cuseq_lens_k: torch.Tensor | None = None,
+        max_seqlens: int | None = None,
+        max_seqlens_q: int | None = None,
+        max_seqlens_k: int | None = None,
         attn_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute scaled dot product attention.
@@ -88,7 +97,33 @@ class Attention(nn.Module):
         Returns:
             Output tensor of shape (B, H, N, D)
         """
-        if self.fast_attn:
+        if self.flash_attn:
+            # ChatGPT suggested the transpose can't find documentation that works yet
+            # Use dispatch_flash_attn from olmo_core
+            # q, k, v are (B, H, S, D), need to be (B, S, H, D) for dispatch_flash_attn
+            q_disp = q.transpose(1, 2)
+            k_disp = k.transpose(1, 2)
+            v_disp = v.transpose(1, 2)
+
+            # attn_mask is (B, Nk), True means valid (not padding).
+            # This matches key_padding_mask for dispatch_flash_attn.
+            # Causal is False for this generic attention block.
+            x = dispatch_flash_attn(
+                q_disp,
+                k_disp,
+                v_disp,
+                cu_seqlens=cu_seqlens,
+                cuseq_lens_q=cuseq_lens_q,
+                cuseq_lens_k=cuseq_lens_k,
+                max_seqlens=max_seqlens,
+                max_seqlens_q=max_seqlens_q,
+                max_seqlens_k=max_seqlens_k,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
+                softmax_scale=self.scale,
+            )
+            # Output is (B, Nq, H, D), transpose back to (B, H, Nq, D)
+            x = x.transpose(1, 2)
+        elif self.fast_attn:
             if attn_mask is not None:
                 attn_mask = attn_mask[:, None, None].repeat((1, self.num_heads, n, 1))
             x = F.scaled_dot_product_attention(
@@ -115,6 +150,12 @@ class Attention(nn.Module):
         self,
         x: torch.Tensor,
         y: torch.Tensor | None = None,
+        cu_seqlens: torch.Tensor | None = None,
+        cuseq_lens_q: torch.Tensor | None = None,
+        cuseq_lens_k: torch.Tensor | None = None,
+        max_seqlens: int | None = None,
+        max_seqlens_q: int | None = None,
+        max_seqlens_k: int | None = None,
         attn_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Forward pass.
@@ -146,7 +187,19 @@ class Attention(nn.Module):
 
         q, k = self.q_norm(q), self.k_norm(k)
 
-        x = self.sdpa(q, k, v, N, attn_mask)
+        x = self.sdpa(
+            q,
+            k,
+            v,
+            n=N,
+            cu_seqlens=cu_seqlens,
+            cuseq_lens_q=cuseq_lens_q,
+            cuseq_lens_k=cuseq_lens_k,
+            max_seqlens=max_seqlens,
+            max_seqlens_q=max_seqlens_q,
+            max_seqlens_k=max_seqlens_k,
+            attn_mask=attn_mask,
+        )
 
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
@@ -366,7 +419,16 @@ class Block(nn.Module):
         )
 
     def forward(
-        self, x: torch.Tensor, y: torch.Tensor | None, attn_mask: torch.Tensor | None
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor | None,
+        cu_seqlens: torch.Tensor | None = None,
+        cuseq_lens_q: torch.Tensor | None = None,
+        cuseq_lens_k: torch.Tensor | None = None,
+        max_seqlens: int | None = None,
+        max_seqlens_q: int | None = None,
+        max_seqlens_k: int | None = None,
+        attn_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Forward pass.
 
@@ -378,9 +440,21 @@ class Block(nn.Module):
         Returns:
             Output tensor of shape (B, N, C)
         """
-        x = x + self.drop_path(self.ls1(self.attn(self.norm1(x), y, attn_mask)))
-        x = x + self.drop_path(self.ls2(self.mlp(self.norm2(x))))
-        return x
+        x = x + self.drop_path(
+            self.ls1(
+                self.attn(
+                    self.norm1(x),
+                    y,
+                    cu_seqlens=cu_seqlens,
+                    cuseq_lens_q=cuseq_lens_q,
+                    cuseq_lens_k=cuseq_lens_k,
+                    max_seqlens=max_seqlens,
+                    max_seqlens_q=max_seqlens_q,
+                    max_seqlens_k=max_seqlens_k,
+                    attn_mask=attn_mask,
+                )
+            )
+        )
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
         """Apply FSDP to the model."""
