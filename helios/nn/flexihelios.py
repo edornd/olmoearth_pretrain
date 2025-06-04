@@ -1176,7 +1176,7 @@ class Encoder(FlexiHeliosBase):
 
         bool_mask = mask == MaskValue.ONLINE_ENCODER.value
 
-        tokens, indices, new_mask, seq_lengths, max_seqlens = self.remove_masked_tokens(
+        tokens, indices, new_mask, seq_lengths, max_seqlen = self.remove_masked_tokens(
             x, bool_mask
         )
         if exit_ids_seq is not None:
@@ -1205,7 +1205,7 @@ class Encoder(FlexiHeliosBase):
             tokens = blk(
                 x=tokens,
                 cu_seqlens=cu_seqlens,
-                max_seqlens=max_seqlens,
+                max_seqlen=max_seqlen,
                 # we will have to specify k and q lens for cross attention
                 attn_mask=new_mask,
             )
