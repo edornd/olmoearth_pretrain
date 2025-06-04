@@ -300,13 +300,12 @@ class GalileoTrainModule(HeliosTrainModule):
                             f"rank: {self.local_rank}, epoch: {self.trainer.epoch}, "
                             f"step: {self.trainer.global_step}"
                         )
-                        # Set to 0 to avoid breaking the training
-                        contrastive_loss = torch.tensor(0.0, device=self.device)
-
-                    loss += contrastive_loss
-                    total_batch_con += (
-                        get_local_tensor(contrastive_loss.detach()) / num_microbatches
-                    )
+                    else:
+                        loss += contrastive_loss
+                        total_batch_con += (
+                            get_local_tensor(contrastive_loss.detach())
+                            / num_microbatches
+                        )
 
                 loss = loss / num_microbatches
                 loss_val = get_local_tensor(loss.detach())
