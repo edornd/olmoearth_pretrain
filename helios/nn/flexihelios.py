@@ -1183,8 +1183,10 @@ class Encoder(FlexiHeliosBase):
             exit_ids_seq, _, _ = self.remove_masked_tokens(exit_ids_seq, bool_mask)
             # still linear projections
             exited_tokens, _, _ = self.remove_masked_tokens(exited_tokens, bool_mask)
+        logger.info(f"seq_lengths: {seq_lengths}")
         cu_seqlens = get_cumulative_sequence_lengths(seq_lengths)
 
+        # Time attn with cuda bench
         # Apply attn with varying encoder depths
         for i_blk, blk in enumerate(self.blocks):
             # Skip the zeroth block because we want to use the exited tokens that don't have encodings as this allows trivial solution of predicting the shared encodings
@@ -1202,6 +1204,15 @@ class Encoder(FlexiHeliosBase):
             # of True indicates the value *should* take part in
             # attention
             # WARNING: THIS MAY CHANGE DEPENDING ON THE ATTENTION IMPLEMENTATION
+            logger.info(f"for block {i_blk}, tokens type: {type(tokens)}")
+            logger.info(f"for block {i_blk}, cu_seqlens: {cu_seqlens} max_seqlen: {max_seqlen} of type {type(max_seqlen)}")
+            # get the shapes fo tokens cu_seqlens and max_seqlen
+            # logger.info(f"for block {i_blk}, tokens shape: {tokens.shape} {cu_seqlens.shape} {max_seqlen.shape}")
+            # log the tokens dtype
+            logger.info(f"before block {i_blk}, tokens shape: {tokens.shape}")
+            # if new_mask.all():
+            #     cu_seqlens = None
+            #     max_seqlen = None
             tokens = blk(
                 x=tokens,
                 cu_seqlens=cu_seqlens,
@@ -1209,6 +1220,15 @@ class Encoder(FlexiHeliosBase):
                 # we will have to specify k and q lens for cross attention
                 attn_mask=new_mask,
             )
+            logger.info(f"after block {i_blk}, tokens shape: {tokens.shape}")
+            # check for nan
+            if torch.isnan(tokens).any():
+                logger.warning(f"for block {i_blk}, tokens is nan  {tokens.shape}")
+                # count how many are nan and lgo there index and the ttal number of nan
+                nan_count = torch.isnan(tokens).sum()
+                logger.warning(f"for block {i_blk}, nan count: {nan_count}")
+                logger.warning(f"for block {i_blk}, nan indices: {torch.where(torch.isnan(tokens))}")
+                raise ValueError("tokens is nan")
 
         if exit_ids_seq is not None:
             # this should only ever be called by the target encoder,
@@ -1506,7 +1526,15 @@ class Predictor(FlexiHeliosBase):
         for blk in self.blocks:
             # note that we are not taking the inverse of the mask, since split_x_y gives us
             # true values for values we want to take part in attention
+            logger.info(f"x shape before block: {x.shape}")
+            logger.info(f"y shape before block: {y.shape}")
+            logger.info(f"x_mask shape before block: {x_mask.shape}")
+            logger.info(f"y_mask shape before block: {y_mask.shape}")
             x = blk(x=x, y=y, attn_mask=y_mask.bool())
+            logger.info(f"x shape after block: {x.shape}")
+            logger.info(f"y shape after block: {y.shape}")
+            logger.info(f"x_mask shape after block: {x_mask.shape}")
+            logger.info(f"y_mask shape after block: {y_mask.shape}")
         x = self.combine_x_y(
             tokens_to_decode=x,
             unmasked_tokens=y,

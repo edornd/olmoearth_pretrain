@@ -1,14 +1,80 @@
 """Attention Components for Helios."""
 
-from typing import Any
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from olmo_core.nn.attention.flash_attn_api import dispatch_flash_attn
+# from olmo_core.nn.attention.flash_attn_api import dispatch_flash_attn
 from torch.distributed.fsdp import fully_shard
 from torch.jit import Final
+from logging import getLogger
+import flash_attn
+
+logger = getLogger(__name__)
+
+
+def dispatch_flash_attn(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    *,
+    cu_seqlens: Optional[torch.Tensor] = None,
+    cu_seqlens_q: Optional[torch.Tensor] = None,
+    cu_seqlens_k: Optional[torch.Tensor] = None,
+    max_seqlen: Optional[int] = None,
+    max_seqlen_q: Optional[int] = None,
+    max_seqlen_k: Optional[int] = None,
+    dropout_p: float = 0.0,
+    softmax_scale: Optional[float] = None,
+    causal: bool = False,
+) -> torch.Tensor:
+    if flash_attn is None:
+        raise RuntimeError("flash-attn is required!")
+
+    if cu_seqlens is not None:
+        if cu_seqlens_q is None:
+            cu_seqlens_q = cu_seqlens
+        if cu_seqlens_k is None:
+            cu_seqlens_k = cu_seqlens
+    if max_seqlen is not None:
+        if max_seqlen_q is None:
+            max_seqlen_q = max_seqlen
+        if max_seqlen_k is None:
+            max_seqlen_k = max_seqlen
+
+    varlen = all(x is not None for x in (cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k))
+
+    if varlen:
+        assert q.ndim == 3, "q must be pre-packed"
+        logger.info(f"q shape: {q.shape} k shape: {k.shape} v shape: {v.shape}")
+        # lgo using varlen
+        logger.info(f"using varlen")
+        return flash_attn.flash_attn_varlen_func(
+            q,
+            k,
+            v,
+            # _flatten_batch_dim(q),
+            # _flatten_batch_dim(k),
+            # _flatten_batch_dim(v),
+            cu_seqlens_q,
+            cu_seqlens_k,
+            max_seqlen_q,
+            max_seqlen_k,
+            dropout_p=dropout_p,
+            softmax_scale=softmax_scale,
+            causal=causal,
+        )
+    else:
+        return flash_attn.flash_attn_func(
+            q,
+            k,
+            v,
+            dropout_p=dropout_p,
+            softmax_scale=softmax_scale,
+            causal=causal,
+        )
 
 
 class Attention(nn.Module):
@@ -37,7 +103,6 @@ class Attention(nn.Module):
         proj_drop: float = 0.0,
         norm_layer: nn.Module = nn.LayerNorm,
         cross_attn: bool = False,
-        flash_attn: bool = True,
     ) -> None:
         """Initialize the attention module.
 
@@ -60,7 +125,6 @@ class Attention(nn.Module):
 
         self.cross_attn = cross_attn
         self.fast_attn = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        self.flash_attn = flash_attn
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.k = nn.Linear(dim, dim, bias=qkv_bias)
         self.v = nn.Linear(dim, dim, bias=qkv_bias)
@@ -84,6 +148,7 @@ class Attention(nn.Module):
         max_seqlen_q: int | None = None,
         max_seqlen_k: int | None = None,
         attn_mask: torch.Tensor | None = None,
+        flash_attn = True
     ) -> torch.Tensor:
         """Compute scaled dot product attention.
 
@@ -97,30 +162,43 @@ class Attention(nn.Module):
         Returns:
             Output tensor of shape (B, H, N, D)
         """
-        if self.flash_attn:
-            # ChatGPT suggested the transpose can't find documentation that works yet
-            # Use dispatch_flash_attn from olmo_core
-            # q, k, v are (B, H, S, D), need to be (B, S, H, D) for dispatch_flash_attn
-            q_disp = q.transpose(1, 2)
-            k_disp = k.transpose(1, 2)
-            v_disp = v.transpose(1, 2)
+        if flash_attn:
 
-            # attn_mask is (B, Nk), True means valid (not padding).
-            # This matches key_padding_mask for dispatch_flash_attn.
-            # Causal is False for this generic attention block.
+            if torch.isnan(q).any():
+                print("q is nan")
+                raise ValueError("q is nan")
+            if torch.isnan(k).any():
+                print("k is nan")
+                raise ValueError("k is nan")
+            if torch.isnan(v).any():
+                print("v is nan")
+                raise ValueError("v is nan")
+            # also log the dtype of q, k, v
+            logger.info(f"q dtype: {q.dtype} k dtype: {k.dtype} v dtype: {v.dtype}")
+            # q_disp = q.transpose(1, 2)
+            # k_disp = k.transpose(1, 2)
+            # v_disp = v.transpose(1, 2)
+            # log the max values of q, k, v
+            logger.info(f"q max: {q.shape} k max: {k.shape} v max: {v.shape}")
+
+            # I want my own dispatch flash attn function for now
             x = dispatch_flash_attn(
-                q_disp,
-                k_disp,
-                v_disp,
+                q,
+                k,
+                v,
                 cu_seqlens=cu_seqlens,
                 cu_seqlens_q=cu_seqlens_q,
                 cu_seqlens_k=cu_seqlens_k,
                 max_seqlen=max_seqlen,
                 max_seqlen_q=max_seqlen_q,
                 max_seqlen_k=max_seqlen_k,
-                dropout_p=self.attn_drop.p if self.training else 0.0,
+                dropout_p=self.attn_drop.p,
                 softmax_scale=self.scale,
+                causal=False,
             )
+            # check for nan here
+            if torch.isnan(x).any():
+                raise ValueError("x is nan")
             # Output is (B, Nq, H, D), transpose back to (B, H, Nq, D)
             x = x.transpose(1, 2)
         elif self.fast_attn:
@@ -157,6 +235,7 @@ class Attention(nn.Module):
         max_seqlen_q: int | None = None,
         max_seqlen_k: int | None = None,
         attn_mask: torch.Tensor | None = None,
+        flash_attn: bool = True,
     ) -> torch.Tensor:
         """Forward pass.
 
@@ -168,7 +247,7 @@ class Attention(nn.Module):
         Returns:
             Output tensor of shape (B, N, C)
         """
-        B, N, C = x.shape
+        original_shape = x.shape
 
         q = self.q(x)
 
@@ -180,18 +259,24 @@ class Attention(nn.Module):
             assert self.cross_attn
             k = self.k(y)
             v = self.v(y)
-
-        q = rearrange(q, "b n (h d) -> b h n d", h=self.num_heads)
-        k = rearrange(k, "b n (h d) -> b h n d", h=self.num_heads)
-        v = rearrange(v, "b n (h d) -> b h n d", h=self.num_heads)
+        if not flash_attn:
+            q = rearrange(q, "b n (h d) -> b h n d", h=self.num_heads)
+            k = rearrange(k, "b n (h d) -> b h n d", h=self.num_heads)
+            v = rearrange(v, "b n (h d) -> b h n d", h=self.num_heads)
+        else:
+            q = rearrange(q, "bn (h d) -> bn h d", h=self.num_heads)
+            k = rearrange(k, "bn (h d) -> bn h d", h=self.num_heads)
+            v = rearrange(v, "bn (h d) -> bn h d", h=self.num_heads)
+        logger.info(f"q shape: {q.shape} k shape: {k.shape} v shape: {v.shape}")
 
         q, k = self.q_norm(q), self.k_norm(k)
 
+        # pack q, k, v using the attention_mask (which now should be treated as a key padding mask)
         x = self.sdpa(
             q,
             k,
             v,
-            n=N,
+            n=original_shape[-2], # supposed to be the number of tokens in each sample with padding
             cu_seqlens=cu_seqlens,
             cu_seqlens_q=cu_seqlens_q,
             cu_seqlens_k=cu_seqlens_k,
@@ -199,9 +284,10 @@ class Attention(nn.Module):
             max_seqlen_q=max_seqlen_q,
             max_seqlen_k=max_seqlen_k,
             attn_mask=attn_mask,
+            flash_attn=flash_attn,
         )
-
-        x = x.transpose(1, 2).reshape(B, N, C)
+        logger.info(f"x shape: {x.shape}")
+        x = x.transpose(1, 2).reshape(original_shape)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -440,11 +526,27 @@ class Block(nn.Module):
         Returns:
             Output tensor of shape (B, N, C)
         """
+        og_shape = x.shape
+        if y is not None:
+            # log that flash attn is False
+            logger.info(f"flash attn is False")
+            flash_attn = False
+        else:
+            flash_attn = True
+        if flash_attn and cu_seqlens is not None:
+            logger.info(f"x shape before flattening: {x.shape}")
+            x_flat = torch.flatten(x, end_dim=1)
+            logger.info(f"x_flat shape: {x_flat.shape}")
+            flat_attn_mask = torch.flatten(attn_mask)
+            logger.info(f"flat_attn_mask shape: {flat_attn_mask.shape}")
+            x = x_flat[flat_attn_mask]
+            logger.info(f"x shape: {x.shape}")
+
         x = x + self.drop_path(
             self.ls1(
                 self.attn(
-                    self.norm1(x),
-                    y,
+                    x=self.norm1(x),
+                    y=y,
                     cu_seqlens=cu_seqlens,
                     cu_seqlens_q=cu_seqlens_q,
                     cu_seqlens_k=cu_seqlens_k,
@@ -452,9 +554,22 @@ class Block(nn.Module):
                     max_seqlen_q=max_seqlen_q,
                     max_seqlen_k=max_seqlen_k,
                     attn_mask=attn_mask,
+                    flash_attn=flash_attn,
                 )
             )
         )
+        x = x + self.drop_path(self.ls2(self.mlp(self.norm2(x))))
+        # FOr now I am going to unpack here though ideally this can be done after attention is called entirely?
+        if flash_attn and cu_seqlens is not None:
+            logger.info(f"x shape before unpacking: {x.shape}")
+            out = x.new_zeros(og_shape[0] * og_shape[1], og_shape[2])
+            out[flat_attn_mask] = x
+            # can probs be a view for the real thing
+            out = out.reshape(og_shape[0], og_shape[1], -1)
+            logger.info(f"x shape after unpacking: {out.shape}")
+            return out
+        return x
+
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
         """Apply FSDP to the model."""

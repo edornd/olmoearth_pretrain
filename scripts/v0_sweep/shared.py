@@ -219,7 +219,11 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             f"All modalities must be in token_exit_cfg_a: {TRAINING_MODALITIES}"
         )
     token_exit_cfg_zero = {modality: 0 for modality in TRAINING_MODALITIES}
-    dp_config = DataParallelConfig(name=DataParallelType.fsdp)
+    dp_config = DataParallelConfig(
+        name=DataParallelType.fsdp,
+        param_dtype=DType.bfloat16,
+        reduce_dtype=DType.float32,
+    )
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
@@ -237,7 +241,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             rank_microbatch_size=RANK_MICROBATCH_SIZE,
             token_exit_cfg_a=token_exit_cfg_galileo,
             token_exit_cfg_b=token_exit_cfg_zero,
-            autocast_precision=DType.bfloat16,
+            autocast_precision=None,  # DType.bfloat16,
             max_grad_norm=1.0,
             dp_config=dp_config,
             scheduler=scheduler,
@@ -251,7 +255,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             mae_loss_config=mae_loss_config,
             rank_microbatch_size=RANK_MICROBATCH_SIZE,
             token_exit_cfg=token_exit_cfg_zero,
-            autocast_precision=DType.bfloat16,
+            autocast_precision=None,  # DType.bfloat16,
             max_grad_norm=1.0,
             dp_config=dp_config,
             scheduler=scheduler,
@@ -265,7 +269,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             mae_loss_config=mae_loss_config,
             rank_microbatch_size=RANK_MICROBATCH_SIZE,
             token_exit_cfg=token_exit_cfg_zero,
-            autocast_precision=DType.bfloat16,
+            autocast_precision=None,  # DType.bfloat16,
             contrastive_config=contrastive_config,
             max_grad_norm=1.0,
             dp_config=dp_config,
