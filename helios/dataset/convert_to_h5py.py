@@ -17,6 +17,7 @@ from tqdm import tqdm
 from upath import UPath
 
 from helios.data.constants import Modality, ModalitySpec, TimeSpan
+from helios.data.constants import IMAGE_TILE_SIZE
 from helios.data.utils import convert_to_db
 from helios.dataset.parse import parse_helios_dataset
 from helios.dataset.sample import (
@@ -46,6 +47,7 @@ class ConvertToH5pyConfig(Config):
     chunk_options: tuple | None = (
         None  # Chunking configuration. None: disabled. True: auto (data_item.shape). tuple: specific shape.
     )
+    tile_size: int = 256
 
     def build(self) -> "ConvertToH5py":
         """Build the ConvertToH5py object."""
@@ -106,7 +108,9 @@ class ConvertToH5py:
         self.shuffle = shuffle
         self.chunk_options = chunk_options
         self.h5py_dir: UPath | None = None
-
+        if IMAGE_TILE_SIZE % tile_size != 0:
+            raise ValueError(f"Tile size {tile_size} must be a factor of {IMAGE_TILE_SIZE}")
+        self.tile_size = tile_size
     @property
     def compression_settings_suffix(self) -> str:
         """String representation of the compression settings.
@@ -273,11 +277,11 @@ class ConvertToH5py:
 
             if modality.is_spatial:
                 # Calculate row and column indices for 2x2 grid
-                row = (sublock_index // 2) * 128
-                col = (sublock_index % 2) * 128
+                row = (sublock_index // 2) * self.tile_size
+                col = (sublock_index % 2) * self.tile_size
                 logger.info(f"Sublock index: {sublock_index}, row: {row}, col: {col}")
                 logger.info(f"Image shape: {image.shape}")
-                image = image[row:row+128, col:col+128, ...]
+                image = image[row:row+self.tile_size, col:col+self.tile_size, ...]
                 logger.info(f"Image shape after slicing: {image.shape}")
             sample_dict[modality.name] = image
 
@@ -512,9 +516,10 @@ class ConvertToH5py:
         # I want to do this in parallel
 
         # First, create the list of tuples
+        num_subtiles = IMAGE_TILE_SIZE // self.tile_size
         tuples = []
         for sample in samples:
-            for j in range(4):
+            for j in range(num_subtiles):
                 tuples.append((j, sample))
         samples = tuples
         self.prepare_h5_dataset(samples)
