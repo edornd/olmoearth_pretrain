@@ -61,13 +61,14 @@ class ConvertToH5pyConfig(Config):
             compression_opts=self.compression_opts,
             shuffle=self.shuffle,
             chunk_options=self.chunk_options,
+            tile_size=self.tile_size,
         )
 
 
 class ConvertToH5py:
     """Class for converting a dataset of GeoTiffs into a training dataset set up of h5py files."""
 
-    h5py_folder: str = "h5py_data_w_missing_timesteps_128_x_4"
+    h5py_folder: str = "h5py_data_w_missing_timesteps"
     latlon_distribution_fname: str = "latlon_distribution.npy"
     sample_metadata_fname: str = "sample_metadata.csv"
     sample_file_pattern: str = "sample_{index}.h5"
@@ -83,6 +84,7 @@ class ConvertToH5py:
         compression_opts: int | None = None,
         shuffle: bool | None = None,
         chunk_options: tuple | bool | None = None,
+        tile_size: int = IMAGE_TILE_SIZE,
     ) -> None:
         """Initialize the ConvertToH5py object.
 
