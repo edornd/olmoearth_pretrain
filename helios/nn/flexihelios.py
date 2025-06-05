@@ -794,6 +794,7 @@ class FlexiHeliosBase(nn.Module):
         mlp_ratio: float,
         depth: int,
         drop_path: float,
+        use_flash_attn: bool = False,
         supported_modalities: list[ModalitySpec],
         random_channel_embs: bool = False,
     ) -> None:
@@ -808,7 +809,7 @@ class FlexiHeliosBase(nn.Module):
         self.max_sequence_length = max_sequence_length
         self.use_channel_embs = use_channel_embs
         self.random_channel_embs = random_channel_embs
-
+        self.use_flash_attn = use_flash_attn
         self.blocks = nn.ModuleList(
             [
                 Block(
@@ -819,6 +820,7 @@ class FlexiHeliosBase(nn.Module):
                     norm_layer=nn.LayerNorm,  # TODO: This should be configurable
                     cross_attn=self.cross_attn,
                     drop_path=drop_path,
+                    use_flash_attn=self.use_flash_attn,
                 )
                 for _ in range(depth)
             ]
@@ -994,6 +996,7 @@ class Encoder(FlexiHeliosBase):
         random_channel_embs: bool = False,
         num_projection_layers: int = 1,
         aggregate_then_project: bool = True,
+        use_flash_attn: bool = False,
     ):
         """Initialize the encoder.
 
@@ -1024,6 +1027,7 @@ class Encoder(FlexiHeliosBase):
             drop_path=drop_path,
             supported_modalities=supported_modalities,
             random_channel_embs=random_channel_embs,
+            use_flash_attn=use_flash_attn,
         )
         self.min_patch_size = min_patch_size
         self.max_patch_size = max_patch_size
@@ -1321,6 +1325,7 @@ class Predictor(FlexiHeliosBase):
         learnable_channel_embeddings: bool = True,
         random_channel_embeddings: bool = False,
         output_embedding_size: int | None = None,
+        use_flash_attn: bool = False,
     ):
         """Initialize the predictor.
 
@@ -1347,6 +1352,7 @@ class Predictor(FlexiHeliosBase):
             use_channel_embs=learnable_channel_embeddings,
             random_channel_embs=random_channel_embeddings,
             supported_modalities=supported_modalities,
+            use_flash_attn=use_flash_attn,
         )
         # TODO: Rename this weird misname
         self.learnable_channel_embeddings = learnable_channel_embeddings
@@ -1662,6 +1668,7 @@ class EncoderConfig(Config):
     random_channel_embs: bool = False
     num_projection_layers: int = 1
     aggregate_then_project: bool = True
+    use_flash_attn: bool = False
 
     def validate(self) -> None:
         """Validate the configuration."""
@@ -1703,7 +1710,7 @@ class PredictorConfig(Config):
     learnable_channel_embeddings: bool = True
     random_channel_embeddings: bool = False
     output_embedding_size: int | None = None
-
+    use_flash_attn: bool = False
     def validate(self) -> None:
         """Validate the configuration."""
         if len(self.supported_modalities) == 0:

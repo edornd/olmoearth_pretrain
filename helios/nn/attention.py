@@ -10,7 +10,10 @@ from einops import rearrange
 from torch.distributed.fsdp import fully_shard
 from torch.jit import Final
 from logging import getLogger
-import flash_attn
+try:
+    import flash_attn
+except ImportError:
+    flash_attn = None
 
 logger = getLogger(__name__)
 
@@ -50,17 +53,7 @@ def dispatch_flash_attn(
         assert q.ndim == 3, "q must be pre-packed"
         # logger.info(f"q shape: {q.shape} k shape: {k.shape} v shape: {v.shape}")
         # # lgo using varlen
-        logger.info(f"using varlen")
-        # check nans here
-        if torch.isnan(q).any():
-            logger.info("q is nan")
-            raise ValueError("q is nan before flash attn")
-        if torch.isnan(k).any():
-            logger.info("k is nan")
-            raise ValueError("k is nan before flash attn")
-        if torch.isnan(v).any():
-            logger.info("v is nan")
-            raise ValueError("v is nan before flash attn")
+        logger.debug(f"using varlen")
 
         return flash_attn.flash_attn_varlen_func(
             q,
