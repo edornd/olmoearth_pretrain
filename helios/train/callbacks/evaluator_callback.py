@@ -142,7 +142,7 @@ class DownstreamEvaluator:
                 device=self.device,
                 batch_size=self.batch_size,
                 lr=self.probe_lr,
-                grid_size=int(self.config.height_width / self.patch_size),
+                patch_size=self.patch_size,
             )
         else:
             raise ValueError(f"Unrecognized task type: {self.config.task_type}")

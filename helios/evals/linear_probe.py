@@ -1,7 +1,5 @@
 """Train and evaluate a linear probe."""
 
-import math
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -43,7 +41,7 @@ def train_and_eval_probe(
     test_embeddings: torch.Tensor,
     test_labels: torch.Tensor,
     device: torch.device,
-    grid_size: int,
+    patch_size: int,
     batch_size: int,
     epochs: int = 50,
 ) -> float:
@@ -51,10 +49,6 @@ def train_and_eval_probe(
     if train_embeddings.shape[-1] != test_embeddings.shape[-1]:
         raise ValueError("Embedding dims don't match.")
     in_features = train_embeddings.shape[-1]
-
-    # we test this is the case for segmentation task configs.
-    assert config.height_width is not None
-    output_patch_size = math.ceil(config.height_width / grid_size)
 
     probe = train_probe(
         data_loader=DataLoader(
@@ -66,7 +60,7 @@ def train_and_eval_probe(
         epochs=epochs,
         in_features=in_features,
         num_classes=config.num_classes,
-        patch_size=output_patch_size,
+        patch_size=patch_size,
         device=device,
         task_type=config.task_type,
     )
@@ -78,7 +72,7 @@ def train_and_eval_probe(
         ),
         probe=probe,
         num_classes=config.num_classes,
-        patch_size=output_patch_size,
+        patch_size=patch_size,
         device=device,
         task_type=config.task_type,
     )
