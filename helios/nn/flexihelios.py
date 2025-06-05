@@ -950,13 +950,9 @@ class FlexiHeliosBase(nn.Module):
 
     @staticmethod
     def pack_tokens(tokens: Tensor, mask: Tensor) -> Tensor:
-        logger.info(f"Original x shape: {tokens.shape}")
         tokens_packed = torch.flatten(tokens, end_dim=1)
-        logger.info(f"Flattened x shape: {tokens_packed.shape}")
         mask = torch.flatten(mask)
-        logger.info(f"Flattened attention mask shape: {mask.shape}")
         tokens = tokens_packed[mask]
-        logger.info(f"Final masked x shape: {tokens.shape}")
         return tokens
 
     @staticmethod
@@ -1550,21 +1546,12 @@ class Predictor(FlexiHeliosBase):
         for blk in self.blocks:
             # note that we are not taking the inverse of the mask, since split_x_y gives us
             # true values for values we want to take part in attention
-            logger.info(f"x shape before block: {x.shape}")
-            logger.info(f"y shape before block: {y.shape}")
-            logger.info(f"x_mask shape before block: {x_mask.shape}")
-            logger.info(f"y_mask shape before block: {y_mask.shape}")
             x = blk(x=x, y=y,
-                attn_mask=x_mask.bool(), # only for flash attn though this should not be left in
-                y_mask=y_mask.bool(),
+                attn_mask=y_mask.bool() if not flash_attn else None, # only for flash attn though this should not be left in
                 cu_seqlens_q=cu_seqlens_x,
                 cu_seqlens_k=cu_seqlens_y,
                 max_seqlen_q=max_length_of_x,
                 max_seqlen_k=max_length_of_y)
-            logger.info(f"x shape after block: {x.shape}")
-            logger.info(f"y shape after block: {y.shape}")
-            logger.info(f"x_mask shape after block: {x_mask.shape}")
-            logger.info(f"y_mask shape after block: {y_mask.shape}")
 
 
         if flash_attn:

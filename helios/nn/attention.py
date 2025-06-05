@@ -174,34 +174,6 @@ class Attention(nn.Module):
             Output tensor of shape (B, H, N, D)
         """
         if flash_attn:
-
-            if torch.isnan(q).any():
-                print("q is nan")
-                raise ValueError("q is nan")
-            if torch.isnan(k).any():
-                print("k is nan")
-                raise ValueError("k is nan")
-            if torch.isnan(v).any():
-                print("v is nan")
-                raise ValueError("v is nan")
-
-            # I want my own dispatch flash attn function for now
-
-            # log the max seqlens and the last cu seqlen if not none alsof of ka nd v too
-            if cu_seqlens is not None:
-                logger.info(f"max seqlen: {max_seqlen} last cu seqlen: {cu_seqlens[-1]} ")
-            if cu_seqlens_q is not None:
-                logger.info(f"max seqlen q: {max_seqlen_q} last cu seqlen q: {cu_seqlens_q[-5:]} q shape: {cu_seqlens_q.shape}")
-            if cu_seqlens_k is not None:
-                logger.info(f"max seqlen k: {max_seqlen_k} last cu seqlen k: {cu_seqlens_k[-4:]} k shape: {cu_seqlens_k.shape}")
-
-            # what are the max q k and v values also what it is the seq len
-            logger.info(f"q.max(): {q.max()}")
-            logger.info(f"k.max(): {k.max()}")
-            logger.info(f"v.max(): {v.max()}")
-            logger.info(f"q.shape: {q.shape}")
-            logger.info(f"k.shape: {k.shape}")
-            logger.info(f"v.shape: {v.shape}")
             x = dispatch_flash_attn(
                 q,
                 k,
@@ -216,13 +188,9 @@ class Attention(nn.Module):
                 softmax_scale=self.scale,
                 causal=False,
             )
-            torch.cuda.synchronize()
-            if torch.isnan(x).any():
-                raise ValueError("x is nan")
             # Output is (B, Nq, H, D), transpose back to (B, H, Nq, D)
-            logger.info(f"x shape: {x.shape}")
+            # matching the transpose of the other attention implementations that need to be transposed back
             x = x.transpose(1, 2)
-            logger.info(f"x shape after transpose: {x.shape}")
         elif self.fast_attn:
             if attn_mask is not None:
                 attn_mask = attn_mask[:, None, None].repeat((1, self.num_heads, n, 1))
@@ -537,7 +505,6 @@ class Block(nn.Module):
         max_seqlen_q: int | None = None,
         max_seqlen_k: int | None = None,
         attn_mask: torch.Tensor | None = None,
-        y_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Forward pass.
 
