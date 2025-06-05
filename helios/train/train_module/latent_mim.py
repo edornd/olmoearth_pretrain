@@ -237,6 +237,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
 
                 loss_val = get_local_tensor(loss.detach())
                 total_batch_loss += loss_val
+                logger.info(f"Loss: {total_batch_loss}")
 
                 # Skip bad batches
                 if torch.isnan(loss).any() or torch.isinf(loss).any():

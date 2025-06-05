@@ -1543,9 +1543,9 @@ class Predictor(FlexiHeliosBase):
         flash_attn = True
         if flash_attn:
             og_shape_x = x.shape
-            x = self.pack_tokens(x, x_mask).contiguous()
+            x = self.pack_tokens(x, x_mask.bool())
             og_shape_y = y.shape
-            y = self.pack_tokens(y, y_mask).contiguous()
+            y = self.pack_tokens(y, y_mask.bool())
 
         for blk in self.blocks:
             # note that we are not taking the inverse of the mask, since split_x_y gives us
@@ -1568,8 +1568,8 @@ class Predictor(FlexiHeliosBase):
 
 
         if flash_attn:
-            x = self.unpack_tokens(x, x_mask, og_shape_x)
-            y = self.unpack_tokens(y, y_mask, og_shape_y)
+            x = self.unpack_tokens(x, x_mask.bool(), og_shape_x)
+            y = self.unpack_tokens(y, y_mask.bool(), og_shape_y)
 
 
         x = self.combine_x_y(

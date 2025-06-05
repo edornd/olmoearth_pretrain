@@ -51,6 +51,17 @@ def dispatch_flash_attn(
         # logger.info(f"q shape: {q.shape} k shape: {k.shape} v shape: {v.shape}")
         # # lgo using varlen
         logger.info(f"using varlen")
+        # check nans here
+        if torch.isnan(q).any():
+            logger.info("q is nan")
+            raise ValueError("q is nan before flash attn")
+        if torch.isnan(k).any():
+            logger.info("k is nan")
+            raise ValueError("k is nan before flash attn")
+        if torch.isnan(v).any():
+            logger.info("v is nan")
+            raise ValueError("v is nan before flash attn")
+
         return flash_attn.flash_attn_varlen_func(
             q,
             k,
@@ -178,16 +189,19 @@ class Attention(nn.Module):
 
             # log the max seqlens and the last cu seqlen if not none alsof of ka nd v too
             if cu_seqlens is not None:
-                logger.info(f"max seqlen: {max_seqlen} last cu seqlen: {cu_seqlens[-1]}")
+                logger.info(f"max seqlen: {max_seqlen} last cu seqlen: {cu_seqlens[-1]} ")
             if cu_seqlens_q is not None:
-                logger.info(f"max seqlen q: {max_seqlen_q} last cu seqlen q: {cu_seqlens_q[-1]}")
+                logger.info(f"max seqlen q: {max_seqlen_q} last cu seqlen q: {cu_seqlens_q[-5:]} q shape: {cu_seqlens_q.shape}")
             if cu_seqlens_k is not None:
-                logger.info(f"max seqlen k: {max_seqlen_k} last cu seqlen k: {cu_seqlens_k[-1]}")
+                logger.info(f"max seqlen k: {max_seqlen_k} last cu seqlen k: {cu_seqlens_k[-4:]} k shape: {cu_seqlens_k.shape}")
 
             # what are the max q k and v values also what it is the seq len
             logger.info(f"q.max(): {q.max()}")
             logger.info(f"k.max(): {k.max()}")
             logger.info(f"v.max(): {v.max()}")
+            logger.info(f"q.shape: {q.shape}")
+            logger.info(f"k.shape: {k.shape}")
+            logger.info(f"v.shape: {v.shape}")
             x = dispatch_flash_attn(
                 q,
                 k,
