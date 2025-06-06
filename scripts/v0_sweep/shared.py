@@ -256,6 +256,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             rank_microbatch_size=RANK_MICROBATCH_SIZE,
             token_exit_cfg=token_exit_cfg_zero,
             autocast_precision=None,  # DType.bfloat16,
+            # compile_model=True,
             max_grad_norm=1.0,
             dp_config=dp_config,
             scheduler=scheduler,
