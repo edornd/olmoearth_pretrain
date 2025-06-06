@@ -445,7 +445,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            probe_lr=0.01,
+            probe_lr=0.002,
             eval_interval=Duration.epochs(10),
             input_modalities=[Modality.SENTINEL1.name, Modality.LANDSAT.name],
             epochs=50,
@@ -485,7 +485,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         "pastis_sentinel1": DownstreamTaskConfig(
             dataset="pastis",
             embedding_batch_size=32,
-            probe_batch_size=16,
+            probe_batch_size=128,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
