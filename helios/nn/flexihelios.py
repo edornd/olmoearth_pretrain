@@ -1597,7 +1597,7 @@ class Predictor(FlexiHeliosBase):
         for blk in self.blocks:
             # note that we are not taking the inverse of the mask, since split_x_y gives us
             # true values for values we want to take part in attention
-            x = blk(
+            tokens_to_decode = blk(
                 x=tokens_to_decode,
                 y=unmasked_tokens,
                 attn_mask=(
