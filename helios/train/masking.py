@@ -767,25 +767,33 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
     ) -> list[dict[str, dict[int, bool]]]:
         """Get the modalities that are present for each sample."""
         masked_sample_dict = batch.as_dict(return_none=False)
-        present_modalities = []
+        present_modalities: list[dict[str, dict[int, bool]]] = []
 
-        for sample_idx in range(batch.timestamps.shape[0]):
-            present_modalities_for_sample = {}
-            for modality in batch.modalities:
-                if modality == "timestamps":
-                    continue
-                modality_mask_name = MaskedHeliosSample.get_masked_modality_name(
-                    modality
-                )
-                modality_mask = masked_sample_dict[modality_mask_name]
-                missing_mask = modality_mask == MaskValue.MISSING.value
-                # Modality is present only if it is not completely missing
-                if not torch.all(missing_mask[sample_idx]):
-                    # By default encode all bandsets (True: encode, False: decode)
-                    bandset_idx = {i: True for i in range(modality_mask.shape[-1])}
-                    present_modalities_for_sample[modality] = bandset_idx
+        for modality in batch.modalities:
+            if modality == "timestamps":
+                continue
+            modality_mask_name = MaskedHeliosSample.get_masked_modality_name(modality)
+            modality_mask = masked_sample_dict[modality_mask_name]
+            batch_size = modality_mask.shape[0]
+            missing_values_mask = modality_mask == MaskValue.MISSING.value
+            # Find the samples where the modality is completely missing
+            is_modality_completely_missing_for_samples = torch.all(
+                missing_values_mask.view(batch_size, -1), dim=1
+            )
+            is_modality_present_for_samples = (
+                ~is_modality_completely_missing_for_samples
+            )
 
-            present_modalities.append(present_modalities_for_sample)
+            num_bandsets = modality_mask.shape[-1]
+            # By default encode all bandsets (True: encode, False: decode)
+            bandset_info = {idx: True for idx in range(num_bandsets)}
+
+            present_sample_indices = torch.where(is_modality_present_for_samples)[0]
+
+            for sample_idx_tensor in present_sample_indices:
+                sample_idx = sample_idx_tensor.item()
+                present_modalities[sample_idx][modality] = bandset_info
+
         return present_modalities
 
     def select_encoded_decoded_bandsets(
@@ -803,13 +811,18 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                         for bandset_idx in present_modalities_for_sample[modality]
                     ]
                 )
-            # Split the bandsets into encoded and decoded
-            if len(all_modalities_bandsets) <= 2:
+            # If there is only one modality, we only encode not decode
+            if len(all_modalities_bandsets) == 1:
                 encoded_bandset_idxs = all_modalities_bandsets
                 decoded_bandset_idxs = []
+            # If there are two modalities, we encode one and decode the other
+            elif len(all_modalities_bandsets) == 2:
+                encoded_bandset_idxs = [all_modalities_bandsets[0]]
+                decoded_bandset_idxs = [all_modalities_bandsets[1]]
+            # If there are more than two modalities, we randomly select some to encode and the rest to decode
             else:
                 num_encoded_bandsets = np.random.randint(
-                    2, len(all_modalities_bandsets)
+                    1, len(all_modalities_bandsets)
                 )
                 encoded_idxs = np.random.choice(
                     len(all_modalities_bandsets),
@@ -863,6 +876,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
 
                 encoded_decoded_bandset_idxs = present_modalities_for_sample[modality]
                 for bandset_idx in encoded_decoded_bandset_idxs:
+                    # Right now one bandset can either be encoded or decoded, not both
                     is_encoded = encoded_decoded_bandset_idxs[bandset_idx]
                     is_decoded = not is_encoded
 
