@@ -764,7 +764,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
 
     def get_sample_present_modalities(
         self, batch: MaskedHeliosSample
-    ) -> list[dict[str, dict[int, int]]]:
+    ) -> list[dict[str, dict[int, bool]]]:
         """Get the modalities that are present for each sample."""
         masked_sample_dict = batch.as_dict(return_none=False)
         present_modalities = []
@@ -781,16 +781,16 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 missing_mask = modality_mask == MaskValue.MISSING.value
                 # Modality is present only if it is not completely missing
                 if not torch.all(missing_mask[sample_idx]):
-                    # Add all bandsets indices, by default encode all bandsets (1: encode, 0: decode)
-                    bandset_idx = {i: 1 for i in range(modality_mask.shape[-1])}
+                    # By default encode all bandsets (True: encode, False: decode)
+                    bandset_idx = {i: True for i in range(modality_mask.shape[-1])}
                     present_modalities_for_sample[modality] = bandset_idx
 
             present_modalities.append(present_modalities_for_sample)
         return present_modalities
 
     def select_encoded_decoded_bandsets(
-        self, present_modalities: list[dict[str, dict[int, int]]]
-    ) -> list[dict[str, dict[int, int]]]:
+        self, present_modalities: list[dict[str, dict[int, bool]]]
+    ) -> list[dict[str, dict[int, bool]]]:
         """Select the encoded and decoded bandsets for each sample."""
         encoded_decoded_bandsets = []
         for sample_idx in range(len(present_modalities)):
@@ -826,9 +826,9 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 ]
             # Set the encoded and decoded bandsets (1: encode, 0: decode)
             for encoded_modality, encoded_bandset in encoded_bandset_idxs:
-                present_modalities_for_sample[encoded_modality][encoded_bandset] = 1
+                present_modalities_for_sample[encoded_modality][encoded_bandset] = True
             for decoded_modality, decoded_bandset in decoded_bandset_idxs:
-                present_modalities_for_sample[decoded_modality][decoded_bandset] = 0
+                present_modalities_for_sample[decoded_modality][decoded_bandset] = False
 
             encoded_decoded_bandsets.append(present_modalities_for_sample)
         return encoded_decoded_bandsets
@@ -841,7 +841,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
     def apply_bandset_mask_rules(
         self,
         masked_batch: MaskedHeliosSample,
-        encoded_decoded_bandsets: list[dict[str, dict[int, int]]],
+        encoded_decoded_bandsets: list[dict[str, dict[int, bool]]],
     ) -> MaskedHeliosSample:
         """Allow encoding of encoded bandsets and decoding of decoded bandsets."""
         masked_batch_dict = masked_batch.as_dict(return_none=False)
@@ -863,8 +863,8 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
 
                 encoded_decoded_bandset_idxs = present_modalities_for_sample[modality]
                 for bandset_idx in encoded_decoded_bandset_idxs:
-                    is_encoded = encoded_decoded_bandset_idxs[bandset_idx] == 1
-                    is_decoded = encoded_decoded_bandset_idxs[bandset_idx] == 0
+                    is_encoded = encoded_decoded_bandset_idxs[bandset_idx]
+                    is_decoded = not is_encoded
 
                     if self.overide_random_mask_condition(modality_spec):
                         if is_encoded:
