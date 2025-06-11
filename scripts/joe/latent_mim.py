@@ -8,7 +8,6 @@ from olmo_core.distributed.parallel.data_parallel import (
     DataParallelType,
 )
 from olmo_core.optim import AdamWConfig
-from olmo_core.optim.scheduler import ConstantWithWarmup
 from olmo_core.train.callbacks import (
     BeakerCallback,
     CheckpointerCallback,
@@ -42,6 +41,7 @@ from helios.train.callbacks import (
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
+from helios.train.scheduler import PolyWithWarmup
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ def build_train_module_config(
     """Build the train module config for an experiment."""
     return LatentMIMTrainModuleConfig(
         optim_config=AdamWConfig(lr=0.0001, weight_decay=0.02),
-        warmup_duration=Duration.steps(4000),
+        warmup_duration=Duration.steps(2000),
         rank_microbatch_size=64,  # Can be 256 on titan, needs to be <= 64 (i think) on jupiter
         masking_config=MaskingConfig(
             strategy_config={
@@ -102,7 +102,7 @@ def build_train_module_config(
         ),
         token_exit_cfg={modality: 0 for modality in common.training_modalities},
         max_grad_norm=1.0,
-        scheduler=ConstantWithWarmup(),
+        scheduler=PolyWithWarmup(),
         ema_decay=(1.0, 1.0),
         dp_config=DataParallelConfig(
             name=DataParallelType.fsdp,
@@ -156,7 +156,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             save_folder=common.save_folder,
             cancel_check_interval=1,
             metrics_collect_interval=1,
-            max_duration=Duration.epochs(75),
+            max_duration=Duration.epochs(30),
             checkpointer=CheckpointerConfig(work_dir=common.save_folder),
         )
         .with_callback(
