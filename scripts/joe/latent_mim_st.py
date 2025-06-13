@@ -125,7 +125,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     return HeliosDataLoaderConfig(
         num_workers=16,
         global_batch_size=512,
-        token_budget=3250,
+        token_budget=3000,
         prefetch_factor=4,
         sampled_hw_p_list=list(range(5, 13)),
         min_patch_size=MIN_PATCH_SIZE,
