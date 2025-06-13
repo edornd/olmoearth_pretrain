@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
 
-model_size = MODEL_SIZE_ARGS["large_shallow_decoder"]
+model_size = MODEL_SIZE_ARGS["base_shallow_decoder"]
 
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
@@ -96,7 +96,7 @@ def build_train_module_config(
         ),
         masking_config=MaskingConfig(
             strategy_config={
-                "type": "random",
+                "type": "space_time",
                 "encode_ratio": 0.1,
                 "decode_ratio": 0.75,
             }
@@ -125,7 +125,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     return HeliosDataLoaderConfig(
         num_workers=16,
         global_batch_size=512,
-        token_budget=3000,
+        token_budget=6000,
         prefetch_factor=4,
         sampled_hw_p_list=list(range(5, 13)),
         min_patch_size=MIN_PATCH_SIZE,
@@ -143,13 +143,13 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
             HeliosDatasetConfig(
                 h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_128_x_4_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/469892",
                 training_modalities=common.training_modalities,
-                cache_dir="/helios_cache/presto",
+                # cache_dir="/helios_cache/presto",
             ),
             # osm_sampling
             HeliosDatasetConfig(
                 h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_128_x_4_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/1141152",
                 training_modalities=common.training_modalities,
-                cache_dir="/helios_cache/osm_sampling",
+                # cache_dir="/helios_cache/osm_sampling",
             ),
         ]
     )
