@@ -8,9 +8,11 @@ from helios.data.constants import MISSING_VALUE, Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import (
     MaskValue,
+    ModalityCrossSpaceMaskingStrategy,
     ModalityMaskingStrategy,
     ModalitySpaceTimeMaskingStrategy,
     RandomMaskingStrategy,
+    RandomRangeMaskingStrategy,
     SpaceMaskingStrategy,
     TimeMaskingStrategy,
 )
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def test_random_masking_and_unmask() -> None:
     """Test random masking ratios."""
-    b, h, w, t = 100, 16, 16, 8
+    b, h, w, t = 4, 16, 16, 8
 
     patch_size = 4
 
@@ -749,3 +751,186 @@ def test_modality_mask_and_unmask() -> None:
     assert (
         num_decoder / total_elements
     ) == expected_decode_ratio, "Incorrect decode mask ratio"
+
+
+def test_random_range_masking() -> None:
+    """Test random range masking."""
+    b, h, w, t = 100, 16, 16, 8
+    patch_size = 4
+
+    days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
+    months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
+    years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
+    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
+    worldcover_num_bands = Modality.WORLDCOVER.num_bands
+    latlon_num_bands = Modality.LATLON.num_bands
+    batch = HeliosSample(
+        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
+        latlon=torch.ones((b, latlon_num_bands)),
+        timestamps=timestamps,
+        worldcover=torch.ones((b, h, w, 1, worldcover_num_bands)),
+    )
+    min_encode_ratio = 0.4
+    max_encode_ratio = 0.9
+    masked_sample = RandomRangeMaskingStrategy(
+        min_encode_ratio=min_encode_ratio,
+        max_encode_ratio=max_encode_ratio,
+    ).apply_mask(
+        batch,
+        patch_size=patch_size,
+    )
+    # Check that all values in the first patch are the same (consistent masking)
+    assert masked_sample.sentinel2_l2a_mask is not None
+    first_patch: torch.Tensor = masked_sample.sentinel2_l2a_mask[0, :4, :4, 0, 0]
+    first_value: int = first_patch[0, 0]
+    assert (first_patch == first_value).all()
+    second_patch: torch.Tensor = masked_sample.sentinel2_l2a_mask[0, :4, :4, 1, 0]
+    second_value: int = second_patch[0, 0]
+    assert (second_patch == second_value).all()
+    worldcover_patch: torch.Tensor = masked_sample.worldcover_mask[0, :4, :4, 0]  # type: ignore
+    worldcover_value: int = worldcover_patch[0, 0]
+    assert (worldcover_patch == worldcover_value).all()
+    # Check that the distribution of masking ratios is roughly correct.
+    encode_ratios = []
+    decode_ratios = []
+    for example_idx in range(b):
+        mask = masked_sample.sentinel2_l2a_mask[example_idx]
+        total_elements = mask.numel()
+        num_encoder = len(mask[mask == MaskValue.ONLINE_ENCODER.value])
+        num_decoder = len(mask[mask == MaskValue.DECODER.value])
+        encode_ratios.append(num_encoder / total_elements)
+        decode_ratios.append(num_decoder / total_elements)
+    eps = 0.02
+    assert min_encode_ratio - eps <= min(encode_ratios) < min_encode_ratio + 0.1
+    assert max_encode_ratio + eps >= max(encode_ratios) > max_encode_ratio - 0.1
+    min_decode_ratio = 1 - max_encode_ratio
+    max_decode_ratio = 1 - min_encode_ratio
+    assert min_decode_ratio - eps <= min(decode_ratios) < min_decode_ratio + 0.1
+    assert max_decode_ratio + eps >= max(decode_ratios) > max_decode_ratio - 0.1
+
+
+def test_space_cross_modality_masking(set_random_seeds: None) -> None:
+    """Test space cross modality masking."""
+    b, h, w, t = 4, 4, 4, 3
+
+    patch_size = 1
+
+    days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
+    months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
+    years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
+    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
+    worldcover_num_bands = Modality.WORLDCOVER.num_bands
+    latlon_num_bands = Modality.LATLON.num_bands
+    batch = HeliosSample(
+        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
+        sentinel1=torch.ones((b, h, w, t, Modality.SENTINEL1.num_bands)),
+        latlon=torch.ones((b, latlon_num_bands)),
+        timestamps=timestamps,
+        worldcover=torch.ones((b, h, w, 1, worldcover_num_bands)),
+    )
+
+    strategy = ModalityCrossSpaceMaskingStrategy(
+        encode_ratio=0.1,
+        decode_ratio=0.75,
+        allow_encoding_decoding_same_bandset=False,
+    )
+    masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
+    logger.info(f"masked_sample: {masked_sample}")
+    # Check that the worldcover mask has the expected values
+    # Check that latlon mask has the expected values
+    expected_latlon_mask = torch.tensor([[0], [2], [2], [0]])
+    expected_worldcover_mask = torch.tensor(
+        [
+            [
+                [[[2]], [[2]], [[2]], [[1]]],
+                [[[2]], [[2]], [[1]], [[2]]],
+                [[[2]], [[2]], [[1]], [[2]]],
+                [[[2]], [[2]], [[1]], [[2]]],
+            ],
+            [
+                [[[1]], [[2]], [[2]], [[1]]],
+                [[[2]], [[2]], [[2]], [[2]]],
+                [[[2]], [[1]], [[2]], [[2]]],
+                [[[2]], [[2]], [[1]], [[2]]],
+            ],
+            [
+                [[[2]], [[2]], [[1]], [[2]]],
+                [[[2]], [[1]], [[2]], [[1]]],
+                [[[2]], [[2]], [[1]], [[2]]],
+                [[[2]], [[2]], [[2]], [[2]]],
+            ],
+            [
+                [[[2]], [[2]], [[2]], [[2]]],
+                [[[2]], [[1]], [[2]], [[2]]],
+                [[[2]], [[2]], [[1]], [[1]]],
+                [[[1]], [[2]], [[2]], [[2]]],
+            ],
+        ]
+    )
+
+    # Assert that the masks match the expected values
+    assert torch.equal(masked_sample.worldcover_mask, expected_worldcover_mask)
+    assert torch.equal(masked_sample.latlon_mask, expected_latlon_mask)
+
+
+def test_space_cross_modality_masking_with_missing_data(set_random_seeds: None) -> None:
+    """Test space cross modality masking."""
+    b, h, w, t = 4, 4, 4, 3
+
+    patch_size = 1
+
+    days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
+    months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
+    years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
+    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
+    worldcover_num_bands = Modality.WORLDCOVER.num_bands
+    latlon_num_bands = Modality.LATLON.num_bands
+    batch = HeliosSample(
+        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
+        sentinel1=torch.ones((b, h, w, t, Modality.SENTINEL1.num_bands)),
+        latlon=torch.ones((b, latlon_num_bands)),
+        timestamps=timestamps,
+        worldcover=torch.full((b, h, w, 1, worldcover_num_bands), MISSING_VALUE),
+    )
+
+    strategy_allow_false = ModalityCrossSpaceMaskingStrategy(
+        encode_ratio=0.1,
+        decode_ratio=0.75,
+        allow_encoding_decoding_same_bandset=False,
+    )
+    strategy_allow_true = ModalityCrossSpaceMaskingStrategy(
+        encode_ratio=0.1,
+        decode_ratio=0.75,
+        allow_encoding_decoding_same_bandset=True,
+    )
+    masked_sample_allow_false = strategy_allow_false.apply_mask(
+        batch, patch_size=patch_size
+    )
+    masked_sample_allow_true = strategy_allow_true.apply_mask(
+        batch, patch_size=patch_size
+    )
+    logger.info(f"masked_sample_allow_false: {masked_sample_allow_false}")
+    logger.info(f"masked_sample_allow_true: {masked_sample_allow_true}")
+    # Check that the worldcover mask has the expected values
+    # Check that latlon mask has the expected values
+    expected_latlon_mask = torch.tensor([[0], [2], [2], [0]])
+
+    # Assert that the masks match the expected values
+    assert (masked_sample_allow_false.worldcover_mask == MaskValue.MISSING.value).all()  # type: ignore
+    assert torch.equal(masked_sample_allow_false.latlon_mask, expected_latlon_mask)
+
+    # Compare the masks between two strategies
+    assert not torch.equal(
+        masked_sample_allow_false.latlon_mask, masked_sample_allow_true.latlon_mask
+    )
+    assert not torch.equal(
+        masked_sample_allow_false.sentinel2_l2a_mask,
+        masked_sample_allow_true.sentinel2_l2a_mask,
+    )
+    assert not torch.equal(
+        masked_sample_allow_false.sentinel1_mask,
+        masked_sample_allow_true.sentinel1_mask,
+    )

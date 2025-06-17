@@ -21,6 +21,7 @@ from helios.nn.encodings import (
     get_month_encoding_table,
 )
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed, FlexiPatchReconstruction
+from helios.nn.utils import get_cumulative_sequence_lengths
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)
@@ -426,28 +427,37 @@ class Reconstructor(nn.Module):
 
     def __init__(
         self,
+        decoder: nn.Module,
         supported_modalities: list[ModalitySpec],
         max_patch_size: int,
-        embedding_size: int,
     ):
         """Initialize the patch embeddings.
 
         Args:
+            decoder: Predictor nn module to use on before reconstructor on input
             supported_modalities: Which modalities from Modality this model
                 instantiation supports
             max_patch_size: Maximum size of patches
-            embedding_size: Size of embeddings
         """
         super().__init__()
         self.max_patch_size = max_patch_size
-        self.embedding_size = embedding_size
+        self.embedding_size = decoder.output_embedding_size
         self.supported_modalities = supported_modalities
+        self.decoder = decoder
         # TODO: want to be able to remove certain bands and modalities
         self.per_modality_reconstructions = nn.ModuleDict({})
         for modality in self.supported_modalities:
             self.per_modality_reconstructions[modality.name] = (
                 self._get_patch_reconstruction_module_for_modality(modality)
             )
+
+    def apply_compile(self) -> None:
+        """Apply torch.compile to the model."""
+        self.decoder.apply_compile()
+
+    def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
+        """Apply FSDP to the model."""
+        self.decoder.apply_fsdp(**fsdp_kwargs)
 
     @staticmethod
     def _get_reconstruction_module_name(modality: str, idx: int) -> str:
@@ -534,13 +544,16 @@ class Reconstructor(nn.Module):
 
     def forward(
         self,
-        input_data: TokensAndMasks,
+        x: TokensAndMasks,
+        timestamps: Tensor,
         patch_size: int,
+        input_res: int = BASE_GSD,
     ) -> TokensAndMasks:
         """Return flexibly patchified reconstruction for each modality of the input data.
 
         Given a [B, H, W, (T), b_s, D] inputs, returns a [B, H, W, (T), C] output.
         """
+        input_data = self.decoder(x, timestamps, patch_size, input_res)
         output_dict = {}
         modalities_to_process = get_modalities_to_process(
             input_data.modalities, [m.name for m in self.supported_modalities]
@@ -559,8 +572,8 @@ class Reconstructor(nn.Module):
 class ReconstructorConfig(Config):
     """Configuration for the Reconstructor."""
 
+    decoder_config: "Config"
     supported_modality_names: list[str]
-    embedding_size: int = 16
     max_patch_size: int = 8
 
     def validate(self) -> None:
@@ -583,6 +596,8 @@ class ReconstructorConfig(Config):
         kwargs = self.as_dict(exclude_none=True, recurse=False)
         kwargs.pop("supported_modality_names")
         kwargs["supported_modalities"] = self.supported_modalities
+        kwargs.pop("decoder_config")
+        kwargs["decoder"] = self.decoder_config.build()
         logger.info(f"Predictor kwargs: {kwargs}")
         return Reconstructor(**kwargs)
 
@@ -595,8 +610,8 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         embedding_size: int,
         supported_modalities: list[ModalitySpec],
         max_sequence_length: int,
-        use_channel_embs: bool = True,
-        random_channel_embs: bool = False,
+        learnable_channel_embeddings: bool = True,
+        random_channel_embeddings: bool = False,
     ):
         """Initialize the composite encodings.
 
@@ -605,8 +620,8 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             supported_modalities: Which modalities from Modality this model
                 instantiation supports
             max_sequence_length: Maximum sequence length
-            use_channel_embs: Whether to use learnable channel embeddings
-            random_channel_embs: Initialize channel embeddings randomly (zeros if False)
+            learnable_channel_embeddings: Whether to use learnable channel embeddings
+            random_channel_embeddings: Initialize channel embeddings randomly (zeros if False)
         """
         super().__init__()
         self.embedding_size = embedding_size
@@ -634,7 +649,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         # M
         month_tab = get_month_encoding_table(self.embedding_dim_per_embedding_type)
         self.month_embed = nn.Embedding.from_pretrained(month_tab, freeze=True)
-        if use_channel_embs:
+        if learnable_channel_embeddings:
             args = {"requires_grad": True}
         else:
             args = {"requires_grad": False}
@@ -642,7 +657,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         self.per_modality_channel_embeddings = nn.ParameterDict()
         for modality in self.supported_modalities:
             shape = (len(modality.band_sets), self.embedding_dim_per_embedding_type)
-            if random_channel_embs:
+            if random_channel_embeddings:
                 channel_embeddings = nn.Parameter(torch.rand(shape), **args)
             else:
                 channel_embeddings = nn.Parameter(torch.zeros(shape), **args)
@@ -790,13 +805,14 @@ class FlexiHeliosBase(nn.Module):
         self,
         embedding_size: int,
         max_sequence_length: int,
-        use_channel_embs: bool,
         num_heads: int,
         mlp_ratio: float,
         depth: int,
         drop_path: float,
         supported_modalities: list[ModalitySpec],
-        random_channel_embs: bool = False,
+        learnable_channel_embeddings: bool = True,
+        random_channel_embeddings: bool = False,
+        use_flash_attn: bool = False,
     ) -> None:
         """Initialize the FlexiHeliosBase class."""
         super().__init__()
@@ -807,9 +823,10 @@ class FlexiHeliosBase(nn.Module):
         logger.info(f"modalities being used by model: {self.supported_modality_names}")
 
         self.max_sequence_length = max_sequence_length
-        self.use_channel_embs = use_channel_embs
-        self.random_channel_embs = random_channel_embs
 
+        self.use_flash_attn = use_flash_attn
+        self.learnable_channel_embeddings = learnable_channel_embeddings
+        self.random_channel_embeddings = random_channel_embeddings
         self.blocks = nn.ModuleList(
             [
                 Block(
@@ -820,6 +837,7 @@ class FlexiHeliosBase(nn.Module):
                     norm_layer=nn.LayerNorm,  # TODO: This should be configurable
                     cross_attn=self.cross_attn,
                     drop_path=drop_path,
+                    use_flash_attn=self.use_flash_attn,
                 )
                 for _ in range(depth)
             ]
@@ -829,8 +847,8 @@ class FlexiHeliosBase(nn.Module):
             embedding_size,
             self.supported_modalities,
             max_sequence_length,
-            use_channel_embs,
-            random_channel_embs,
+            learnable_channel_embeddings,
+            random_channel_embeddings,
         )
         self.apply(self._init_weights)
 
@@ -949,6 +967,37 @@ class FlexiHeliosBase(nn.Module):
 
         return tokens_only_dict
 
+    @staticmethod
+    def pack_tokens(tokens: Tensor, mask: Tensor) -> Tensor:
+        """Pack the Batch and sequence length dimensions of tokens and mask into a single tensor.
+
+        Args:
+            tokens: Tokens to pack
+            mask: Mask to pack
+
+        Returns:
+            Packed tokens enabling varlen flash attention
+        """
+        tokens_packed = torch.flatten(tokens, end_dim=1)
+        mask = torch.flatten(mask)
+        tokens = tokens_packed[mask]
+        return tokens
+
+    @staticmethod
+    def unpack_tokens(tokens: Tensor, mask: Tensor, og_shape: tuple) -> Tensor:
+        """Unpack the Batch and sequence length dimensions of tokens and mask into a single tensor.
+
+        Args:
+            tokens: Tokens to unpack
+            mask: Mask to unpack
+            og_shape: Original shape of the tokens
+        """
+        tokens_new = tokens.new_zeros(og_shape[0] * og_shape[1], og_shape[2])
+        mask = torch.flatten(mask)
+        tokens_new[mask] = tokens
+        tokens = tokens_new.reshape(og_shape[0], og_shape[1], -1)
+        return tokens
+
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
         """Apply FSDP to the model."""
         for block in self.blocks:
@@ -976,10 +1025,12 @@ class Encoder(FlexiHeliosBase):
         drop_path: float,
         supported_modalities: list[ModalitySpec],
         max_sequence_length: int,
-        use_channel_embs: bool = True,
-        random_channel_embs: bool = False,
+        learnable_channel_embeddings: bool = True,
+        random_channel_embeddings: bool = False,
         num_projection_layers: int = 1,
         aggregate_then_project: bool = True,
+        use_flash_attn: bool = False,
+        frozen_patch_embeddings: bool = False,
     ):
         """Initialize the encoder.
 
@@ -993,12 +1044,15 @@ class Encoder(FlexiHeliosBase):
             drop_path: Drop path rate
             supported_modalities: list documenting modalities used in a given model instantiation
             max_sequence_length: Maximum sequence length
-            use_channel_embs: Whether to use learnable channel embeddings
-            random_channel_embs: Initialize channel embeddings randomly (zeros if False)
+            learnable_channel_embeddings: Whether to use learnable channel embeddings
+            random_channel_embeddings: Initialize channel embeddings randomly (zeros if False)
             num_projection_layers: The number of layers to use in the projection. If >1, then
                 a ReLU activation will be applied between layers
             aggregate_then_project: If True, then we will average the tokens before applying
                 the projection. If False, we will apply the projection first.
+            use_flash_attn: Whether to use flash attention
+            frozen_patch_embeddings: If True, we freeze the embedding layer, as recommended in
+                https://arxiv.org/pdf/2104.02057, Section 4.2
         """
         super().__init__(
             embedding_size=embedding_size,
@@ -1006,10 +1060,11 @@ class Encoder(FlexiHeliosBase):
             mlp_ratio=mlp_ratio,
             num_heads=num_heads,
             max_sequence_length=max_sequence_length,
-            use_channel_embs=use_channel_embs,
+            learnable_channel_embeddings=learnable_channel_embeddings,
             drop_path=drop_path,
             supported_modalities=supported_modalities,
-            random_channel_embs=random_channel_embs,
+            use_flash_attn=use_flash_attn,
+            random_channel_embeddings=random_channel_embeddings,
         )
         self.min_patch_size = min_patch_size
         self.max_patch_size = max_patch_size
@@ -1026,6 +1081,10 @@ class Encoder(FlexiHeliosBase):
         )
         self.norm = nn.LayerNorm(self.embedding_size)
         self.apply(self._init_weights)
+
+        if frozen_patch_embeddings:
+            for p in self.patch_embeddings.parameters():
+                p.requires_grad = False
 
     def create_token_exit_ids(
         self, x: dict[str, Tensor], token_exit_cfg: dict[str, int]
@@ -1046,7 +1105,9 @@ class Encoder(FlexiHeliosBase):
         return exit_ids_per_modality_dict
 
     @staticmethod
-    def remove_masked_tokens(x: Tensor, mask: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def remove_masked_tokens(
+        x: Tensor, mask: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """Remove masked tokens from the tokens and masks.
 
         Implementation from https://stackoverflow.com/a/68621610/2332296
@@ -1063,6 +1124,8 @@ class Encoder(FlexiHeliosBase):
             tokens: [B, T, D]
             indices: [B, T]
             updated_mask: [B, T]
+            seqlens: [B]
+            max_length: [1]
             where T is the max number of unmasked tokens for an instance
         """
         sorted_mask, indices = torch.sort(mask, dim=1, descending=True, stable=True)
@@ -1074,12 +1137,13 @@ class Encoder(FlexiHeliosBase):
         x = x * sorted_mask.unsqueeze(-1)
 
         # cut off to the length of the longest sequence
-        max_length = sorted_mask.sum(-1).max()
+        seq_lengths = sorted_mask.sum(-1)
+        max_length = seq_lengths.max()
         x = x[:, :max_length]
         # New mask chopped to the longest sequence
         updated_mask = sorted_mask[:, :max_length]
 
-        return x, indices, updated_mask
+        return x, indices, updated_mask, seq_lengths, max_length
 
     @staticmethod
     def add_removed_tokens(
@@ -1170,15 +1234,26 @@ class Encoder(FlexiHeliosBase):
             input_res,
         )
         tokens_dict.update(original_masks_dict)
-        x, mask = self.collapse_and_combine_hwtc(tokens_dict)
+        tokens, mask = self.collapse_and_combine_hwtc(tokens_dict)
 
         bool_mask = mask == MaskValue.ONLINE_ENCODER.value
 
-        tokens, indices, new_mask = self.remove_masked_tokens(x, bool_mask)
+        tokens, indices, new_mask, seq_lengths, max_seqlen = self.remove_masked_tokens(
+            tokens, bool_mask
+        )
         if exit_ids_seq is not None:
-            exit_ids_seq, _, _ = self.remove_masked_tokens(exit_ids_seq, bool_mask)
+            exit_ids_seq, _, _, _, _ = self.remove_masked_tokens(
+                exit_ids_seq, bool_mask
+            )
             # still linear projections
-            exited_tokens, _, _ = self.remove_masked_tokens(exited_tokens, bool_mask)
+            exited_tokens, _, _, _, _ = self.remove_masked_tokens(
+                exited_tokens, bool_mask
+            )
+        cu_seqlens = get_cumulative_sequence_lengths(seq_lengths)
+        # Pack x tokens
+        if self.use_flash_attn:
+            og_shape = tokens.shape
+            tokens = self.pack_tokens(tokens, new_mask)
 
         # Apply attn with varying encoder depths
         for i_blk, blk in enumerate(self.blocks):
@@ -1197,7 +1272,16 @@ class Encoder(FlexiHeliosBase):
             # of True indicates the value *should* take part in
             # attention
             # WARNING: THIS MAY CHANGE DEPENDING ON THE ATTENTION IMPLEMENTATION
-            tokens = blk(x=tokens, y=None, attn_mask=new_mask)
+            tokens = blk(
+                x=tokens,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                # we will have to specify k and q lens for cross attention
+                attn_mask=new_mask if self.training else None,
+            )
+
+        if self.use_flash_attn:
+            tokens = self.unpack_tokens(tokens, new_mask, og_shape)
 
         if exit_ids_seq is not None:
             # this should only ever be called by the target encoder,
@@ -1223,6 +1307,7 @@ class Encoder(FlexiHeliosBase):
         tokens_per_modality_dict.update(original_masks_dict)
         return tokens_per_modality_dict
 
+    # TODO: we want to have a single API for the encoder and decoder
     def forward(
         self,
         x: MaskedHeliosSample,
@@ -1285,6 +1370,7 @@ class Predictor(FlexiHeliosBase):
         learnable_channel_embeddings: bool = True,
         random_channel_embeddings: bool = False,
         output_embedding_size: int | None = None,
+        use_flash_attn: bool = False,
     ):
         """Initialize the predictor.
 
@@ -1300,6 +1386,7 @@ class Predictor(FlexiHeliosBase):
             learnable_channel_embeddings: Whether to use learnable channel embeddings
             random_channel_embeddings: Whether to randomly initialize channel embeddings
             output_embedding_size: Size of output embeddings
+            use_flash_attn: Whether to use flash attention
         """
         super().__init__(
             embedding_size=decoder_embedding_size,
@@ -1308,11 +1395,11 @@ class Predictor(FlexiHeliosBase):
             num_heads=num_heads,
             max_sequence_length=max_sequence_length,
             drop_path=drop_path,
-            use_channel_embs=learnable_channel_embeddings,
-            random_channel_embs=random_channel_embeddings,
+            learnable_channel_embeddings=learnable_channel_embeddings,
+            random_channel_embeddings=random_channel_embeddings,
             supported_modalities=supported_modalities,
+            use_flash_attn=use_flash_attn,
         )
-        # TODO: Rename this weird misname
         self.learnable_channel_embeddings = learnable_channel_embeddings
         self.random_channel_embeddings = random_channel_embeddings
         self.encoder_embedding_size = encoder_embedding_size
@@ -1369,9 +1456,7 @@ class Predictor(FlexiHeliosBase):
 
     # TODO: GIVE more explicit function names
     @staticmethod
-    def split_x_y(
-        tokens: Tensor, mask: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def split_x_y(tokens: Tensor, mask: Tensor) -> tuple[Tensor, ...]:
         """Splits tokens into three groups based on mask values.
 
         This function:
@@ -1391,6 +1476,10 @@ class Predictor(FlexiHeliosBase):
             tokens_to_decode_mask: Binary mask for x tokens of shape [B, X_len].
             unmasked_tokens_mask: Binary mask for y tokens of shape [B, Y_len].
             indices: Indices for restoring the original token ordering of shape [B, T].
+            seqlens_tokens_to_decode: Sequence lengths of tokens to decode of shape [B].
+            seqlens_unmasked_tokens: Sequence lengths of unmasked tokens of shape [B].
+            max_length_of_decoded_tokens: Maximum length of decoded tokens of shape [1].
+            max_length_of_unmasked_tokens: Maximum length of unmasked tokens of shape [1].
         """
         # Set Missing Masks to Target Encoder ONLY so that we can have all unused tokens in the middle
         org_mask_dtype = mask.dtype
@@ -1407,8 +1496,10 @@ class Predictor(FlexiHeliosBase):
         binarized_decoder_mask = sorted_mask == MaskValue.DECODER.value
         binarized_online_encoder_mask = sorted_mask == MaskValue.ONLINE_ENCODER.value
 
-        max_length_of_unmasked_tokens = binarized_online_encoder_mask.sum(dim=-1).max()
-        max_length_of_decoded_tokens = binarized_decoder_mask.sum(dim=-1).max()
+        seqlens_unmasked_tokens = binarized_online_encoder_mask.sum(dim=-1)
+        max_length_of_unmasked_tokens = seqlens_unmasked_tokens.max()
+        seqlens_tokens_to_decode = binarized_decoder_mask.sum(dim=-1)
+        max_length_of_decoded_tokens = seqlens_tokens_to_decode.max()
 
         # the y mask is going to be used to determine which of the y values take. True values
         # take part in the attention (we don't take the inverse here, unlike in the decoder)
@@ -1432,6 +1523,10 @@ class Predictor(FlexiHeliosBase):
             tokens_to_decode_mask,
             unmasked_tokens_mask,
             indices,
+            seqlens_tokens_to_decode,
+            seqlens_unmasked_tokens,
+            max_length_of_decoded_tokens,
+            max_length_of_unmasked_tokens,
         )
 
     @staticmethod
@@ -1488,18 +1583,69 @@ class Predictor(FlexiHeliosBase):
             tokens_only_dict, timestamps, patch_size, input_res
         )
         tokens_dict.update(original_masks_dict)
-        x, mask = self.collapse_and_combine_hwtc(tokens_dict)
+        all_tokens, mask = self.collapse_and_combine_hwtc(tokens_dict)
         # X contains the tokens to decode, Y contains the tokens to attend to for context
-        x, y, x_mask, y_mask, indices = self.split_x_y(x, mask)
+        (
+            tokens_to_decode,
+            unmasked_tokens,
+            tokens_to_decode_mask,
+            unmasked_tokens_mask,
+            indices,
+            seqlens_tokens_to_decode,
+            seqlens_unmasked_tokens,
+            max_length_of_tokens_to_decode,
+            max_length_of_unmasked_tokens,
+        ) = self.split_x_y(all_tokens, mask)
+        # Pack x tokens
+        if self.use_flash_attn:
+            og_shape_tokens_to_decode = tokens_to_decode.shape
+            tokens_to_decode = self.pack_tokens(
+                tokens_to_decode, tokens_to_decode_mask.bool()
+            )
+            og_shape_unmasked_tokens = unmasked_tokens.shape
+            unmasked_tokens = self.pack_tokens(
+                unmasked_tokens, unmasked_tokens_mask.bool()
+            )
+            cu_seqlens_tokens_to_decode = get_cumulative_sequence_lengths(
+                seqlens_tokens_to_decode
+            )
+            cu_seqlens_unmasked_tokens = get_cumulative_sequence_lengths(
+                seqlens_unmasked_tokens
+            )
+        else:
+            cu_seqlens_tokens_to_decode = None
+            cu_seqlens_unmasked_tokens = None
+
         for blk in self.blocks:
             # note that we are not taking the inverse of the mask, since split_x_y gives us
             # true values for values we want to take part in attention
-            x = blk(x=x, y=y, attn_mask=y_mask.bool())
+            tokens_to_decode = blk(
+                x=tokens_to_decode,
+                y=unmasked_tokens,
+                attn_mask=(
+                    unmasked_tokens_mask.bool() if not self.use_flash_attn else None
+                ),  # only for flash attn though this should not be left in
+                cu_seqlens_q=cu_seqlens_tokens_to_decode,
+                cu_seqlens_k=cu_seqlens_unmasked_tokens,
+                max_seqlen_q=max_length_of_tokens_to_decode,
+                max_seqlen_k=max_length_of_unmasked_tokens,
+            )
+
+        if self.use_flash_attn:
+            tokens_to_decode = self.unpack_tokens(
+                tokens_to_decode,
+                tokens_to_decode_mask.bool(),
+                og_shape_tokens_to_decode,
+            )
+            unmasked_tokens = self.unpack_tokens(
+                unmasked_tokens, unmasked_tokens_mask.bool(), og_shape_unmasked_tokens
+            )
+
         x = self.combine_x_y(
-            tokens_to_decode=x,
-            unmasked_tokens=y,
-            tokens_to_decode_mask=x_mask,
-            unmasked_tokens_mask=y_mask,
+            tokens_to_decode=tokens_to_decode,
+            unmasked_tokens=unmasked_tokens,
+            tokens_to_decode_mask=tokens_to_decode_mask,
+            unmasked_tokens_mask=unmasked_tokens_mask,
             indices=indices,
         )
         tokens_per_modality_dict = self.split_and_expand_per_modality(
@@ -1558,7 +1704,6 @@ class Predictor(FlexiHeliosBase):
         modalities_to_process = get_modalities_to_process(
             available_modalities, self.supported_modality_names
         )
-
         for modality in modalities_to_process:
             masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
             modality_mask = tokens_and_masks[masked_modality_name]
@@ -1595,10 +1740,12 @@ class EncoderConfig(Config):
     depth: int = 2
     drop_path: float = 0.1
     max_sequence_length: int = 12
-    use_channel_embs: bool = True
-    random_channel_embs: bool = False
+    learnable_channel_embeddings: bool = True
+    random_channel_embeddings: bool = False
     num_projection_layers: int = 1
     aggregate_then_project: bool = True
+    use_flash_attn: bool = False
+    frozen_patch_embeddings: bool = False
 
     def validate(self) -> None:
         """Validate the configuration."""
@@ -1640,6 +1787,7 @@ class PredictorConfig(Config):
     learnable_channel_embeddings: bool = True
     random_channel_embeddings: bool = False
     output_embedding_size: int | None = None
+    use_flash_attn: bool = False
 
     def validate(self) -> None:
         """Validate the configuration."""

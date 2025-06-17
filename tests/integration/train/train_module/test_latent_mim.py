@@ -55,8 +55,6 @@ def latent_mim_model(
         depth=2,
         drop_path=0.1,
         max_sequence_length=12,
-        use_channel_embs=True,
-        random_channel_embs=False,
     )
 
     # Create predictor config
@@ -69,8 +67,6 @@ def latent_mim_model(
         num_heads=2,
         max_sequence_length=12,
         drop_path=0.0,
-        learnable_channel_embeddings=True,
-        random_channel_embeddings=False,
         output_embedding_size=None,
     )
 

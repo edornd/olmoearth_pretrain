@@ -70,7 +70,6 @@ def test_latentmim_with_loss(
         num_heads=NUM_HEADS,
         mlp_ratio=MLP_RATIO,
         max_sequence_length=MAX_SEQ_LENGTH,
-        use_channel_embs=True,
         depth=DEPTH,
         drop_path=DROP_PATH,
     )
@@ -83,11 +82,10 @@ def test_latentmim_with_loss(
         num_heads=NUM_HEADS,
         max_sequence_length=MAX_SEQ_LENGTH,
         drop_path=DROP_PATH,
-        learnable_channel_embeddings=True,
     )
     latentmim = LatentMIM(encoder, predictor)
 
-    _, output = latentmim.forward(x, patch_size)
+    _, output, _, _ = latentmim.forward(x, patch_size)
     output = predictor.forward(output, x.timestamps, patch_size, input_res=1)
     patched_H = H // patch_size
     patched_W = W // patch_size

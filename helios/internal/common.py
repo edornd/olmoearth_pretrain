@@ -6,7 +6,6 @@ from olmo_core.internal.common import get_beaker_username
 from olmo_core.launch.beaker import (
     BeakerEnvSecret,
     BeakerEnvVar,
-    BeakerLaunchConfig,
     BeakerPriority,
     BeakerWekaBucket,
     OLMoCoreBeakerImage,
@@ -15,7 +14,12 @@ from olmo_core.utils import generate_uuid
 from upath import UPath
 
 from helios.data.constants import Modality
-from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, SubCmd
+from helios.internal.experiment import (
+    CommonComponents,
+    HeliosBeakerLaunchConfig,
+    HeliosVisualizeConfig,
+    SubCmd,
+)
 
 logger = logging.getLogger(__name__)
 BUDGET = "ai2/d5"
@@ -24,7 +28,15 @@ WORKSPACE = "ai2/earth-systems"
 DEFAULT_HELIOS_WEKA_BUCKET = BeakerWekaBucket("dfive-default", "/weka/dfive-default")
 PROJECT_NAME = "helios"
 
-WEKA_CLUSTER_NAMES = ["jupiter", "saturn", "neptune", "ceres", "triton", "titan"]
+WEKA_CLUSTER_NAMES = [
+    "jupiter",
+    "saturn",
+    "neptune",
+    "ceres",
+    "triton",
+    "titan",
+    "rhea",
+]
 
 
 def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
@@ -65,7 +77,7 @@ def build_launch_config(
     workspace: str = WORKSPACE,
     budget: str = BUDGET,
     nccl_debug: bool = False,
-) -> BeakerLaunchConfig:
+) -> HeliosBeakerLaunchConfig:
     """Build a launch config for a helios experiment.
 
     THis will be the default setup, any changes that are temporary should be overriden
@@ -86,15 +98,16 @@ def build_launch_config(
                     "Jobs targeting Augusta should not target other clusters since Weka will not be mounted"
                 )
             weka_buckets = []
-        # if "titan" in c:
-        #     if len(clusters) > 1:
-        #         raise ValueError(
-        #             "Jobs targeting Titan should not target other clusters since Titan uses pytorch 2.7"
-        #         )
-        #     pytorch_upgrade = "pip install --upgrade --no-cache-dir torch==2.7.0 torchvision --index-url https://download.pytorch.org/whl/test/cu128"
+        if "titan" in c:
+            pass
+            # if len(clusters) > 1:
+            #    raise ValueError(
+            #        "Jobs targeting Titan should not target other clusters since Titan uses pytorch 2.7"
+            #    )
+            # pytorch_upgrade = "pip install --upgrade --pre --no-cache-dir torch==2.8.0.dev20250528+cu128 torchvision==0.22.0.dev20250528+cu128 --index-url https://download.pytorch.org/whl/nightly/cu128"
 
     beaker_user = get_beaker_username()
-    return BeakerLaunchConfig(
+    return HeliosBeakerLaunchConfig(
         name=f"{name}-{generate_uuid()[:8]}",
         budget=budget,
         cmd=cmd,
@@ -160,12 +173,10 @@ def build_common_components(
         Modality.SENTINEL1.name,
         Modality.WORLDCOVER.name,
         Modality.LATLON.name,
-        # Modality.SRTM.name,
-        # Modality.NAIP.name,
-        Modality.NAIP_10.name,
-        # Modality.LANDSAT.name,
+        Modality.SRTM.name,
         Modality.LANDSAT.name,
-        # Modality.OPENSTREETMAP_RASTER.name,
+        Modality.OPENSTREETMAP_RASTER.name,
+        # Modality.NAIP_10.name,
     ]
     cmd_to_launch = SubCmd.train
     if cmd == SubCmd.launch_prep:

@@ -1,6 +1,5 @@
 """Training and optimizer abstraction for Helios."""
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Any
@@ -48,6 +47,7 @@ class GalileoTrainModuleConfig(HeliosTrainModuleConfig):
     loss_config_b: LossConfig = field(
         default_factory=lambda: LossConfig(loss_config={"type": "patch_discrimination"})
     )
+    mae_loss_config: LossConfig | None = None
     masking_config_a: MaskingConfig = field(
         default_factory=lambda: MaskingConfig(strategy_config={"type": "random"})
     )
@@ -100,6 +100,7 @@ class GalileoTrainModule(HeliosTrainModule):
         compile_model: Whether to compile to the model.
         dp_config: Data parallel configuration for the model.
         ac_config: Activation checkpointing configuration for the model.
+        mae_loss_config: Optional loss config for masked auto-encoding.
         compile_loss: Whether to compile the loss function.
         autocast_precision: Enable AMP with this data type.
         max_grad_norm: Clip gradient norms to this value.
@@ -124,6 +125,7 @@ class GalileoTrainModule(HeliosTrainModule):
         rank_microbatch_size: int,
         token_exit_cfg_a: dict[str, int],
         token_exit_cfg_b: dict[str, int],
+        mae_loss_config: LossConfig | None = None,
         compile_model: bool = False,
         dp_config: DataParallelConfig | None = None,
         ac_config: TransformerActivationCheckpointingConfig | None = None,
@@ -153,6 +155,7 @@ class GalileoTrainModule(HeliosTrainModule):
             compile_model: Whether to compile to the model.
             dp_config: Data parallel configuration for the model.
             ac_config: Activation checkpointing configuration for the model.
+            mae_loss_config: Optional loss config for masked auto-encoding.
             compile_loss: Whether to compile the loss function.
             autocast_precision: Enable AMP with this data type.
             max_grad_norm: Clip gradient norms to this value.
@@ -200,6 +203,9 @@ class GalileoTrainModule(HeliosTrainModule):
         self.total_loss_name = f"{self.base_loss_a.name}+{self.base_loss_b.name}"
         if self.regularizer is not None:
             self.total_loss_name = f"{self.total_loss_name}+{self.regularizer.name}"
+        self.mae_loss = mae_loss_config.build() if mae_loss_config is not None else None
+        if self.mae_loss is not None:
+            self.total_loss_name = f"{self.total_loss_name}+{self.mae_loss.name}"
 
     def loss_fn_a(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
@@ -229,6 +235,8 @@ class GalileoTrainModule(HeliosTrainModule):
         self.model.train()
 
         # Set the maximum number of tokens
+        total_mask_a_loss = torch.tensor(0.0, device=self.device)
+        total_mask_b_loss = torch.tensor(0.0, device=self.device)
         total_batch_loss = torch.tensor(0.0, device=self.device)
         total_batch_reg = torch.tensor(0.0, device=self.device)
         total_batch_con = torch.tensor(0.0, device=self.device)
@@ -236,7 +244,7 @@ class GalileoTrainModule(HeliosTrainModule):
         patch_size, batch_data = batch
         microbatches = split_batch(batch_data, self.rank_microbatch_size)
         num_microbatches = len(microbatches)
-        for microbatch_idx, microbatch in enumerate(microbatches, start=1):
+        for microbatch_idx, microbatch in enumerate(microbatches):
             with self._train_microbatch_context(microbatch_idx, num_microbatches):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
@@ -244,26 +252,28 @@ class GalileoTrainModule(HeliosTrainModule):
 
                 microbatch = self.transform.apply(microbatch).to_device(self.device)
 
-                loss_a, latent_a, pooled_a = (
-                    self.apply_masks_and_compute_losses_and_latents(
-                        microbatch,
-                        self.masking_strategy_a.apply_mask,
-                        self.model_forward_a,
+                masked_batch_a = self.masking_strategy_a.apply_mask(
+                    microbatch, patch_size
+                )
+                masked_batch_b = self.masking_strategy_b.apply_mask(
+                    microbatch, patch_size
+                )
+                loss_a, latent_a, pooled_a, loss_b, latent_b, pooled_b = (
+                    self.model_forward(
+                        masked_batch_a,
+                        masked_batch_b,
                         patch_size,
                         self.token_exit_cfg_a,
-                    )
-                )
-                loss_b, latent_b, pooled_b = (
-                    self.apply_masks_and_compute_losses_and_latents(
-                        microbatch,
-                        self.masking_strategy_b.apply_mask,
-                        self.model_forward_b,
-                        patch_size,
                         self.token_exit_cfg_b,
                     )
                 )
-
                 loss = (loss_a + loss_b) / 2
+                total_mask_a_loss += (
+                    get_local_tensor(loss_a.detach()) / num_microbatches
+                )
+                total_mask_b_loss += (
+                    get_local_tensor(loss_b.detach()) / num_microbatches
+                )
 
                 # Scale loss by number of microbatches
                 reg_term_a = self.compute_regularization(pooled_a)
@@ -280,35 +290,74 @@ class GalileoTrainModule(HeliosTrainModule):
 
                 if self.contrastive_loss is not None:
                     contrastive_loss = self.contrastive_loss.compute(pooled_a, pooled_b)
-                    loss += contrastive_loss
-                    total_batch_con += (
-                        get_local_tensor(contrastive_loss.detach()) / num_microbatches
-                    )
+                    logger.info(f"contrastive loss: {contrastive_loss}")
+                    if (
+                        torch.isnan(contrastive_loss).any()
+                        or torch.isinf(contrastive_loss).any()
+                    ):
+                        logger.warning(
+                            f"contrastive loss is nan or inf: {contrastive_loss} not adding to total loss. "
+                            f"rank: {self.local_rank}, epoch: {self.trainer.epoch}, "
+                            f"step: {self.trainer.global_step}"
+                        )
+                    else:
+                        loss += contrastive_loss
+                        total_batch_con += (
+                            get_local_tensor(contrastive_loss.detach())
+                            / num_microbatches
+                        )
 
                 loss = loss / num_microbatches
                 loss_val = get_local_tensor(loss.detach())
                 total_batch_loss += loss_val
-
                 # Skip bad batches
+                # this does not work with fsdp need skip step optimizer instead of loss
                 if torch.isnan(loss).any() or torch.isinf(loss).any():
                     logger.warning(
-                        f"NaN or Inf detected in loss at microbatch {microbatch_idx}, stopping training for this batch."
+                        f"NaN or Inf detected in loss at microbatch {microbatch_idx}. "
+                        f"Skipping batch on rank {self.local_rank}, "
+                        f"step {self.trainer.global_step}, epoch {self.trainer.epoch}"
                     )
-                    del latent_a, latent_b
+                    if self.is_fsdp:
+                        raise ValueError(
+                            "FSDP does not support skipping bad batches as the backwards pass will not sync correctly"
+                        )
                     break
-
                 del latent_a, latent_b
                 loss.backward()
 
+        # what happens if both batches are bad?
         if dry_run:
             return
         # Remember to detach the loss before recording
+
+        # check if each metric is nan or inf and if so turn to float('inf') tensor
+        total_batch_loss = torch.nan_to_num(total_batch_loss, nan=float("inf"))
+        total_batch_reg = torch.nan_to_num(total_batch_reg, nan=float("inf"))
+        total_batch_con = torch.nan_to_num(total_batch_con, nan=float("inf"))
+        total_mask_a_loss = torch.nan_to_num(total_mask_a_loss, nan=float("inf"))
+        total_mask_b_loss = torch.nan_to_num(total_mask_b_loss, nan=float("inf"))
+
         self.trainer.record_metric(
             f"train/{self.total_loss_name}",
             total_batch_loss,
             ReduceType.mean,
         )
+        self.trainer.record_metric(
+            f"{self.masking_strategy_a.name}_masking_{self.base_loss_a.name}",
+            total_mask_a_loss,
+            ReduceType.mean,
+            namespace="train",
+        )
+        self.trainer.record_metric(
+            f"{self.masking_strategy_b.name}_masking_{self.base_loss_b.name}",
+            total_mask_b_loss,
+            ReduceType.mean,
+            namespace="train",
+        )
+        self.trainer.record_metric("train/epoch", self.trainer.epoch)
         self.log_regularization(total_batch_reg)
+
         if self.contrastive_loss is not None:
             self.trainer.record_metric(
                 f"train/{self.contrastive_loss.name}",
@@ -317,55 +366,54 @@ class GalileoTrainModule(HeliosTrainModule):
             )
         del batch, microbatch, batch_data
 
-    @staticmethod
-    def apply_masks_and_compute_losses_and_latents(
-        microbatch: HeliosSample,
-        mask_fn: Callable,
-        model_forward_fn: Callable,
+    def model_forward(
+        self,
+        batch_a: MaskedHeliosSample,
+        batch_b: MaskedHeliosSample,
         patch_size: int,
-        token_exit_cfg: dict[str, int],
-    ) -> tuple[torch.Tensor, TokensAndMasks, torch.Tensor]:
-        """Apply masks and compute losses and latents."""
-        masked_batch = mask_fn(microbatch, patch_size=patch_size)
-
-        # Run Encoder and decoder on the augmented input
-        loss, latent, _, _, pooled = model_forward_fn(
-            masked_batch, patch_size, token_exit_cfg
-        )
-        return loss, latent, pooled
-
-    def model_forward_a(
-        self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]
+        token_exit_cfg_a: dict[str, int],
+        token_exit_cfg_b: dict[str, int],
     ) -> tuple[
-        torch.Tensor, TokensAndMasks, TokensAndMasks, TokensAndMasks, torch.Tensor
+        torch.Tensor,
+        TokensAndMasks,
+        TokensAndMasks,
+        torch.Tensor,
+        TokensAndMasks,
+        TokensAndMasks,
     ]:
         """Run a forward pass."""
         with self._model_forward_context():
-            latent, decoded, pooled = self.model.forward_a(batch, patch_size)
-            with torch.no_grad():
-                logger.info("target encoder running here")
-                target_output, _ = self.model.target_encoder.forward(
-                    batch.unmask(),
-                    patch_size=patch_size,
-                    token_exit_cfg=token_exit_cfg,
-                )
-            loss = self.loss_fn_a(decoded, target_output)
-            return loss, latent, decoded, target_output, pooled
+            output_dict = self.model(batch_a, batch_b, patch_size)
+            latent_a, decoded_a, latent_projected_and_pooled_a, reconstructed_a = (
+                output_dict["a"]
+            )
+            latent_b, decoded_b, latent_projected_and_pooled_b, reconstructed_b = (
+                output_dict["b"]
+            )
 
-    def model_forward_b(
-        self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]
-    ) -> tuple[
-        torch.Tensor, TokensAndMasks, TokensAndMasks, TokensAndMasks, torch.Tensor
-    ]:
-        """Run a forward pass."""
-        with self._model_forward_context():
-            latent, decoded, pooled = self.model.forward_b(batch, patch_size)
             with torch.no_grad():
                 logger.info("target encoder running here")
-                target_output, _ = self.model.target_encoder.forward(
-                    batch.unmask(),
+                target_output_a, _ = self.model.target_encoder.forward(
+                    batch_a.unmask(),
                     patch_size=patch_size,
-                    token_exit_cfg=token_exit_cfg,
+                    token_exit_cfg=token_exit_cfg_a,
                 )
-            loss = self.loss_fn_b(decoded, target_output)
-            return loss, latent, decoded, target_output, pooled
+                target_output_b, _ = self.model.target_encoder.forward(
+                    batch_b.unmask(),
+                    patch_size=patch_size,
+                    token_exit_cfg=token_exit_cfg_b,
+                )
+
+            loss_a = self.loss_fn_a(decoded_a, target_output_a)
+            loss_b = self.loss_fn_b(decoded_b, target_output_b)
+            if self.mae_loss is not None:
+                loss_a += self.mae_loss.compute(reconstructed_a, batch_a)
+                loss_b += self.mae_loss.compute(reconstructed_b, batch_b)
+            return (
+                loss_a,
+                latent_a,
+                latent_projected_and_pooled_a,
+                loss_b,
+                latent_b,
+                latent_projected_and_pooled_b,
+            )

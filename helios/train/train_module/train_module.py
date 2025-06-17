@@ -1,6 +1,7 @@
 """Training and optimizer abstraction for Helios."""
 
 import contextlib
+import json
 from collections.abc import Generator
 from dataclasses import dataclass, field
 from logging import getLogger
@@ -17,7 +18,7 @@ from olmo_core.distributed.parallel import (
     get_dp_mesh,
     get_dp_process_group,
 )
-from olmo_core.distributed.utils import get_full_tensor, get_world_size
+from olmo_core.distributed.utils import get_world_size
 from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
@@ -27,9 +28,10 @@ from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
 )
 from olmo_core.utils import gc_cuda, get_default_device
+from torch import nn
 from torch.distributed.checkpoint.metadata import Metadata
 from torch.distributed.fsdp import FSDPModule
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.tensor import DTensor
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 
@@ -158,6 +160,7 @@ class HeliosTrainModule(TrainModule):
         dp_config: DataParallelConfig | None = None,
         ac_config: TransformerActivationCheckpointingConfig | None = None,
         compile_loss: bool = False,
+        find_unused_parameters: bool = True,
         autocast_precision: torch.dtype | None = None,
         max_grad_norm: float | None = None,
         scheduler: Scheduler | None = None,
@@ -177,6 +180,7 @@ class HeliosTrainModule(TrainModule):
             dp_config: Data parallel configuration for the model.
             ac_config: Activation checkpointing configuration for the model.
             compile_loss: Whether to compile the loss function.
+            find_unused_parameters: Whether to find unused parameters for DDP.
             autocast_precision: Enable AMP with this data type.
             max_grad_norm: Clip gradient norms to this value.
             scheduler: Optional learning rate scheduler.
@@ -193,7 +197,7 @@ class HeliosTrainModule(TrainModule):
             "Number of encoder parameters: %d",
             sum(p.numel() for p in self.model.encoder.parameters()),
         )
-        if hasattr(self.model, "decoder"):
+        if hasattr(self.model, "decoder") and self.model.decoder is not None:
             logger.info(
                 "Number of decoder parameters: %d",
                 sum(p.numel() for p in self.model.decoder.parameters()),
@@ -251,7 +255,11 @@ class HeliosTrainModule(TrainModule):
                 )
                 logger.info("Applied FSDP to the model")
             elif dp_config.name == DataParallelType.ddp:
-                self.model.apply_ddp(dp_mesh=dp_mesh, compile_enabled=compile_model)
+                self.model.apply_ddp(
+                    dp_mesh=dp_mesh,
+                    compile_enabled=compile_model,
+                    find_unused_parameters=find_unused_parameters,
+                )
                 logger.info("Applied DDP to the model")
             else:
                 raise NotImplementedError(dp_config.name)
@@ -284,6 +292,13 @@ class HeliosTrainModule(TrainModule):
         return get_dp_process_group(self.world_mesh)
 
     @property
+    def is_fsdp(self) -> bool:
+        """Check if the model is FSDP."""
+        return self._dp_config is not None and self._dp_config.name in (
+            DataParallelType.fsdp
+        )
+
+    @property
     def eval_batch_spec(self) -> EvalBatchSpec:
         """Get the evaluation batch spec."""
         # Determine the number of micro-batches.
@@ -295,6 +310,11 @@ class HeliosTrainModule(TrainModule):
             rank_batch_size=rank_batch_size_instances,
             batch_size_unit=EvalBatchSizeUnit.instances,
         )
+
+    @property
+    def local_rank(self) -> int:
+        """Get the local rank."""
+        return self.trainer.data_loader.dp_rank
 
     @property
     def logits_dtype(self) -> torch.dtype:
@@ -451,12 +471,17 @@ class HeliosTrainModule(TrainModule):
             yield
 
     @contextlib.contextmanager
-    def _model_forward_context(self) -> Generator[None, None, None]:
+    def _model_forward_context(
+        self, no_sync: bool = False
+    ) -> Generator[None, None, None]:
         with contextlib.ExitStack() as stack:
             if self.autocast_precision is not None:
                 stack.enter_context(
                     torch.autocast(self.device.type, dtype=self.autocast_precision)
                 )
+            if isinstance(self.model, DDP) and no_sync:
+                # If we do multiple forwards through the  encoder we only want to sunc on the last one
+                stack.enter_context(self.model.no_sync())
             yield
 
     def _clear_loss_buffers(self) -> None:
@@ -467,11 +492,30 @@ class HeliosTrainModule(TrainModule):
     def _get_state_dict(
         self, sd_options: dist_cp_sd.StateDictOptions
     ) -> dict[str, Any]:
+        """Get the state dict."""
+        # This is a sanity check to make sure the checkpoint is compatible
+        # with the current model architecture, mainly useful when running evaluation beaker jobs
+        if self.trainer.load_path is not None:
+            with open(f"{self.trainer.load_path}/config.json") as f:
+                config_dict = json.load(f)
+                model_config = Config.from_dict(config_dict["model"])
+            model = model_config.build()
+            # Check if any keys are missing
+            for key in self.model.state_dict().keys():
+                if key not in model.state_dict():
+                    logger.info("Key %s not in checkpoint", key)
+                    raise RuntimeError("Model and checkpoint are not compatible")
+            logger.info("Model and checkpoint are compatible")
+
+        model_state_dict = dist_cp_sd.get_model_state_dict(
+            self.model, options=sd_options
+        )
+        optim_state_dict = dist_cp_sd.get_optimizer_state_dict(
+            self.model, self.optimizer, options=sd_options
+        )
         return {
-            "model": dist_cp_sd.get_model_state_dict(self.model, options=sd_options),
-            "optim": dist_cp_sd.get_optimizer_state_dict(
-                self.model, self.optimizer, options=sd_options
-            ),
+            "model": model_state_dict,
+            "optim": optim_state_dict,
         }
 
     def _clip_grad_norm(
@@ -481,14 +525,31 @@ class HeliosTrainModule(TrainModule):
         foreach: bool | None = None,
     ) -> torch.Tensor:
         """Clip the gradients."""
-        if isinstance(self.model, FSDP):
-            logger.info("Using FSDP grad clipping")
-            # I am not sure this is ever hit beccause we are using FSDP2
-            return self.model.clip_grad_norm_(max_grad_norm)
         # Pipeline parallel grad clipping required nightly torch
-        return torch.nn.utils.clip_grad_norm_(
-            self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
+        # return torch.nn.utils.clip_grad_norm_(
+        #     self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
+        # )
+        parameters = [p for p in self.model.parameters()]
+        grads = [p.grad for p in parameters if p.grad is not None]
+        total_norm = nn.utils.get_total_norm(
+            grads, norm_type=norm_type, error_if_nonfinite=False, foreach=foreach
         )
+
+        # If total_norm is a DTensor, the placements must be `torch.distributed._tensor.ops.math_ops._NormPartial`.
+        # We can simply reduce the DTensor to get the total norm in this tensor's process group
+        # and then convert it to a local tensor.
+        # NOTE: It has two purposes:
+        #       1. to make sure the total norm is computed correctly when PP is used (see below)
+        #       2. to return a reduced total_norm tensor whose .item() would return the correct value
+        if isinstance(total_norm, DTensor):
+            # Will reach here if any non-PP parallelism is used.
+            # If only using PP, total_norm will be a local tensor.
+            total_norm = total_norm.full_tensor()
+
+        torch.nn.utils.clip_grads_with_norm_(
+            parameters, max_grad_norm, total_norm, foreach=foreach
+        )
+        return total_norm
 
     def update_target_encoder(self) -> None:
         """Update the target encoder."""
@@ -505,12 +566,19 @@ class HeliosTrainModule(TrainModule):
                 cur_ema_value,
                 ReduceType.mean,
             )
-            for param, target_param in zip(
+            for p, tp in zip(
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
-                get_full_tensor(target_param.data).mul_(cur_ema_value).add_(
-                    get_full_tensor(param.data), alpha=(1 - cur_ema_value)
-                )
+                if isinstance(p.data, DTensor):
+                    # get the local shard, update it in place
+                    p_local = p.data.to_local()
+                    tp_local = tp.data.to_local()
+                    tp_local.mul_(cur_ema_value).add_(
+                        p_local, alpha=(1 - cur_ema_value)
+                    )
+                else:
+                    # fallback for any plain Tensor
+                    tp.data.mul_(cur_ema_value).add_(p.data, alpha=(1 - cur_ema_value))
 
     def eval_batch(
         self, batch: dict[str, Any], labels: torch.Tensor | None = None
