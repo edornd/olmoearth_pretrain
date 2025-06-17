@@ -15,13 +15,16 @@ from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
 )
 
-from helios.data.constants import Modality
+from helios.data.constants import (
+    MISSING_VALUE,
+    Modality,
+)
 from helios.data.dataset import HeliosSample
 from helios.data.transform import TransformConfig
 from helios.nn.flexihelios import TokensAndMasks
 from helios.nn.galileo import Galileo
 from helios.train.loss import LossConfig
-from helios.train.masking import MaskedHeliosSample, MaskingConfig
+from helios.train.masking import MaskedHeliosSample, MaskingConfig, MaskValue
 from helios.train.train_module.train_module import (
     HeliosTrainModule,
     HeliosTrainModuleConfig,
@@ -252,9 +255,63 @@ class GalileoTrainModule(HeliosTrainModule):
 
                 microbatch = self.transform.apply(microbatch).to_device(self.device)
 
+                has_modality = torch.zeros(
+                    microbatch.sentinel1.shape[0], device=microbatch.sentinel1.device
+                )
+                for modality in microbatch.modalities:
+                    masks = getattr(microbatch, modality)
+                    masks_sum = torch.sum(
+                        masks != MISSING_VALUE, dim=tuple(range(1, len(masks.shape)))
+                    )
+                    has_modality += masks_sum
+                has_modality_pre = has_modality.flatten()
+                if (has_modality_pre == 0).any():
+                    bad_inds = (has_modality_pre == 0).nonzero()
+                    logger.warning("sample missing allmodalitise before masking")
+                    logger.warning(f"{has_modality_pre}")
+                    logger.warning(f"{microbatch.sentinel1_mask[bad_inds]}")
+                    logger.warning(f"{microbatch.sentinel2_l2a_mask[bad_inds]}")
+                    logger.warning(f"{microbatch.worldcover_mask[bad_inds]}")
+                    raise ValueError("missing Modalily")
+
                 masked_batch_a = self.masking_strategy_a.apply_mask(
                     microbatch, patch_size
                 )
+                has_modality = torch.zeros(
+                    masked_batch_a.sentinel1.shape[0],
+                    device=masked_batch_a.sentinel1.device,
+                )
+                for modality in masked_batch_a.modalities:
+                    masks = getattr(masked_batch_a, modality + "_mask")
+                    masks_sum = torch.sum(
+                        masks == MaskValue.ONLINE_ENCODER.value,
+                        dim=tuple(range(1, len(masks.shape))),
+                    )
+                    has_modality += masks_sum
+                has_modality = has_modality.flatten()
+                if (has_modality == 0).any():
+                    bad_inds = (has_modality == 0).nonzero()
+                    logger.warning("sample missing allmodalitise")
+                    logger.warning(f"{has_modality}")
+                    logger.warning(f"{masked_batch_a.sentinel1_mask[bad_inds]}")
+                    logger.warning(f"{masked_batch_a.sentinel2_l2a_mask[bad_inds]}")
+                    logger.warning(f"{masked_batch_a.worldcover_mask[bad_inds]}")
+
+                    logger.warning(f"{microbatch.sentinel1[bad_inds]}")
+                    logger.warning(f"{microbatch.sentinel2_l2a[bad_inds]}")
+                    logger.warning(f"{microbatch.worldcover[bad_inds]}")
+                    logger.warning(
+                        f"worldcover missing {torch.sum(microbatch.worldcover[bad_inds]==MISSING_VALUE)} present {torch.sum(microbatch.worldcover[bad_inds]!=MISSING_VALUE)} total {microbatch.worldcover[bad_inds].shape}"
+                    )
+                    logger.warning(
+                        f"sentinel1 missing {torch.sum(microbatch.sentinel1[bad_inds]==MISSING_VALUE)} present {torch.sum(microbatch.sentinel1[bad_inds]!=MISSING_VALUE)} total {microbatch.sentinel1[bad_inds].shape}"
+                    )
+                    logger.warning(
+                        f"sentinel2_l2a missing {torch.sum(microbatch.sentinel2_l2a[bad_inds]==MISSING_VALUE)} present {torch.sum(microbatch.sentinel2_l2a[bad_inds]!=MISSING_VALUE)} total {microbatch.sentinel2_l2a[bad_inds].shape}"
+                    )
+                    logger.warning(f"Pre counts:{has_modality_pre}")
+                    raise ValueError("missing Modalily")
+
                 masked_batch_b = self.masking_strategy_b.apply_mask(
                     microbatch, patch_size
                 )

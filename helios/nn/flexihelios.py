@@ -186,6 +186,7 @@ class TokensAndMasks(NamedTuple):
                 )
                 return x_for_pooling.max(dim=1).values
             elif pooling_type == PoolingType.MEAN:
+                logger.warning(f"sum over masks {torch.sum(mask, -1, keepdim=True)}")
                 return x_for_pooling.sum(dim=1) / torch.sum(mask, -1, keepdim=True)
             else:
                 raise ValueError(f"Invalid pooling type: {pooling_type}")
