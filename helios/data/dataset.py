@@ -284,15 +284,30 @@ class HeliosSample(NamedTuple):
             raise ValueError("patch_size too small for this sample and budget")
         return min(floor(max_t_within_budget), self.time)
 
-    def _get_start_t(self, missing_timesteps: dict[str, Any]) -> int:
-        start_t = MAX_SEQUENCE_LENGTH
-
-        for modality in missing_timesteps:
-            start_t = min(start_t, missing_timesteps[modality].index(True))
-
-        if start_t == MAX_SEQUENCE_LENGTH:
-            raise ValueError("Can't find good start_t")
-        return start_t
+    def _get_valid_start_ts(
+        self, missing_timesteps: dict[str, Any], max_t: int, current_length: int
+    ) -> list[int]:
+        # case 1: no missing timesteps mask that means every timestep is valid
+        valid_start_ts = []
+        if not missing_timesteps:
+            valid_start_ts = list(range(current_length - max_t + 1))
+        else:
+            # case 2: we have missing timesteps mask that means we need to get a list of valid timesteps given current_length and max_t
+            # case 2a max_t is greater than current_length
+            if current_length > max_t:
+                start_ts = set()
+                for modality in missing_timesteps:
+                    # all non missing timesteps where we could start from and add max_t timesteps and still be within the
+                    valid_timesteps = np.flatnonzero(missing_timesteps[modality])
+                    valid_timesteps = valid_timesteps[
+                        valid_timesteps + max_t <= current_length
+                    ]
+                    start_ts.update(valid_timesteps)
+                valid_start_ts = list(start_ts)
+            else:
+                # Assumes that at least 1 modality has the first timestep as valid
+                valid_start_ts = [0]
+        return sorted(valid_start_ts)
 
     def subset(
         self,
@@ -300,6 +315,7 @@ class HeliosSample(NamedTuple):
         max_tokens_per_instance: int,
         sampled_hw_p: int,
         current_length: int,
+        missing_timesteps: dict[str, Any] = {},
     ) -> "HeliosSample":
         """Subset a HelioSample that is unbatched ie no batch dimension.
 
@@ -332,11 +348,10 @@ class HeliosSample(NamedTuple):
         start_w = np.random.choice(self.width - sampled_hw + 1)
 
         # The timestamps are edge padded and we always want to start from a valid timestep
-        if current_length > max_t:
-            start_t = np.random.choice(current_length - max_t + 1)
-        else:
-            start_t = 0
-        # logger.warning(start_t)
+        valid_start_ts = self._get_valid_start_ts(
+            missing_timesteps, max_t, current_length
+        )
+        start_t = np.random.choice(valid_start_ts)
 
         new_data_dict: dict[str, ArrayTensor] = {}
 
@@ -809,17 +824,24 @@ class HeliosDataset(Dataset):
 
         sample_dict, missing_timesteps_masks = self.read_h5_file(h5_file_path)
         # get first present timestep
-        first_valid_timestep = MAX_SEQUENCE_LENGTH
-        for modality, timestep_mask in missing_timesteps_masks.items():
-            valid_timesteps = np.where(timestep_mask)[0]
-            if len(valid_timesteps) > 0:
-                first_valid_timestep = min(first_valid_timestep, valid_timesteps[0])
+        if not missing_timesteps_masks:
+            first_valid_timestep = 0
+            last_valid_timestep = MAX_SEQUENCE_LENGTH
+        else:
+            first_valid_timestep = MAX_SEQUENCE_LENGTH
+            last_valid_timestep = 0
+            for timestep_mask in missing_timesteps_masks.values():
+                valid_timesteps = np.where(timestep_mask)[0]
+                if len(valid_timesteps) > 0:
+                    first_valid_timestep = min(first_valid_timestep, valid_timesteps[0])
+                    last_valid_timestep = max(last_valid_timestep, valid_timesteps[-1])
+
         timestamps = sample_dict["timestamps"]
         if first_valid_timestep >= MAX_SEQUENCE_LENGTH:
             raise ValueError(
                 f"No valid timesteps found for {h5_file_path} with args: {args} missing_timesteps_masks: {missing_timesteps_masks}"
             )
-        timestamps = timestamps[first_valid_timestep:]
+        timestamps = timestamps[first_valid_timestep : last_valid_timestep + 1]
         sample_dict["timestamps"] = timestamps
         sample_dict, current_length = self._pad_timestamps(sample_dict)
         # fill sample currently takes like .08 seconds which may bottleneck smaller models
