@@ -76,11 +76,11 @@ class TestHeliosSample:
     def test_get_valid_start_ts(self) -> None:
         """Test the get_valid_start_ts function."""
         missing_timesteps = {
-            "sentinel2_l2a": np.array([True] * 8 + [False] * 2),
-            # "landsat": np.array([True] * 10),
+            "sentinel2_l2a": np.array([True] * 10 + [False] * 3),
+            "landsat": np.array([True] * 8 + [False] * 3 + [True] * 2),
         }
-        max_t = 1
-        current_length = 8
+        max_t = 2
+        current_length = 13
         valid_start_ts = HeliosSample._get_valid_start_ts(
             missing_timesteps, max_t, current_length
         )

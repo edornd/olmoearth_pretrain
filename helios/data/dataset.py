@@ -839,9 +839,6 @@ class HeliosDataset(Dataset):
                 if len(valid_timesteps) > 0:
                     first_valid_timestep = min(first_valid_timestep, valid_timesteps[0])
                     last_valid_timestep = max(last_valid_timestep, valid_timesteps[-1])
-        logger.warning(
-            f"First valid timestep: {first_valid_timestep}, last valid timestep: {last_valid_timestep}"
-        )
         timestamps = timestamps[first_valid_timestep : last_valid_timestep + 1]
         return timestamps
 
