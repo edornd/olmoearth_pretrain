@@ -297,7 +297,7 @@ class GalileoTrainModule(HeliosTrainModule):
                     contrastive_loss = self.contrastive_loss.compute(pooled_a, pooled_b)
                     logger.info(f"contrastive loss: {contrastive_loss}")
                     logger.warning(
-                        f"contrastive loss is: {contrastive_loss} not adding to total loss. "
+                        f"contrastive loss is: {contrastive_loss} adding to total loss. "
                         f"rank: {self.local_rank}, epoch: {self.trainer.epoch}, "
                         f"step: {self.trainer.global_step}"
                     )

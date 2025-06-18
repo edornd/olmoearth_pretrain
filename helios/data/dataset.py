@@ -299,11 +299,11 @@ class HeliosSample(NamedTuple):
                     logger.warning(f"modality: {modality}")
                     # all non missing timesteps where we could start from and add max_t timesteps and still be within the
                     valid_timesteps = np.flatnonzero(missing_timesteps[modality])
-                    logger.warning(f"valid_timesteps: {valid_timesteps}")
+                    # logger.warning(f"valid_timesteps: {valid_timesteps}")
                     valid_timesteps = valid_timesteps[
                         valid_timesteps + max_t <= current_length
                     ]
-                    logger.warning(f"valid_timesteps post filter: {valid_timesteps}")
+                    # logger.warning(f"valid_timesteps post filter: {valid_timesteps}")
                     start_ts.update(valid_timesteps)
                 valid_start_ts = list(start_ts)
         else:
@@ -357,9 +357,13 @@ class HeliosSample(NamedTuple):
         start_w = np.random.choice(self.width - sampled_hw + 1)
 
         # The timestamps are edge padded and we always want to start from a valid timestep
+        logger.warning(
+            f"current_length: {current_length} max_t: {max_t} missing_timesteps: {missing_timesteps}"
+        )
         valid_start_ts = self._get_valid_start_ts(
             missing_timesteps, max_t, current_length
         )
+        logger.warning(f"valid_start_ts: {valid_start_ts}")
         start_t = np.random.choice(valid_start_ts)
 
         new_data_dict: dict[str, ArrayTensor] = {}
@@ -655,9 +659,13 @@ class HeliosDataset(Dataset):
 
         # Copy the existing data to the appropriate timestep positions
         present_indices = np.where(missing_timestep_mask)[0]
+        filled_timesteps = []
         for i, idx in enumerate(present_indices):
             if i < t:  # Only copy if we have data for this timestep
+                logger.warning(f"filling timestep {idx} with timestep {i}")
                 full_timesteps_data[..., idx, :] = modality_data[..., i, :]
+                filled_timesteps.append(idx)
+        logger.warning(f"filled_timesteps: {filled_timesteps}")
 
         return full_timesteps_data
 
@@ -703,6 +711,7 @@ class HeliosDataset(Dataset):
                     not np.all(mask) or len(mask) < self.max_sequence_length
                 )
                 if has_missing_timesteps:
+                    logger.warning(f"filling missing timesteps for {modality}")
                     # By default, we will fill missing timesteps with the missing value
                     modality_data = self._fill_missing_timesteps(modality_data, mask)
                 # Update the sample dictionary with the potentially imputed data
@@ -724,14 +733,14 @@ class HeliosDataset(Dataset):
             sample_dict["timestamps"] = padded_timestamps
         return sample_dict, current_length
 
+    @staticmethod
     def apply_subset(
-        self,
         sample: HeliosSample,
         args: GetItemArgs,
         current_length: int,
         missing_timesteps: dict[str, Any] = {},
     ) -> HeliosSample:
-        """Apply the subset to the sample.
+        """Apply the subset to the sample no-op if token_budget is None.
 
         Args:
             sample: The sample to apply the subset to.
@@ -848,6 +857,8 @@ class HeliosDataset(Dataset):
             missing_timesteps_masks[modality] = timestep_mask[
                 first_valid_timestep : last_valid_timestep + 1
             ]
+        logger.warning(f"timestamps: {timestamps}")
+        logger.warning(f"missing_timesteps_masks: {missing_timesteps_masks}")
         return timestamps, missing_timesteps_masks
 
     def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:
