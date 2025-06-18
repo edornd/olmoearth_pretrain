@@ -1,5 +1,6 @@
 """Unit tests for the dataset module."""
 
+from logging import getLogger
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,8 @@ from upath import UPath
 
 from helios.data.constants import MISSING_VALUE
 from helios.data.dataset import HeliosDataset, HeliosSample, collate_helios
+
+logger = getLogger(__name__)
 
 
 def test_collate_helios(
@@ -69,6 +72,20 @@ class TestHeliosSample:
 
         # Check that the missing modality masks are preserved
         assert (subset_sample.sentinel1[1] != MISSING_VALUE).sum() == 0
+
+    def test_get_valid_start_ts(self) -> None:
+        """Test the get_valid_start_ts function."""
+        missing_timesteps = {
+            "sentinel2_l2a": np.array([True] * 8 + [False] * 2),
+            # "landsat": np.array([True] * 10),
+        }
+        max_t = 1
+        current_length = 8
+        valid_start_ts = HeliosSample._get_valid_start_ts(
+            missing_timesteps, max_t, current_length
+        )
+        logger.warning(f"valid_start_ts: {valid_start_ts}")
+        assert False
 
 
 class TestHeliosDataset:
@@ -184,3 +201,19 @@ class TestHeliosDataset:
         # Check that missing timesteps are filled with MISSING_VALUE
         assert np.all(sample.sentinel2_l2a[..., 1, :] == MISSING_VALUE)
         assert np.all(sample.sentinel2_l2a[..., 3:, :] == MISSING_VALUE)
+
+    def test_crop_timestamps(self) -> None:
+        """Test _crop_timestamps function."""
+        timestamps = np.array([[i, 1, 2023] for i in range(10)])
+        missing_timesteps_masks = {
+            "sentinel2_l2a": np.array([True] * 8 + [False] * 2),
+            # "landsat": np.array([True] * 10),
+        }
+        cropped_timestamps = HeliosDataset._crop_timestamps(
+            timestamps, missing_timesteps_masks
+        )
+
+        logger.warning(
+            f"cropped_timestamps: {cropped_timestamps} length: {len(cropped_timestamps)}"
+        )
+        assert False

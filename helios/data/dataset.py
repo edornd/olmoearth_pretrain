@@ -284,10 +284,12 @@ class HeliosSample(NamedTuple):
             raise ValueError("patch_size too small for this sample and budget")
         return min(floor(max_t_within_budget), self.time)
 
+    @staticmethod
     def _get_valid_start_ts(
-        self, missing_timesteps: dict[str, Any], max_t: int, current_length: int
+        missing_timesteps: dict[str, Any], max_t: int, current_length: int
     ) -> list[int]:
         # case 1: no missing timesteps mask that means every timestep is valid
+        # what if current length is 12 and max_t is 12
         if current_length > max_t:
             if not missing_timesteps:
                 valid_start_ts = list(range(current_length - max_t + 1))
@@ -724,6 +726,7 @@ class HeliosDataset(Dataset):
         sample: HeliosSample,
         args: GetItemArgs,
         current_length: int,
+        missing_timesteps: dict[str, Any] = {},
     ) -> HeliosSample:
         """Apply the subset to the sample.
 
@@ -741,6 +744,7 @@ class HeliosDataset(Dataset):
                 max_tokens_per_instance=args.token_budget,
                 sampled_hw_p=args.sampled_hw_p,
                 current_length=current_length,
+                missing_timesteps=missing_timesteps,
             )
         else:
             sample_subset = sample
@@ -818,15 +822,11 @@ class HeliosDataset(Dataset):
         """Get the h5 file path."""
         return self.h5py_dir / ConvertToH5py.sample_file_pattern.format(index=index)
 
-    def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:
-        """Get the sample at the given index."""
-        if hasattr(self, "sample_indices") and self.sample_indices is not None:
-            index = self.sample_indices[args.idx]
-        else:
-            index = args.idx
-        h5_file_path = self._get_h5_file_path(index)
-
-        sample_dict, missing_timesteps_masks = self.read_h5_file(h5_file_path)
+    @staticmethod
+    def _crop_timestamps(
+        timestamps: np.ndarray, missing_timesteps_masks: dict[str, Any]
+    ) -> np.ndarray:
+        """Crop the timestamps to the first and last valid timestep."""
         # get first present timestep
         if not missing_timesteps_masks:
             first_valid_timestep = 0
@@ -839,23 +839,36 @@ class HeliosDataset(Dataset):
                 if len(valid_timesteps) > 0:
                     first_valid_timestep = min(first_valid_timestep, valid_timesteps[0])
                     last_valid_timestep = max(last_valid_timestep, valid_timesteps[-1])
-
-        timestamps = sample_dict["timestamps"]
-        if first_valid_timestep >= MAX_SEQUENCE_LENGTH:
-            raise ValueError(
-                f"No valid timesteps found for {h5_file_path} with args: {args} missing_timesteps_masks: {missing_timesteps_masks}"
-            )
+        logger.warning(
+            f"First valid timestep: {first_valid_timestep}, last valid timestep: {last_valid_timestep}"
+        )
         timestamps = timestamps[first_valid_timestep : last_valid_timestep + 1]
-        sample_dict["timestamps"] = timestamps
+        return timestamps
+
+    def __getitem__(self, args: GetItemArgs) -> tuple[int, HeliosSample]:
+        """Get the sample at the given index."""
+        if hasattr(self, "sample_indices") and self.sample_indices is not None:
+            index = self.sample_indices[args.idx]
+        else:
+            index = args.idx
+        h5_file_path = self._get_h5_file_path(index)
+
+        sample_dict, missing_timesteps_masks = self.read_h5_file(h5_file_path)
+        # if the longest modality is not present we will need to crop timestamps
+        sample_dict["timestamps"] = self._crop_timestamps(
+            sample_dict["timestamps"], missing_timesteps_masks
+        )
         sample_dict, current_length = self._pad_timestamps(sample_dict)
+        # current length is not zero indexed
         # fill sample currently takes like .08 seconds which may bottleneck smaller models
         sample, missing_modalities = self.fill_sample_with_missing_values(
             sample_dict, missing_timesteps_masks
         )
         # Everything is filled to 12 here always so we never run into the too long issue before
         # We just pick the lowest that is correct and then repad to the correct length
-        subset_sample = self.apply_subset(sample, args, current_length)
-
+        subset_sample = self.apply_subset(
+            sample, args, current_length, missing_timesteps_masks
+        )
         data = [
             subset_sample.sentinel1,
             subset_sample.sentinel2_l2a,
