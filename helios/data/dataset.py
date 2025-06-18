@@ -311,7 +311,9 @@ class HeliosSample(NamedTuple):
             logger.warning(
                 f"No valid start timesteps found for {missing_timesteps} with max_t {max_t} and current_length {current_length}"
             )
-            raise ValueError("No valid start timesteps found")
+            raise ValueError(
+                f"No valid start timesteps found for {missing_timesteps} with max_t {max_t} and current_length {current_length}"
+            )
         return sorted(valid_start_ts)
 
     def subset(
