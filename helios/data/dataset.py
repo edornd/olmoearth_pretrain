@@ -220,6 +220,7 @@ class HeliosSample(NamedTuple):
 
         Note that the timestamps are edge padded by repeating the last timestamp.
         """
+        # assumes that every valid timestep is present
         min_valid_time = MAX_SEQUENCE_LENGTH
         if self.timestamps is None:
             raise ValueError("Timestamps are not present in the sample")
@@ -233,6 +234,28 @@ class HeliosSample(NamedTuple):
                 f"valid_time is smaller than time: {min_valid_time} < {self.time}"
             )
         return min_valid_time
+
+    # this is just a draft of something we could do
+    @property
+    def timesteps_with_at_least_one_modality(self) -> list[list[int]]:
+        """Get timesteps with at least one modality present."""
+        timesteps_with_at_least_one_modality = []
+        for i in range(self.batch_size):
+            timesteps_with_at_least_one_modality = []
+            for modality in self.modalities:
+                modality_spec = Modality.get(modality)
+                if modality_spec.is_multitemporal:
+                    data = getattr(self, modality)[i]
+                    # time is seocnd to last dim I want to check for which indices in that dimension all the values are missing
+                    missing_timesteps = np.where(
+                        (data == MISSING_VALUE).all(dim=-2)
+                    )[0]
+                    timesteps_with_at_least_one_modality.extend(missing_timesteps)
+                else:
+                    timesteps_with_at_least_one_modality.append([0])
+
+        return timesteps_with_at_least_one_modality
+
 
     def get_expected_shape(self, attribute: str) -> tuple[int, ...]:
         """Get the expected shape of an attribute."""

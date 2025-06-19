@@ -400,6 +400,10 @@ class TimeMaskingStrategy(MaskingStrategy):
             raise ValueError("patch_size must be provided for time masking")
         output_dict: dict[str, ArrayTensor | None] = {}
         temporal_mask = None
+        # we need to pick timesteps such that every sample has at least one encoded timestep
+        # is this possible across the batch to guarantee that every sample has at least one encoded timestep?
+        # If not we should just do random masking
+        # the other option here is to do missing masking first and th
         for modality_name in batch.modalities:
             instance = getattr(batch, modality_name)
             if instance is None:
@@ -667,6 +671,8 @@ class SpaceTimeMaskingStrategy(MaskingStrategy):
     ) -> MaskedHeliosSample:
         """Apply space or time masking to the input data."""
         has_enough_timesteps = batch.valid_time >= 3
+        # I need a timestamp mask
+
         if not has_enough_timesteps:
             logger.debug(f"Valid time: {batch.valid_time}, Time: {batch.time}")
         if (self.generator.random() < 0.5) or (not has_enough_timesteps):

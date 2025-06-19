@@ -119,9 +119,9 @@ class TestHeliosDataset:
             Modality.SENTINEL2_L2A.name,
             Modality.SENTINEL1.name,
             Modality.WORLDCOVER.name,
-            Modality.OPENSTREETMAP_RASTER.name,
-            Modality.SRTM.name,
-            Modality.LANDSAT.name,
+            # Modality.OPENSTREETMAP_RASTER.name,
+            # Modality.SRTM.name,
+            # Modality.LANDSAT.name,
         ]
         dataset = HeliosDataset(
             h5py_dir=setup_h5py_dir,
@@ -132,11 +132,11 @@ class TestHeliosDataset:
         args = GetItemArgs(idx=0, patch_size=1, sampled_hw_p=11, token_budget=1500)
         sample_dict = {}
         rng = default_rng(42)
-        num_s2_timesteps = 8
-        num_s1_timesteps = 2
-        num_landsat_timesteps = 10
+        num_s2_timesteps = 10
+        num_s1_timesteps = 4
+        num_landsat_timesteps = 12
         logger.info(f"Training modalities: {dataset.training_modalities}")
-        sample_present_modalities = [Modality.SENTINEL2_L2A.name, Modality.LANDSAT.name]
+        sample_present_modalities = [Modality.SENTINEL2_L2A.name, Modality.SENTINEL1.name]
         if Modality.SENTINEL2_L2A.name in sample_present_modalities:
             mock_sentinel2_l2a = rng.random(
                 (256, 256, num_s2_timesteps, 12), dtype=np.float32
@@ -175,9 +175,8 @@ class TestHeliosDataset:
         timestamps = np.concatenate([days, months, years], axis=1)  # shape: (12, 3)
         sample_dict["timestamps"] = timestamps
         missing_timesteps_masks = {
-            Modality.SENTINEL2_L2A.name: np.array([True] * 8 + [False] * 2),
-            Modality.LANDSAT.name: np.array([True] * 10),
-        }
+            'sentinel1': np.array([False,  True, False, False, False, False, False, False, False, True,  True,  True]),
+            'sentinel2_l2a': np.array([ True,  True, False,  True,  True, False,  True,  True,  True, True,  True,  True])}
         timestamps, missing_timesteps_masks = dataset._crop_timestamps_and_masks(
             sample_dict["timestamps"], missing_timesteps_masks
         )
