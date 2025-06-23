@@ -1193,6 +1193,17 @@ class Encoder(FlexiHeliosBase):
             exit_ids_seq = None
         return exit_ids_seq
 
+    def get_attn_or_none_mask(
+        self,
+        new_mask: Tensor,
+        always_pass_none_mask_to_transformer: bool,
+    ) -> Tensor | None:
+        """Get the attention mask or None if we should pass None to the transformer."""
+        if always_pass_none_mask_to_transformer or not self.training:
+            return None
+        else:
+            return new_mask
+
     def apply_attn(
         self,
         x: dict[str, Tensor],
@@ -1240,6 +1251,9 @@ class Encoder(FlexiHeliosBase):
             og_shape = tokens.shape
             tokens = self.pack_tokens(tokens, new_mask)
 
+        attn_mask = self.get_attn_or_none_mask(
+            new_mask, always_pass_none_mask_to_transformer
+        )
         # Apply attn with varying encoder depths
         for i_blk, blk in enumerate(self.blocks):
             # Skip the zeroth block because we want to use the exited tokens that don't have encodings as this allows trivial solution of predicting the shared encodings
@@ -1257,10 +1271,6 @@ class Encoder(FlexiHeliosBase):
             # of True indicates the value *should* take part in
             # attention
             # WARNING: THIS MAY CHANGE DEPENDING ON THE ATTENTION IMPLEMENTATION
-            if always_pass_none_mask_to_transformer or not self.training:
-                attn_mask = None
-            else:
-                attn_mask = new_mask
             tokens = blk(
                 x=tokens,
                 cu_seqlens=cu_seqlens,
