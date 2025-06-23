@@ -1200,6 +1200,7 @@ class Encoder(FlexiHeliosBase):
         patch_size: int,
         input_res: int,
         token_exit_cfg: dict[str, int] | None = None,
+        always_pass_none_mask_to_transformer: bool = False,
     ) -> dict[str, Tensor]:
         """Apply the attention to the tokens and masks."""
         tokens_only_dict, original_masks_dict, modalities_to_dims_dict = (
@@ -1256,12 +1257,16 @@ class Encoder(FlexiHeliosBase):
             # of True indicates the value *should* take part in
             # attention
             # WARNING: THIS MAY CHANGE DEPENDING ON THE ATTENTION IMPLEMENTATION
+            if always_pass_none_mask_to_transformer or not self.training:
+                attn_mask = None
+            else:
+                attn_mask = new_mask
             tokens = blk(
                 x=tokens,
                 cu_seqlens=cu_seqlens,
                 max_seqlen=max_seqlen,
                 # we will have to specify k and q lens for cross attention
-                attn_mask=new_mask if self.training else None,
+                attn_mask=attn_mask,
             )
 
         if self.use_flash_attn:
@@ -1298,6 +1303,7 @@ class Encoder(FlexiHeliosBase):
         patch_size: int,
         input_res: int = BASE_GSD,
         token_exit_cfg: dict | None = None,
+        always_pass_none_mask_to_transformer: bool = False,
     ) -> tuple[TokensAndMasks, torch.Tensor]:
         """Process masked input samples into token representations.
 
@@ -1306,6 +1312,7 @@ class Encoder(FlexiHeliosBase):
             patch_size: Size of patches to divide the input into
             input_res: Resolution of the input data
             token_exit_cfg: Configuration for token exit
+            always_pass_none_mask_to_transformer: Whether to always pass None as the mask to the transformer, this enables torch based flash attention
 
         Returns:
             TokensAndMasks containing the encoded representations and their masks
@@ -1321,6 +1328,7 @@ class Encoder(FlexiHeliosBase):
                 patch_size=patch_size,
                 input_res=input_res,
                 token_exit_cfg=token_exit_cfg,
+                always_pass_none_mask_to_transformer=always_pass_none_mask_to_transformer,
             )
         output = TokensAndMasks(**patchified_tokens_and_masks)
         return output, self.project_and_aggregate(output)
