@@ -136,7 +136,10 @@ class TestHeliosDataset:
         num_s1_timesteps = 4
         num_landsat_timesteps = 12
         logger.info(f"Training modalities: {dataset.training_modalities}")
-        sample_present_modalities = [Modality.SENTINEL2_L2A.name, Modality.SENTINEL1.name]
+        sample_present_modalities = [
+            Modality.SENTINEL2_L2A.name,
+            Modality.SENTINEL1.name,
+        ]
         if Modality.SENTINEL2_L2A.name in sample_present_modalities:
             mock_sentinel2_l2a = rng.random(
                 (256, 256, num_s2_timesteps, 12), dtype=np.float32
@@ -175,8 +178,39 @@ class TestHeliosDataset:
         timestamps = np.concatenate([days, months, years], axis=1)  # shape: (12, 3)
         sample_dict["timestamps"] = timestamps
         missing_timesteps_masks = {
-            'sentinel1': np.array([False,  True, False, False, False, False, False, False, False, True,  True,  True]),
-            'sentinel2_l2a': np.array([ True,  True, False,  True,  True, False,  True,  True,  True, True,  True,  True])}
+            "sentinel1": np.array(
+                [
+                    False,
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    True,
+                    True,
+                ]
+            ),
+            "sentinel2_l2a": np.array(
+                [
+                    True,
+                    True,
+                    False,
+                    True,
+                    True,
+                    False,
+                    True,
+                    True,
+                    True,
+                    True,
+                    True,
+                    True,
+                ]
+            ),
+        }
         timestamps, missing_timesteps_masks = dataset._crop_timestamps_and_masks(
             sample_dict["timestamps"], missing_timesteps_masks
         )
@@ -192,8 +226,12 @@ class TestHeliosDataset:
         )
         # Everything is filled to 12 here always so we never run into the too long issue before
         # We just pick the lowest that is correct and then repad to the correct length
-        subset_sample = dataset.apply_subset(
-            sample, args, current_length, missing_timesteps_masks
+        subset_sample = sample.subset(
+            patch_size=args.patch_size,
+            max_tokens_per_instance=args.token_budget,
+            sampled_hw_p=args.sampled_hw_p,
+            current_length=current_length,
+            missing_timesteps_masks=missing_timesteps_masks,
         )
         data = [
             getattr(subset_sample, modality) for modality in dataset.training_modalities
