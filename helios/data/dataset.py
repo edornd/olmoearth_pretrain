@@ -6,6 +6,7 @@ import shutil
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import cached_property
 from math import floor
 from typing import Any, NamedTuple, cast
 
@@ -216,35 +217,31 @@ class HeliosSample(NamedTuple):
 
     @property
     def valid_time(self) -> int:
-        """Get the minimum number of valid time steps in a batch.
-        """
+        """Get the minimum number of valid time steps in a batch."""
         return self.timesteps_with_at_least_one_modality.shape[0]
 
-    # this is just a draft of something we could do
-    @property
+    @cached_property
     def timesteps_with_at_least_one_modality(self) -> torch.Tensor:
         """Get timesteps with at least one modality present."""
-        # assuming these are torch tensors
-        # assumes we have a batch dimension
         per_modality_present_masks = []
         for modality in self.modalities:
-            # TODO: seems like we never want timestamps when we loop so maybe we should move this to the property
             if modality == "timestamps":
                 continue
             modality_spec = Modality.get(modality)
             if modality_spec.is_multitemporal:
                 data = getattr(self, modality)
-                # Get all timestamps that are present for all samples with dim T
+                if isinstance(data, np.ndarray):
+                    raise ValueError(
+                        "timesteps_with_at_least_one_modality is not yet supported for numpy arrays"
+                    )
+                # Get all timestamps that are present for all samples for the given modality
                 present_mask = (data != MISSING_VALUE).all(dim=(0, 1, 2, 4))
                 per_modality_present_masks.append(present_mask)
-        # Now we want to find the timesteps that at least 1 modality is present for all samples
-        # at least one means we need any across the timesteps
-        modality_timestep_present_mask = torch.stack(
+        at_least_one_modality_present_timestep_mask = torch.stack(
             per_modality_present_masks, dim=1
-        )
-        at_least_one_modality_present_mask = modality_timestep_present_mask.any(dim=1)
+        ).any(dim=1)
         timesteps_with_at_least_one_modality = torch.where(
-            at_least_one_modality_present_mask
+            at_least_one_modality_present_timestep_mask
         )[0]
         return timesteps_with_at_least_one_modality
 
@@ -669,7 +666,6 @@ class HeliosDataset(Dataset):
             if i < t:  # Only copy if we have data for this timestep
                 full_timesteps_data[..., idx, :] = modality_data[..., i, :]
                 filled_timesteps.append(idx)
-
 
         return full_timesteps_data
 
