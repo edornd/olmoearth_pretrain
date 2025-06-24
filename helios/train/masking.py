@@ -933,9 +933,12 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             )
         return encoded_decoded_bandsets
 
-    def overide_random_mask_condition(self, modality_spec: ModalitySpec) -> bool:
-        """Overide the random mask  for the given modality by the encoding and decoding bandsets."""
-        # Defaults to not overiding anything that may be random masked
+    def overide_strategy_mask(self, modality_spec: ModalitySpec) -> bool:
+        """Overide the mask for a modality depending on the strategy being modality cross masked.
+
+        e.g in time masking, static in time data is randomly masked but we want that data to be either used to predict temporally masked data or
+        predicted from temporal data.
+        """
         return False
 
     def apply_bandset_mask_rules(
@@ -946,7 +949,18 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         ],
         present_modalities_bandsets: list[list[tuple[str, int]]],
     ) -> MaskedHeliosSample:
-        """Allow encoding of encoded bandsets and decoding of decoded bandsets."""
+        """Compute masks for each band set based on the encode and decode selections.
+
+        The encoded and decoded bandsets are typically computed by the select_encoded_decoded_bandsets method.
+
+        Args:
+            masked_batch: The masked batch to apply the mask to.
+            encoded_decoded_bandsets: The encoded and decoded bandsets for each sample.
+            present_modalities_bandsets: The present modalities and bandsets for each sample.
+
+        Returns:
+            The masked batch with the masks applied.
+        """
         masked_batch_dict = masked_batch.as_dict(return_none=False)
         for modality in masked_batch.modalities:
             if modality == "timestamps":
@@ -974,7 +988,12 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                     is_encoded = (modality, bandset_idx) in encoded_bandset_idxs
                     is_decoded = (modality, bandset_idx) in decoded_bandset_idxs
 
-                    if self.overide_random_mask_condition(modality_spec):
+                    # For different masking strategies, some modalities may not be able to follow the structured masking strategy
+                    # e.g static in space is randomly masked in space masking
+                    # e.g static in time is randomly masked in time masking
+                    # By setting to all encode or decode depending on the strategy,
+                    # the modality the structure of the strategy is maintained
+                    if self.overide_strategy_mask(modality_spec):
                         if is_encoded:
                             forced_mask_value = MaskValue.ONLINE_ENCODER.value
                         elif is_decoded:
@@ -1070,7 +1089,7 @@ class ModalityCrossSpaceMaskingStrategy(ModalityCrossMaskingStrategy):
             only_decode_modalities=only_decode_modalities,
         )
 
-    def overide_random_mask_condition(self, modality_spec: ModalitySpec) -> bool:
+    def overide_strategy_mask(self, modality_spec: ModalitySpec) -> bool:
         """Overide the random mask  for the given modality by the encoding and decoding bandsets."""
         # For space masking non spatial data is randomly masked but we want to use the encoding and decoding bandsets
         # to determine the mask for the non spatial data
@@ -1106,7 +1125,7 @@ class ModalityCrossTimeMaskingStrategy(ModalityCrossMaskingStrategy):
             only_decode_modalities=only_decode_modalities,
         )
 
-    def overide_random_mask_condition(self, modality_spec: ModalitySpec) -> bool:
+    def overide_strategy_mask(self, modality_spec: ModalitySpec) -> bool:
         """Overide the random mask  for the given modality by the encoding and decoding bandsets."""
         # For time masking static data is randomly masked but we want to use the encoding and decoding bandsets
         # to determine the mask for the static data
@@ -1263,12 +1282,6 @@ class ModalityCrossRandomMaskingStrategy(ModalityCrossMaskingStrategy):
             max_decoded_bandsets=max_decoded_bandsets,
             only_decode_modalities=only_decode_modalities,
         )
-
-    def overide_random_mask_condition(self, modality_spec: ModalitySpec) -> bool:
-        """Override the random mask for the given modality by the encoding and decoding bandsets."""
-        # For random masking, we want to use the encoding and decoding bandsets
-        # to determine the mask for all modalities
-        return False
 
 
 @MASKING_STRATEGY_REGISTRY.register("random_increasing")
