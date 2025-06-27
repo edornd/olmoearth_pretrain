@@ -31,8 +31,8 @@ for checkpoint in checkpoints:
             + f"_eval_{probe_lr}"
         )
         start_command = "python3" if run_cmd == "launch" else "torchrun"
-        lr_args = lr_args.format(lr=probe_lr)
-        print(lr_args)
-        cmd = f"{start_command} scripts/2025_06_10_cross_masking_investigation/eval.py {run_cmd} {run_name} {cluster} --launch.priority=high {lr_args} --trainer.load_path={checkpoint}"
+        formatted_lr_args = lr_args.format(lr=probe_lr)
+        print(formatted_lr_args)
+        cmd = f"{start_command} scripts/2025_06_10_cross_masking_investigation/eval.py {run_cmd} {run_name} {cluster} --launch.priority=high {formatted_lr_args} --trainer.load_path={checkpoint}"
         print(cmd)
         subprocess.run(cmd, shell=True)  # nosec
