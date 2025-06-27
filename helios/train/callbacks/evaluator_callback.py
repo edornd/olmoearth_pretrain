@@ -44,6 +44,7 @@ class DownstreamEvaluator:
         probe_lr: float | None = None,
         input_modalities: list[str] = field(default_factory=list),
         eval_mode: str | None = None,
+        dataset_percentage: float = 1.0,
     ) -> None:
         """Initialize the downstream evaluator.
 
@@ -64,6 +65,7 @@ class DownstreamEvaluator:
             input_modalities: Input modalities, only used for multimodal tasks.
             eval_mode: whether to use knn or linear probe. Defaults to KNN for classification
                 and linear probe for segmentation. Only classification is supported by KNN
+            dataset_percentage: Percentage of the training dataset to use for the evaluation.
         """
         self.evaluation_name = evaluation_name
         self.dataset = dataset
@@ -80,7 +82,7 @@ class DownstreamEvaluator:
         self.patch_size = patch_size
         self.input_modalities = input_modalities
         self.epochs = epochs
-
+        self.dataset_percentage = dataset_percentage
         if eval_mode is None:
             eval_mode = (
                 "knn"
@@ -144,6 +146,18 @@ class DownstreamEvaluator:
         start_time = time.time()
         logger.info(f"Getting train embeddings for {self.dataset}...")
         train_embeddings, train_labels = self._get_embeddings(train_loader)
+        if self.dataset_percentage < 1.0:
+            # Randomly sample a percentage of the test data
+            num_train_samples = train_embeddings.shape[0]
+            num_train_samples_to_sample = int(
+                num_train_samples * self.dataset_percentage
+            )
+            # Randomly sample the indices integers from 0 to num_train_samples
+            train_indices = torch.randperm(num_train_samples)[
+                :num_train_samples_to_sample
+            ]
+            train_embeddings = train_embeddings[train_indices]
+            train_labels = train_labels[train_indices]
         logger.info(f"Getting test embeddings for {self.dataset}...")
         test_embeddings, test_labels = self._get_embeddings(val_loader)
         logger.info(
@@ -249,6 +263,7 @@ class DownstreamTaskConfig:
     probe_lr: float | None = None
     patch_size: int = 4
     probe_batch_size: int = 32
+    dataset_percentage: float = 1.0
     epochs: int = 50  # Number of training epochs for linear probing task
     eval_interval: Duration = field(default_factory=lambda: Duration.epochs(1))
     eval_mode: str | None = None
