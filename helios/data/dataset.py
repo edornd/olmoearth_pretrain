@@ -625,6 +625,7 @@ class HeliosDataset(Dataset):
                 size=int(len(self.sample_indices) * self.dataset_percentage),
                 replace=False,
             )
+        self.latlon_distribution = self.latlon_distribution[self.sample_indices]
 
     def get_geographic_distribution(self) -> np.ndarray:
         """Get the geographic distribution of the dataset.
@@ -899,6 +900,7 @@ class HeliosDatasetConfig(Config):
     normalize: bool = True
     cache_dir: str | None = None
     samples_per_sec: float | None = None
+    dataset_percentage: float = 1.0
 
     def get_numpy_dtype(self) -> np.dtype:
         """Get the numpy dtype."""
