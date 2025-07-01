@@ -111,6 +111,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             probe_lr=0.1,
             eval_interval=Duration.epochs(10),
         ),
+        # THESE EVALS DO NOT yet supportt partition
         # "sickle_sentinel1": DownstreamTaskConfig(
         #     dataset="sickle",
         #     embedding_batch_size=32,
@@ -191,18 +192,19 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             input_modalities=[Modality.SENTINEL1.name],
             epochs=50,
         ),
-        # "pastis_sentinel1_sentinel2": DownstreamTaskConfig(
-        #     dataset="pastis",
-        #     embedding_batch_size=32,
-        #     probe_batch_size=8,
-        #     num_workers=2,
-        #     pooling_type=PoolingType.MEAN,
-        #     norm_stats_from_pretrained=True,
-        #     probe_lr=0.1,
-        #     eval_interval=Duration.epochs(20),
-        #     input_modalities=[Modality.SENTINEL1.name, Modality.SENTINEL2_L2A.name],
-        #     epochs=50,
-        # ),
+        "pastis_sentinel1_sentinel2": DownstreamTaskConfig(
+            dataset="pastis",
+            embedding_batch_size=32,
+            probe_batch_size=8,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            probe_lr=0.1,
+            eval_interval=Duration.epochs(20),
+            input_modalities=[Modality.SENTINEL1.name, Modality.SENTINEL2_L2A.name],
+            epochs=50,
+        ),
+        # also does not support partitions
         # "breizhcrops": DownstreamTaskConfig(
         #     dataset="breizhcrops",
         #     embedding_batch_size=128,
