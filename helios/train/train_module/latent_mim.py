@@ -214,14 +214,19 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                microbatch = self.transform.apply(microbatch).to_device(self.device)
+                microbatch = self.transform.apply(microbatch)
+                logger.info("finished transform")
+                microbatch = microbatch.to_device(self.device)
+                logger.info("finished to device")
                 masked_batch = self.masking_strategy.apply_mask(
                     microbatch, patch_size=patch_size
                 )
+                logger.info("finished masking")
                 # Run Encoder and decoder on the augmented input
                 loss, latent, decoded, target_output = self.model_forward(
                     masked_batch, patch_size, self.token_exit_cfg
                 )
+                logger.info("finished model forward")
                 reg_term = self.compute_regularization(latent)
                 if reg_term is not None:
                     loss = loss + reg_term
@@ -233,9 +238,10 @@ class LatentMIMTrainModule(HeliosTrainModule):
 
                 loss_val = get_local_tensor(loss.detach())
                 total_batch_loss += loss_val
-
+                logger.info("finished loss")
                 # Skip bad batches
                 if torch.isnan(loss).any() or torch.isinf(loss).any():
+                    logger.info("nan or inf detected in loss")
                     logger.warning(
                         f"NaN or Inf detected in loss at microbatch {microbatch_idx}, stopping training for this batch."
                     )
@@ -244,7 +250,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
 
                 del latent, decoded, target_output
                 loss.backward()
-
+                logger.info("finished backward")
         self.trainer.record_metric(
             f"train/{self.total_loss_name}",
             total_batch_loss,
@@ -265,13 +271,16 @@ class LatentMIMTrainModule(HeliosTrainModule):
         with self._model_forward_context():
             latent, decoded, _, reconstructed = self.model(batch, patch_size)
             with torch.no_grad():
+                logger.info("starting target encoder forward pass")
                 logger.info("Target Encoder forward pass...")
                 target_output, _ = self.model.target_encoder.forward(
                     batch.unmask(),
                     patch_size=patch_size,
                     token_exit_cfg=token_exit_cfg,
                 )
+            logger.info("finished target encoder forward pass")
             loss = self.loss_fn(decoded, target_output)
+            logger.info("finished loss fn")
             if self.mae_loss is not None:
                 loss += self.mae_loss.compute(reconstructed, batch)
             return loss, latent, decoded, target_output

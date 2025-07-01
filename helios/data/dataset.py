@@ -127,13 +127,14 @@ class HeliosSample(NamedTuple):
         Returns:
             A new HeliosSample with all tensors moved to the specified device.
         """
-        return HeliosSample(
-            **{
-                key: val.to(device)
-                for key, val in self.as_dict(ignore_nones=True).items()
-                if val is not None
-            }
-        )
+        moved_tensors = {}
+        for key, val in self.as_dict(ignore_nones=True).items():
+            if val is not None:
+                logger.info(f"moving {key} to device {device}")
+                logger.info(f"val shape: {val.shape}")
+                moved_tensors[key] = val.to(device)
+                logger.info(f"moved {key} to device {device}")
+        return HeliosSample(**moved_tensors)
 
     def distribute_tensors(self, device_mesh: DeviceMesh) -> "HeliosSample":
         """Distribute the tensors to the specified device mesh."""
