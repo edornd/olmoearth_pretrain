@@ -816,6 +816,11 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             assert (
                 max_encoded_bandsets is None
             ), "max_encoded_bandsets must be set if min_encoded_bandsets is set"
+        else:
+            assert (
+                min_encoded_bandsets > 1
+            ), "min_encoded_bandsets must be greater than 1 so that we don't only  \
+                encode a modality that is randomly masked on batch dimension ie latlon"
         self.min_encoded_bandsets = min_encoded_bandsets
         self.max_encoded_bandsets = max_encoded_bandsets
         self.min_decoded_bandsets = min_decoded_bandsets
@@ -853,7 +858,6 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                     present_modalities_bandsets[sample_idx].append(
                         (modality, bandset_idx)
                     )
-        # print(present_modalities_bandsets)
         return present_modalities_bandsets
 
     def select_encoded_decoded_bandsets(
@@ -869,12 +873,10 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             ]
             # If there is only one modality, we only encode not decode
             if len(present_modalities_bandsets_for_sample) == 1:
-                print("only one modality")
                 encoded_bandset_idxs = set(present_modalities_bandsets_for_sample)
                 decoded_bandset_idxs = set()
             # If there are two modalities, we encode one and decode the other
             elif len(present_modalities_bandsets_for_sample) == 2:
-                print("only two modalities")
                 encoded_bandset_idxs = set([present_modalities_bandsets_for_sample[0]])
                 decoded_bandset_idxs = set([present_modalities_bandsets_for_sample[1]])
             # If there are more than two modalities, we randomly select some to encode and the rest to decode
@@ -887,8 +889,6 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                     if modality_bandset[0] not in self.only_decode_modalities
                 ]
                 num_encodable_modalities = len(encodable_modalities)
-                # print(num_encodable_modalities)
-                # is this sometimes latlon?
                 # if min and max are none we will always encode all encodable bandsets
                 # if min is none, max must be none
                 if self.max_encoded_bandsets is None:
@@ -916,7 +916,6 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 encoded_bandset_idxs = set(
                     [encodable_modalities[i] for i in encoded_idxs]
                 )
-                # print(encoded_bandset_idxs)
                 # Select Indices to Decode
                 min_decoded_bandsets = min(
                     self.min_decoded_bandsets or 1, num_present_modalities
@@ -1081,20 +1080,16 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedHeliosSample:
         """Apply space masking to the input data."""
-        logger.info("starting masking")
         masked_sample = self.strategy.apply_mask(batch, patch_size, **kwargs)
         present_modalities_bandsets = self.get_sample_present_modalities_bandsets(
             masked_sample
         )
-        logger.info("finished getting sample present modalities bandsets")
         encoded_decoded_bandsets = self.select_encoded_decoded_bandsets(
             present_modalities_bandsets
         )
-        logger.info("finished selecting encoded decoded bandsets")
         masked_sample = self.apply_bandset_mask_rules(
             masked_sample, encoded_decoded_bandsets, present_modalities_bandsets
         )
-        logger.info("finished applying bandset mask rules")
         return masked_sample
 
 
