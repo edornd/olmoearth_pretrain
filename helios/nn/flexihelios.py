@@ -190,10 +190,10 @@ class TokensAndMasks(NamedTuple):
             elif pooling_type == PoolingType.MEAN:
                 num_encoded_tokens = torch.sum(mask, -1, keepdim=True)
                 logger.debug(f"num_encoded_tokens: {num_encoded_tokens}")
-                # if (num_encoded_tokens == 0).any():
-                #     raise ValueError(
-                #         f"num_encoded_tokens is 0 for some samples {num_encoded_tokens}"
-                #     )
+                if (num_encoded_tokens == 0).any():
+                    raise ValueError(
+                        f"num_encoded_tokens is 0 for some samples {num_encoded_tokens}"
+                    )
                 return x_for_pooling.sum(dim=1) / num_encoded_tokens
             else:
                 raise ValueError(f"Invalid pooling type: {pooling_type}")
@@ -1171,7 +1171,6 @@ class Encoder(FlexiHeliosBase):
             tokens: Tokens with removed tokens added
             mask: Mask with removed tokens added
         """
-        print(x.shape)
         assert (
             x.shape[1] > 0
         ), "x must have at least one token we should not mask all tokens"
