@@ -23,10 +23,10 @@ lr_args = [
 ]
 
 dataset_paritions = [
-    "0.01x_train",
-    "0.05x_train",
-    "0.2x_train",
-    "0.5x_train",
+    # "0.01x_train",
+    # "0.05x_train",
+    "0.20x_train",
+    "0.50x_train",
 ]
 dataset_partition_args = [
     "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.partition={dataset_partition}",
