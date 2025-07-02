@@ -261,12 +261,7 @@ def evaluate_probe(
             batch_emb = batch_emb.to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
-<<<<<<< HEAD
-                logits = probe(batch_emb)  # (bsz, num_patches, logits_per_patch)
-                # all_attn_weights.append(attn_weights)
-=======
                 logits, attn_weights = probe(batch_emb)  # (bsz, num_patches, logits_per_patch)
->>>>>>> 4352d4b8... working probe wiht attention weight printing
                 if task_type == TaskType.SEGMENTATION:
                     spatial_patches_per_dim = batch_emb.shape[1]
                     logits = rearrange(
@@ -285,19 +280,6 @@ def evaluate_probe(
                             mode="bilinear",
                             align_corners=True,
                         )  # (bsz, num_classes, H, W)
-<<<<<<< HEAD
-    # all_attn_weights = torch.cat(all_attn_weights)
-    # logger.info(f"all_attn_weights shape: {all_attn_weights.shape}")
-    # per_head = all_attn_weights.mean(dim=(0, 2))      # → [heads, 3]
-    # overall = all_attn_weights.mean(dim=(0, 1, 2))    # → [3]
-    # logger.info(f"overall shape: {overall.shape}")
-    # logger.info(f"overall: {overall.tolist()}")
-    # logger.info(f"per_head shape: {per_head.shape}")
-    # logger.info(f"per_head: {per_head.tolist()}")
-    preds = torch.argmax(logits, dim=1).cpu()
-    all_preds.append(preds)
-    all_labels.append(batch_labels)
-=======
 
             preds = torch.argmax(logits, dim=1).cpu()
             all_preds.append(preds)
@@ -311,7 +293,6 @@ def evaluate_probe(
     logger.info(f"overall: {overall.tolist()}")
     logger.info(f"per_head shape: {per_head.shape}")
     logger.info(f"per_head: {per_head.tolist()}")
->>>>>>> 4352d4b8... working probe wiht attention weight printing
 
     all_preds = torch.cat(all_preds)
     all_labels = torch.cat(all_labels)
