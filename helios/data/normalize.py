@@ -1,11 +1,14 @@
 """Normalizer for the Helios dataset."""
 
 import json
+import logging
 from enum import Enum
 
 import numpy as np
 
 from helios.data.constants import ModalitySpec
+
+logger = logging.getLogger(__name__)
 
 
 class Strategy(Enum):
@@ -113,6 +116,9 @@ class Normalizer:
             try:
                 return self._normalize_computed(modality, data)
             except KeyError:
+                logger.warning(
+                    f"No computed stats for {modality}, falling back to predefined stats."
+                )
                 return self._normalize_predefined(modality, data)
         else:
             raise ValueError(f"Invalid strategy: {self.strategy}")
