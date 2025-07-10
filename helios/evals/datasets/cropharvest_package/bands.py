@@ -47,6 +47,7 @@ REMOVED_BANDS = ["B1", "B10"]
 RAW_BANDS = DYNAMIC_BANDS + STATIC_BANDS
 
 BANDS = [x for x in DYNAMIC_BANDS if x not in REMOVED_BANDS] + STATIC_BANDS + ["NDVI"]
+
 # NDVI is between 0 and 1
 BANDS_MAX = (
     [

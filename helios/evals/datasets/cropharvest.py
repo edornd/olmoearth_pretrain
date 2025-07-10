@@ -14,6 +14,7 @@ from helios.data.dataset import HeliosSample
 from helios.data.normalize import Normalizer, Strategy
 from helios.train.masking import MaskedHeliosSample, Modality
 
+from .configs import dataset_to_config
 from .constants import (
     EVAL_S1_BAND_NAMES,
     EVAL_S2_BAND_NAMES,
@@ -98,7 +99,12 @@ def _s1helios2ch_name(band_name: str) -> str:
 
 
 S2_INPUT_TO_OUTPUT_BAND_MAPPING = [
-    BANDS.index(_s2helios2ch_name(b)) for b in EVAL_S2_BAND_NAMES
+    BANDS.index(_s2helios2ch_name(b))
+    for b in EVAL_S2_BAND_NAMES
+    if _s2helios2ch_name(b) in BANDS
+]
+S2_EVAL_BANDS_BEFORE_IMPUTATION = [
+    b for b in EVAL_S2_BAND_NAMES if _s2helios2ch_name(b) in BANDS
 ]
 
 S1_INPUT_TO_OUTPUT_BAND_MAPPING = [
@@ -155,6 +161,7 @@ class CropHarvestDataset(Dataset):
         timesteps: num timesteps to use
         """
         self.timesteps = timesteps
+        self.config = dataset_to_config("cropharvest")
 
         _download_cropharvest_data(cropharvest_dir)
 
@@ -212,6 +219,35 @@ class CropHarvestDataset(Dataset):
         """Length of the dataset."""
         return self.array.shape[0]
 
+    @staticmethod
+    def _impute_bands(
+        image_list: list[np.ndarray],
+        names_list: list[str],
+        imputes: list[tuple[str, str]],
+    ) -> list:
+        # image_list should be one np.array per band, stored in a list
+        # image_list and names_list should be ordered consistently!
+        if not imputes:
+            return image_list
+
+        # create a new image list by looping through and imputing where necessary
+        new_image_list = []
+        for band_name in EVAL_S2_BAND_NAMES:
+            if band_name in names_list:
+                # we have the band, so append it
+                band_idx = names_list.index(band_name)
+                new_image_list.append(image_list[band_idx])
+            else:
+                # we don't have the band, so impute it
+                for impute in imputes:
+                    src, tgt = impute
+                    if tgt == band_name:
+                        # we have a match!
+                        band_idx = names_list.index(src)
+                        new_image_list.append(image_list[band_idx])
+                        break
+        return new_image_list
+
     def __getitem__(self, idx: int) -> tuple[MaskedHeliosSample, torch.Tensor]:
         """Return the sample at idx."""
         x = self.array[idx]
@@ -223,9 +259,13 @@ class CropHarvestDataset(Dataset):
 
         x_hw = repeat(x, "t c -> h w t c", w=1, h=1)
 
-        s2 = x_hw[:, :, : self.timesteps, S2_INPUT_TO_OUTPUT_BAND_MAPPING][
-            :, :, :, EVAL_TO_HELIOS_S2_BANDS
-        ]
+        s2 = x_hw[:, :, : self.timesteps, S2_INPUT_TO_OUTPUT_BAND_MAPPING]
+
+        # for s2, we need to impute missing bands
+        s2 = self._impute_bands(
+            s2, S2_EVAL_BANDS_BEFORE_IMPUTATION, self.config.imputes
+        )
+        s2 = s2[:, :, :, EVAL_TO_HELIOS_S2_BANDS]
         s1 = x_hw[:, :, : self.timesteps, S1_INPUT_TO_OUTPUT_BAND_MAPPING][
             :, :, :, EVAL_TO_HELIOS_S1_BANDS
         ]
