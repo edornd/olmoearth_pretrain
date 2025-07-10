@@ -218,7 +218,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         ),
         "cropharvest_Togo_12": DownstreamTaskConfig(
             dataset="cropharvest_Togo_12",
-            batch_size=8,
+            embedding_batch_size=128,
             num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
