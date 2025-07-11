@@ -210,6 +210,7 @@ class CropHarvestDataset(Dataset):
         self.norm_stats_from_pretrained = norm_stats_from_pretrained
         # We will always need the normalized to normalize latlons
         self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+        self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
         self.norm_method = norm_method
         self.input_modalities = input_modalities
         if len(self.input_modalities) == 0:
@@ -256,7 +257,9 @@ class CropHarvestDataset(Dataset):
         """Return the sample at idx."""
         x = self.array[idx]
         y = self.labels[idx]
-        latlon = self.normalizer_computed.normalize(Modality.LATLON, self.latlons[idx])
+        latlon = self.normalizer_predefined.normalize(
+            Modality.LATLON, self.latlons[idx]
+        )
 
         if not self.norm_stats_from_pretrained:
             x = normalize_bands(x, X_MEAN, X_STD, method=self.norm_method)

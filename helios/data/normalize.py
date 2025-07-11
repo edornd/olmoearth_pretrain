@@ -113,12 +113,6 @@ class Normalizer:
         if self.strategy == Strategy.PREDEFINED:
             return self._normalize_predefined(modality, data)
         elif self.strategy == Strategy.COMPUTED:
-            try:
-                return self._normalize_computed(modality, data)
-            except KeyError:
-                logger.warning(
-                    f"No computed stats for {modality}, falling back to predefined stats."
-                )
-                return self._normalize_predefined(modality, data)
+            return self._normalize_computed(modality, data)
         else:
             raise ValueError(f"Invalid strategy: {self.strategy}")
