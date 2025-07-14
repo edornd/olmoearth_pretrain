@@ -125,6 +125,10 @@ def build_launch_config(
         env_vars=[
             BeakerEnvVar(name="NCCL_DEBUG", value="INFO" if nccl_debug else "WARN"),
             BeakerEnvVar(
+                name="TORCH_NCCL_TRACE_BUFFER_SIZE",
+                value="1000000000" if nccl_debug else "0",
+            ),
+            BeakerEnvVar(
                 name="GOOGLE_APPLICATION_CREDENTIALS", value="/etc/gcp_credentials.json"
             ),
         ],
