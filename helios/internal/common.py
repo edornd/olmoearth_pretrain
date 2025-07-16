@@ -131,6 +131,7 @@ def build_launch_config(
             BeakerEnvVar(
                 name="GOOGLE_APPLICATION_CREDENTIALS", value="/etc/gcp_credentials.json"
             ),
+            BeakerEnvVar("NCCL_BLOCKING_WAIT", value="1" if nccl_debug else "0"),
         ],
         env_secrets=[
             BeakerEnvSecret(name="BEAKER_TOKEN", secret=f"{beaker_user}_BEAKER_TOKEN"),
