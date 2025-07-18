@@ -95,14 +95,25 @@ class HeliosDataLoader(DataLoaderBase):
             mp.set_forkserver_preload(["torch", "rasterio"])
 
     @property
+    def total_unique_batches(self) -> int:
+        """The total number of unique batches in an epoch."""
+        return len(self.dataset) // (self.global_batch_size)
+
+    @property
+    def total_unique_size(self) -> int:
+        """The total number of unique instances in an epoch."""
+        return self.total_unique_batches * self.global_batch_size
+
+    @property
     def total_batches(self) -> int:
         """The total number of batches in an epoch."""
-        return len(self.dataset) // (self.global_batch_size * self.num_dataset_repeats_per_epoch)
+        return self.total_unique_batches * self.num_dataset_repeats_per_epoch
+
 
     @property
     def total_size(self) -> int:
         """The total number of instances in an epoch."""
-        return self.total_batches * self.global_batch_size * self.num_dataset_repeats_per_epoch
+        return self.total_batches * self.global_batch_size
 
     @property
     def _global_indices_file(self) -> UPath:
@@ -127,16 +138,20 @@ class HeliosDataLoader(DataLoaderBase):
         if self.shuffle:
             # Deterministically shuffle based on epoch and seed
             rng = get_rng(self.seed + self.epoch)  # type: ignore
-
+        length_of_dataset = len(self.dataset)
+        print(f"Total Length of dataset: {length_of_dataset}")
         indices_list = []
         for _ in range(self.num_dataset_repeats_per_epoch):
             indices = np.arange(len(self.dataset), dtype=np.uint32)
             if rng is not None:
                 rng.shuffle(indices)
             # Remove tail of data to make it evenly divisible
-            indices = indices[: self.total_size]
-            indices_list.append(indices)
-        return np.concatenate(indices_list)
+            print(f"Total unique size: {self.total_unique_size}")
+            cropped_indices = indices[: self.total_unique_size]
+            indices_list.append(cropped_indices)
+        indices = np.concatenate(indices_list)
+        print(f"Number of indices in this epoch: {indices.shape}")
+        return indices
 
     def build_and_save_global_indices(self, in_memory: bool = False) -> None:
         """Build and save global indices."""
@@ -485,6 +500,7 @@ class HeliosDataLoaderConfig(Config):
     prefetch_factor: int | None = None
     target_device_type: str | None = None
     drop_last: bool = True
+    num_dataset_repeats_per_epoch: int = 1
 
     def validate(self) -> None:
         """Validate the configuration."""
@@ -526,4 +542,5 @@ class HeliosDataLoaderConfig(Config):
             max_patch_size=self.max_patch_size,
             sampled_hw_p_list=self.sampled_hw_p_list,
             token_budget=self.token_budget,
+            num_dataset_repeats_per_epoch=self.num_dataset_repeats_per_epoch,
         )
