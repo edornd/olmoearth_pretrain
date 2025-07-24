@@ -3,12 +3,13 @@
 import logging
 import torch
 import torch.nn.functional as F
-from einops import rearrange
+from einops import rearrange, repeat
 from torchvision import transforms
 from torch import nn
-
+import yaml
 from helios.train.masking import MaskedHeliosSample
 from helios.data.constants import Modality
+
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class PanopticonWrapper(nn.Module):
 
         return data
 
-    def _create_channel_ids(self, total_channels: int, batch_size: int) -> torch.Tensor:
+    def _create_channel_ids(self, modality: str, batch_size: int) -> torch.Tensor:
         """Create channel IDs for the panopticon model.
 
         Args:
@@ -95,11 +96,22 @@ class PanopticonWrapper(nn.Module):
         Returns:
             Channel IDs tensor of shape [1, total_channels] or [batch_size, total_channels]
         """
-        # Create sequential channel IDs (0, 1, 2, ..., total_channels-1)
-        # This is a simple approach - could be enhanced with actual wavelength information
-        chn_ids = torch.arange(total_channels, dtype=torch.float32, device=self.device)
-        chn_ids = chn_ids.unsqueeze(0)  # Shape: [1, total_channels]
-
+        # Bands are in the EVAL_TO_HELIOS_S2_BANDS order so we need to use that to pull the information from the yaml files
+        if modality == "sentinel2_l2a":
+            modality = "sentinel2"
+        with open(f"./helios/evals/panopticon/sensors/{modality}.yaml", "r") as f:
+            sensor_config = yaml.safe_load(f)
+        modality_spec = Modality.get(modality)
+        chn_ids = []
+        for band in modality_spec.band_order:
+            if band == "B10":
+                # skipping B10 band for this eval I think because the helios dataloader skips it
+                continue
+            print(band)
+            print(sensor_config["bands"][band])
+            chn_ids.append(sensor_config["bands"][band]["gaussian"]["mu"])
+        chn_ids = torch.tensor(chn_ids, dtype=torch.float32, device=self.device)
+        chn_ids = repeat(chn_ids, "c -> b c", b=batch_size)
         return chn_ids
 
     def prepare_input(self, masked_helios_sample: MaskedHeliosSample) -> dict[str, torch.Tensor]:
@@ -113,21 +125,24 @@ class PanopticonWrapper(nn.Module):
         """
         # Process each modality
         input_data = []
-        total_channels = 0
-
+        channel_ids_list = []
         for modality in masked_helios_sample.modalities:
             if modality in ["timestamps", "latlon"]:
                 continue  # Skip non-image modalities
 
             data = getattr(masked_helios_sample, modality)
+
+            print(f"Modality: {modality}, data: shape {data.shape}")
             if data is None:
                 continue
 
             # Process the modality data
             processed_data = self._process_modality_data(data)
             input_data.append(processed_data)
-            total_channels += processed_data.shape[1]  # Accumulate channel count
-
+            batch_size = processed_data.shape[0]
+            # I need to convert the helios channel ordering to get the right panopticon channel value
+            chn_ids = self._create_channel_ids(modality, batch_size)
+            channel_ids_list.append(chn_ids)
             logger.info(f"Processed {modality}: {processed_data.shape}")
 
         if not input_data:
@@ -137,9 +152,8 @@ class PanopticonWrapper(nn.Module):
         concatenated_imgs = torch.cat(input_data, dim=1)
         batch_size = concatenated_imgs.shape[0]
 
-        # Create channel IDs
-        chn_ids = self._create_channel_ids(total_channels, batch_size)
-
+        print(f"Concatenated imgs: {concatenated_imgs.shape}")
+        print(f"Channel ids: {chn_ids.shape}")
         panopticon_input = {
             "imgs": concatenated_imgs,
             "chn_ids": chn_ids,

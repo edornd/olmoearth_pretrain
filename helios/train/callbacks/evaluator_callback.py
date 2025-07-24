@@ -153,7 +153,7 @@ class DownstreamEvaluator:
     def val(self) -> float:
         """Validate the model on the downstream task."""
         train_loader = self._get_data_loader("train")
-        val_loader = self._get_data_loader("valid")
+        val_loader = self._get_data_loader("test")
 
         start_time = time.time()
         logger.info(f"Getting train embeddings for {self.dataset}...")
