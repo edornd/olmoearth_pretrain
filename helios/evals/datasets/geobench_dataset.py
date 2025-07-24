@@ -18,7 +18,7 @@ from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskedHeliosSample
 
-from .configs import DATASET_TO_CONFIG
+from .configs import dataset_to_config
 from .constants import (
     EVAL_L8_BAND_NAMES,
     EVAL_S2_BAND_NAMES,
@@ -60,7 +60,7 @@ class GeobenchDataset(Dataset):
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
             visualize_samples: Whether to visualize samples
         """
-        config = DATASET_TO_CONFIG[dataset]
+        config = dataset_to_config(dataset)
         self.config = config
         self.num_classes = config.num_classes
         self.is_multilabel = config.is_multilabel
