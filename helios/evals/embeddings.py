@@ -8,7 +8,8 @@ from torch.utils.data import DataLoader
 from helios.evals.datasets.configs import TaskType
 from helios.nn.flexihelios import Encoder, PoolingType, TokensAndMasks
 from helios.train.masking import MaskedHeliosSample
-from geobreeze.models.dinov2 import DinoV2
+from einops import rearrange
+import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,9 @@ def get_embeddings(
     """Get embeddings from model for the data in data_loader."""
     embeddings = []
     labels = []
-
+    torch.hub._validate_not_a_forked_repo=lambda a,b,c: True
+    torchhub_id = "dinov2_vitb14"
+    model = torch.hub.load("facebookresearch/dinov2", torchhub_id)
     model = model.eval()
     device = next(model.parameters()).device
     total_samples = len(data_loader)
@@ -48,7 +51,17 @@ def get_embeddings(
                 # batch_embeddings: TokensAndMasks = model(
                 #     masked_helios_sample, patch_size=patch_size
                 # )[0]  # (bsz, dim)
-                batch_embeddings = model.forward_features(masked_helios_sample)
+                # create rgb only s2 data
+                s2_data = masked_helios_sample.sentinel2_l2a
+                logger.info(f"s2_data: {s2_data.shape}")
+                # DinoV2 exbects B, C , H , W
+                # channels first
+
+                s2_data = rearrange(s2_data, "b h w t c -> b (c t) h w")
+                s2_data = s2_data[:, [3,2,1], :, :]
+                # Resize the image to 224x224
+                s2_data = F.interpolate(s2_data, size=(224, 224), mode="bilinear", align_corners=False)
+                batch_embeddings = model.forward_features(s2_data)
             spatial_pool = True if task_type == TaskType.SEGMENTATION else False
             # Concat features across modalities in space averaged across time
             averaged_embeddings = batch_embeddings.pool_unmasked_tokens(
