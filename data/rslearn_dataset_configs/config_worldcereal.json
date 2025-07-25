@@ -1,6 +1,23 @@
 {
   "layers": {
-    "tc-annual-temporarycrops": {
+    "tc-annual-temporarycrops-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-annual-temporarycrops-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-annual-temporarycrops-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -11,13 +28,30 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
       "type": "raster"
     },
-    "tc-maize-main-irrigation": {
+    "tc-maize-main-irrigation-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-maize-main-irrigation-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-maize-main-irrigation-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -28,13 +62,30 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
       "type": "raster"
     },
-    "tc-maize-main-maize": {
+    "tc-maize-main-maize-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-maize-main-maize-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-maize-main-maize-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -45,13 +96,30 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
       "type": "raster"
     },
-    "tc-maize-second-irrigation": {
+    "tc-maize-second-irrigation-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-maize-second-irrigation-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-maize-second-irrigation-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -62,13 +130,30 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
       "type": "raster"
     },
-    "tc-maize-second-maize": {
+    "tc-maize-second-maize-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-maize-second-maize-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-maize-second-maize-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -79,13 +164,30 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
       "type": "raster"
     },
-    "tc-springcereals-springcereals": {
+    "tc-springcereals-springcereals-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-springcereals-springcereals-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-springcereals-springcereals-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -96,13 +198,30 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
       "type": "raster"
     },
-    "tc-wintercereals-irrigation": {
+    "tc-wintercereals-irrigation-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-wintercereals-irrigation-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-wintercereals-irrigation-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -113,13 +232,30 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
       "type": "raster"
     },
-    "tc-wintercereals-wintercereals": {
+    "tc-wintercereals-wintercereals-classification": {
+      "alias": "worldcereal",
+      "band_sets": [
+        {
+          "bands": [
+            "tc-wintercereals-wintercereals-classification"
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
+        "worldcereal_dir": "source_data/worldcereal/"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    },
+    "tc-wintercereals-wintercereals-confidence": {
       "alias": "worldcereal",
       "band_sets": [
         {
@@ -130,7 +266,7 @@
         }
       ],
       "data_source": {
-        "name": "rslearn.data_sources.worldcereal.WorldCerealConfidences",
+        "name": "rslearn.data_sources.worldcereal.WorldCereal",
         "worldcereal_dir": "source_data/worldcereal/"
       },
       "resampling_method": "nearest",
