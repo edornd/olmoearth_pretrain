@@ -40,12 +40,21 @@ class PanopticonWrapper(nn.Module):
 
     def _load_model(self, torchhub_id: str):
         """Load the panopticon model from torch hub."""
+        import time
         # Hack to get around https://discuss.pytorch.org/t/torch-hub-load-gives-httperror-rate-limit-exceeded/124769
         torch.hub._validate_not_a_forked_repo = lambda a, b, c: True
-        self.model = torch.hub.load(
-            'panopticon-FM/panopticon',
-            torchhub_id,
-        )
+        for attempt in range(2):
+            try:
+                self.model = torch.hub.load(
+                    'panopticon-FM/panopticon',
+                    torchhub_id,
+                )
+                break
+            except Exception as e:
+                logger.warning(f"Error loading panopticon model: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
+        else:
+            raise RuntimeError(f"Failed to load panopticon model {torchhub_id} after retrying.")
         self.model = self.model.eval()
         self.model = self.model.to(device=self.device)
         logger.info(f"Loaded panopticon model {torchhub_id} on device {self.device}")
