@@ -8,6 +8,7 @@ from torchvision import transforms
 from torch import nn
 import yaml
 from helios.train.masking import MaskedHeliosSample
+from helios.nn.flexihelios import PoolingType
 from helios.data.constants import Modality
 import math
 
@@ -180,7 +181,7 @@ class PanopticonWrapper(nn.Module):
         # I want to return a list of panopticon inputs, one for each timestep
         return per_timestep_panopticon_inputs
 
-    def forward(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
+    def forward(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN) -> torch.Tensor:
         """Forward pass through the panopticon model.
 
         Args:
@@ -198,8 +199,11 @@ class PanopticonWrapper(nn.Module):
             print(f"timestep_output shape: {timestep_output.shape}")
             output_features.append(timestep_output.unsqueeze(0))
         # stack in the timestep dimension and take the mean or maybe the max?
-        output_features = torch.cat(output_features, dim=0).mean(dim=0)
-        print(f"output_features shape: {output_features.shape}")
+        if pooling == PoolingType.MEAN:
+            output_features = torch.cat(output_features, dim=0).mean(dim=0)
+        elif pooling == PoolingType.MAX:
+            output_features = torch.max(torch.cat(output_features, dim=0), dim=0)[0]
+        print(f"output_features shape: {output_features}")
         # Do we need this to work for both single pixel and full images
         return output_features
 
@@ -248,7 +252,7 @@ class PanopticonWrapper(nn.Module):
         return tuple(outputs)
 
     # TODO: add a Temporal poolin type option
-    def forward_features(self, masked_helios_sample: MaskedHeliosSample) -> dict[str, torch.Tensor]:
+    def forward_features(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN) -> torch.Tensor:
         """Forward pass through the panopticon model.
 
         Args:
@@ -266,7 +270,10 @@ class PanopticonWrapper(nn.Module):
             timestep_output = rearrange(timestep_output, "b (h w) d -> b h w d", h=height, w=height)
             output_features.append(timestep_output.unsqueeze(0))
         # stack in the timestep dimension and take the mean or maybe the max?
-        output_features = torch.cat(output_features, dim=0).mean(dim=0)
+        if pooling == PoolingType.MEAN:
+            output_features = torch.cat(output_features, dim=0).mean(dim=0)
+        elif pooling == PoolingType.MAX:
+            output_features = torch.max(torch.cat(output_features, dim=0), dim=0)[0]
         return output_features
 
 
