@@ -75,6 +75,11 @@ def convert_worldcereal(window_path: UPath, helios_path: UPath) -> None:
         concatenated_arrays[concatenated_arrays == 255] = 0
         concatenated_arrays[concatenated_arrays == 254] = 0
 
+        # all values should now be confidences between
+        # 0 and 100
+        assert concatenated_arrays.min() >= 0
+        assert concatenated_arrays.max() <= 100
+
         dst_fname = get_modality_fname(
             helios_path,
             Modality.WORLDCEREAL,
