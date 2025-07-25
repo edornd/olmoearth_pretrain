@@ -20,9 +20,6 @@ from ..util import get_modality_temp_meta_fname, get_window_metadata
 START_TIME = datetime(2021, 1, 1, tzinfo=timezone.utc)
 END_TIME = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
-# Layer name in the input rslearn dataset.
-LAYER_NAME = "worldcereal"
-
 
 def _fill_nones_with_zeros(ndarrays: list[np.ndarray | None]) -> np.ndarray | None:
     filler = None
