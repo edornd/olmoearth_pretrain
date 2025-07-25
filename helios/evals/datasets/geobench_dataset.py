@@ -109,6 +109,9 @@ class GeobenchDataset(Dataset):
         if dataset == "m-so2sat":
             logging.info(f"self.multiply_by_10_000 set to True for {dataset}")
             self.multiply_by_10_000 = True
+        if self.multiply_by_10_000:
+            self.mean = self.mean * 10_000
+            self.std = self.std * 10_000
 
     @staticmethod
     def _get_norm_stats(
