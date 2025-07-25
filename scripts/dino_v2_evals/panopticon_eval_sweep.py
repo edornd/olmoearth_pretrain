@@ -10,7 +10,7 @@ import subprocess
 
 LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
 
-Normalization_MODES = ["dataset", "helios"]
+Normalization_MODES = ["dataset"]
 
 lr_args = " ".join(
     [
@@ -68,7 +68,7 @@ helios_args = " ".join(
 for lr in LP_LRs:
     for norm_mode in Normalization_MODES:
         print(f"Running with {norm_mode} normalization and {lr} learning rate")
-        run_name = f"1_panopticon_v2_eval_norm{norm_mode}_{lr}"
+        run_name = f"1_panopticon_1v2_eval_norm{norm_mode}_{lr}"
         args = lr_args.format(lr=lr)
         if norm_mode == "dataset":
             args += dataset_args
