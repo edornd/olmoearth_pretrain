@@ -210,12 +210,12 @@ class GeobenchDataset(Dataset):
             self.visualize_sample_bands(x, f"./visualizations/sample_{idx}")
         if self.is_landsat:
             assert (
-                x.shape[-1] == len(EVAL_TO_HELIOS_L8_BANDS)
-            ), f"Instances must have {len(EVAL_TO_HELIOS_L8_BANDS)} channels, not {x.shape[-1]}"
+                x.shape[-1] == len(EVAL_L8_BAND_NAMES)
+            ), f"Instances must have {len(EVAL_L8_BAND_NAMES)} channels, not {x.shape[-1]}"
         else:
             assert (
-                x.shape[-1] == len(EVAL_TO_HELIOS_S2_BANDS)
-            ), f"Instances must have {len(EVAL_TO_HELIOS_S2_BANDS)} channels, not {x.shape[-1]}"
+                x.shape[-1] == len(EVAL_S2_BAND_NAMES)
+            ), f"Instances must have {len(EVAL_S2_BAND_NAMES)} channels, not {x.shape[-1]}"
         if self.multiply_by_10_000:
             x = x * 10_000
 
