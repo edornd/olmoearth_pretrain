@@ -208,9 +208,14 @@ class GeobenchDataset(Dataset):
         x = np.stack(x_list, axis=2)  # (h, w, 13)
         if self.visualize_samples:
             self.visualize_sample_bands(x, f"./visualizations/sample_{idx}")
-        assert (
-            x.shape[-1] == 13
-        ), f"All datasets must have 13 channels, not {x.shape[-1]}"
+        if self.is_landsat:
+            assert (
+                x.shape[-1] == len(EVAL_TO_HELIOS_L8_BANDS)
+            ), f"Instances must have {len(EVAL_TO_HELIOS_L8_BANDS)} channels, not {x.shape[-1]}"
+        else:
+            assert (
+                x.shape[-1] == len(EVAL_TO_HELIOS_S2_BANDS)
+            ), f"Instances must have {len(EVAL_TO_HELIOS_S2_BANDS)} channels, not {x.shape[-1]}"
         if self.multiply_by_10_000:
             x = x * 10_000
 
