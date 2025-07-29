@@ -64,7 +64,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             embedding_batch_size=128,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
+            norm_stats_from_pretrained=False,
             eval_interval=Duration.epochs(1),
         ),
         "m-eurosat": DownstreamTaskConfig(
