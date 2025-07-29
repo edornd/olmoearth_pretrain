@@ -251,9 +251,7 @@ class GeobenchDataset(Dataset):
             ]
             # Normalize using the pretrained dataset's normalization stats
             if self.norm_stats_from_pretrained:
-                landsat = torch.tensor(
-                    self.normalizer_computed.normalize(Modality.LANDSAT, landsat)
-                )
+                landsat = self.normalizer_computed.normalize(Modality.LANDSAT, landsat)
                 # For Landsat (ForestNet), only 5/11 bands are present, and the rest
                 # are imputed. this means some of the means and standard deviations
                 # from the pretrained stats are very different. To handle this, we
@@ -272,7 +270,7 @@ class GeobenchDataset(Dataset):
                     axis=-1,
                 )[:, :, :, EVAL_TO_HELIOS_L8_BANDS]
 
-            sample_dict["landsat"] = landsat.float()
+            sample_dict["landsat"] = torch.tensor(landsat).float()
 
         else:
             s2 = repeat(x, "h w c -> h w t c", t=1)[
@@ -283,10 +281,8 @@ class GeobenchDataset(Dataset):
             ]
             # Normalize using the pretrained dataset's normalization stats
             if self.norm_stats_from_pretrained:
-                s2 = torch.tensor(
-                    self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, s2)
-                )
-            sample_dict["sentinel2_l2a"] = s2.float()
+                s2 = self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, s2)
+            sample_dict["sentinel2_l2a"] = torch.tensor(s2).float()
 
         timestamp = repeat(torch.tensor(self.default_day_month_year), "d -> t d", t=1)
         masked_sample = MaskedHeliosSample.from_heliossample(
