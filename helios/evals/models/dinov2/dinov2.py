@@ -43,6 +43,10 @@ class DINOv2(nn.Module):
     """Wrapper for the dinov2 model that can ingest MaskedHeliosSample objects."""
 
     patch_size: int = 14
+    supported_modalities: list[str] = [
+        Modality.SENTINEL2_L2A.name,
+        Modality.LANDSAT.name,
+    ]
 
     def __init__(
         self,
@@ -126,11 +130,14 @@ class DINOv2(nn.Module):
         masked_helios_sample: MaskedHeliosSample,
     ) -> list[torch.Tensor]:
         """Prepare input for the dinov2 model from MaskedHeliosSample."""
-        # Process each modality
-        # TODO: Does not yet support multiple modalities via multiple forward passes
         input_data_timesteps: dict[int, list[torch.Tensor]] = {}
+        num_modalities = len(masked_helios_sample.modalities)
         for modality in masked_helios_sample.modalities:
-            if modality not in ["sentinel2_l2a", "landsat"]:
+            if num_modalities > 1:
+                raise ValueError(
+                    "DINOv2 does not yet support multiple modalities via multiple forward passes"
+                )
+            if modality.upper() not in self.supported_modalities:
                 continue  # Skip non-rgb modalities
 
             data = getattr(masked_helios_sample, modality)
@@ -145,6 +152,7 @@ class DINOv2(nn.Module):
                 if i not in input_data_timesteps:
                     input_data_timesteps[i] = []
                 input_data_timesteps[i].append(data_i)
+            num_modalities += 1
 
         if not input_data_timesteps:
             raise ValueError("No valid modalities found for processing")
