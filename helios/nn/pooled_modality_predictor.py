@@ -59,14 +59,6 @@ class AttnPool(nn.Module):
 
     def forward(self, feat_tokens: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Forward pass for attention pooling linear probe.
-
-        Args:
-            feat_tokens (torch.Tensor): Input feature tokens of shape (B, H, W, N, D).
-
-        Returns:
-            tuple[torch.Tensor, torch.Tensor]:
-                - Output logits after linear layer, shape (B, H, W, out_dim).
-                - Attention weights, shape (B*H*W, num_heads, 1, N).
         """
 
         # B, H, W, N, D = feat_tokens.shape

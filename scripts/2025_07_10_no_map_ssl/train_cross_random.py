@@ -295,7 +295,7 @@ def build_common_components_no_maps_ssl(*args: Any) -> CommonComponents:
         Modality.SENTINEL2_L2A.name,
         Modality.SENTINEL1.name,
         Modality.LANDSAT.name,
-        Modality.LATLON.name,
+        # Modality.LATLON.name,
         # Modality.SRTM.name,
     ]
     return CommonComponents(
