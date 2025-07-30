@@ -24,7 +24,6 @@ class EvalWrapper:
         patch_size: int,
         pooling_type: PoolingType,
         concat_features: bool = False,
-        apply_imagenet_normalization: bool = False,
     ):
         super().__init__()
         self.model = model
@@ -32,7 +31,6 @@ class EvalWrapper:
         self.patch_size = patch_size
         self.pooling_type = pooling_type
         self.concat_features = concat_features
-        self.apply_imagenet_normalization = apply_imagenet_normalization
         self.spatial_pool = task_type == TaskType.SEGMENTATION
 
     @property
@@ -65,12 +63,12 @@ class HeliosEvalWrapper(EvalWrapper):
             masked_helios_sample, patch_size=self.patch_size
         )[0]  # (bsz, dim)
         # Concat features across modalities in space averaged across time
-        batch_embeddings = batch_embeddings.pool_unmasked_tokens(
+        tokens_and_masks = batch_embeddings.pool_unmasked_tokens(
             self.pooling_type,
             spatial_pooling=self.spatial_pool,
             concat_features=self.concat_features,
         )
-        return batch_embeddings
+        return tokens_and_masks
 
 
 class PanopticonEvalWrapper(EvalWrapper):
@@ -95,14 +93,12 @@ class DINOv2EvalWrapper(EvalWrapper):
             batch_embeddings = self.model.forward_features(
                 masked_helios_sample,
                 pooling=self.pooling_type,
-                apply_imagenet_normalization=self.apply_imagenet_normalization,
             )
         else:
             # should this call model ditectly
             batch_embeddings = self.model(
                 masked_helios_sample,
                 pooling=self.pooling_type,
-                apply_imagenet_normalization=self.apply_imagenet_normalization,
             )
         return batch_embeddings
 

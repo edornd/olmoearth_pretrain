@@ -21,19 +21,18 @@ logger = logging.getLogger(__name__)
 class Panopticon(nn.Module):
     """Class containing the Panopticon model that can ingest MaskedHeliosSample objects."""
 
+    patch_size: int = 14
+
     def __init__(
         self,
         torchhub_id: str = "panopticon_vitb14",
-        patch_size: int = 14,
     ):
         """Initialize the Panopticon wrapper.
 
         Args:
             torchhub_id: The torch hub model ID for panopticon
-            patch_size: Patch size for the vision transformer (default 14)
         """
         super().__init__()
-        self.patch_size = patch_size
         # Load the panopticon model
         self._load_model(torchhub_id)
 
@@ -78,23 +77,14 @@ class Panopticon(nn.Module):
         for i in range(t_dim):
             data_i = rearrange(data[:, :, :, i, :], "b h w c -> b c h w")
 
-            if original_height == 1:
-                # For pixel time series resize to single patch
-                data_i = F.interpolate(
-                    data_i,
-                    size=(self.patch_size, self.patch_size),
-                    mode="bilinear",
-                    align_corners=False,
-                )
-            else:
-                # Resize the image to the Panopticon pre-training input size
-                image_size = 224
-                data_i = F.interpolate(
-                    data_i,
-                    size=(image_size, image_size),
-                    mode="bilinear",
-                    align_corners=False,
-                )
+            new_height = self.patch_size if original_height == 1 else 224
+
+            data_i = F.interpolate(
+                data_i,
+                size=(new_height, new_height),
+                mode="bilinear",
+                align_corners=False,
+            )
             data_list.append(data_i)
         return data_list
 
@@ -255,10 +245,8 @@ class PanopticonConfig(Config):
     """olmo_core style config for PanopticonWrapper."""
 
     torchhub_id: str = "panopticon_vitb14"
-    patch_size: int = 14
 
     def build(self) -> Panopticon:
         return Panopticon(
             torchhub_id=self.torchhub_id,
-            patch_size=self.patch_size,
         )

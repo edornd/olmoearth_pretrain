@@ -154,7 +154,6 @@ class DownstreamEvaluator:
             "patch_size": self.patch_size,
             "pooling_type": self.pooling_type,
             "concat_features": (self.probe_type == "attn_pool"),
-            "apply_imagenet_normalization": self.norm_method == NormMethod.NO_NORM,
         }
         model = get_eval_wrapper(model, **wrapper_kwargs)
         return get_embeddings(

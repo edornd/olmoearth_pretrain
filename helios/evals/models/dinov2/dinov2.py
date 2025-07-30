@@ -12,6 +12,7 @@ from olmo_core.config import Config
 from torch import nn
 from torchvision import transforms
 
+from helios.data.constants import Modality
 from helios.nn.flexihelios import PoolingType
 from helios.train.masking import MaskedHeliosSample
 
@@ -28,29 +29,40 @@ def make_normalize_transform(
     return transforms.Normalize(mean=mean, std=std)
 
 
-HELIOS_SENTINEL2_RGB_BANDS = [3, 2, 1]
-HELIOS_LANDSAT_RGB_BANDS = [4, 3, 2]
+# DinoV2 Expects bands ordered as R, G, B
+HELIOS_SENTINEL2_RGB_BANDS = [
+    Modality.SENTINEL2_L2A.band_order.index(b) for b in ["B04", "B03", "B02"]
+]
+HELIOS_LANDSAT_RGB_BANDS = [
+    Modality.LANDSAT.band_order.index(b) for b in ["B4", "B3", "B2"]
+]
 
 
 class DINOv2(nn.Module):
     """Wrapper for the dinov2 model that can ingest MaskedHeliosSample objects."""
 
+    patch_size: int = 14
+
     def __init__(
         self,
         torchhub_id: str = "dinov2_vitb14",
-        patch_size: int = 14,
         use_cls_token: bool = False,
+        apply_imagenet_normalization: bool = False,
     ):
         """Initialize the dinov2 wrapper.
 
         Args:
             torchhub_id: The torch hub model ID for dinov2
-            patch_size: Patch size for the vision transformer (default 14)
             use_cls_token: Whether to use the cls token (default False)
+            apply_imagenet_normalization: Whether to apply imagenet normalization to the input data (default False)
         """
         super().__init__()
-        self.patch_size = patch_size
         self.use_cls_token = use_cls_token
+        self.apply_imagenet_normalization = apply_imagenet_normalization
+        if self.apply_imagenet_normalization:
+            logger.warning(
+                "Applying imagenet normalization to the input data. Make sure other normalization is not applied."
+            )
         # Load the model
         self._load_model(torchhub_id)
 
@@ -77,7 +89,6 @@ class DINOv2(nn.Module):
         self,
         data: torch.Tensor,
         modality: str,
-        apply_imagenet_normalization: bool = False,
     ) -> list[torch.Tensor]:
         """Process individual modality data.
 
@@ -101,24 +112,15 @@ class DINOv2(nn.Module):
             elif modality == "landsat":
                 data_i = data_i[:, HELIOS_LANDSAT_RGB_BANDS, :, :]
 
-            if original_height == 1:
-                # For pixel time series resize to single patch
-                data_i = F.interpolate(
-                    data_i,
-                    size=(self.patch_size, self.patch_size),
-                    mode="bilinear",
-                    align_corners=False,
-                )
-            else:
-                # Resize the image to the dinov2 pre-training input size
-                image_size = 224
-                data_i = F.interpolate(
-                    data_i,
-                    size=(image_size, image_size),
-                    mode="bilinear",
-                    align_corners=False,
-                )
-            if apply_imagenet_normalization:
+            new_height = self.patch_size if original_height == 1 else 224
+
+            data_i = F.interpolate(
+                data_i,
+                size=(new_height, new_height),
+                mode="bilinear",
+                align_corners=False,
+            )
+            if self.apply_imagenet_normalization:
                 # normalize the data
                 normalize_transform = make_normalize_transform()
                 data_i = normalize_transform(data_i)
@@ -128,7 +130,6 @@ class DINOv2(nn.Module):
     def prepare_input(
         self,
         masked_helios_sample: MaskedHeliosSample,
-        apply_imagenet_normalization: bool = False,
     ) -> dict[str, torch.Tensor]:
         """Prepare input for the dinov2 model from MaskedHeliosSample.
 
@@ -150,9 +151,7 @@ class DINOv2(nn.Module):
                 continue
 
             # Process the modality data
-            processed_data = self._process_modality_data(
-                data, modality, apply_imagenet_normalization
-            )
+            processed_data = self._process_modality_data(data, modality)
             for i, data_i in enumerate(processed_data):
                 # start the list if it doesn't exist
                 if i not in input_data_timesteps:
@@ -175,7 +174,6 @@ class DINOv2(nn.Module):
         self,
         masked_helios_sample: MaskedHeliosSample,
         pooling: PoolingType = PoolingType.MEAN,
-        apply_imagenet_normalization: bool = False,
     ) -> torch.Tensor:
         """Forward pass through dinov2 model for classification.
 
@@ -186,9 +184,7 @@ class DINOv2(nn.Module):
             Model embeddings
         """
         # Prepare input
-        per_timestep_inputs = self.prepare_input(
-            masked_helios_sample, apply_imagenet_normalization
-        )
+        per_timestep_inputs = self.prepare_input(masked_helios_sample)
         # potentially will need to add a flag for segmentation
         output_features = []
         for data in per_timestep_inputs:
@@ -210,7 +206,6 @@ class DINOv2(nn.Module):
         self,
         masked_helios_sample: MaskedHeliosSample,
         pooling: PoolingType = PoolingType.MEAN,
-        apply_imagenet_normalization: bool = False,
     ) -> torch.Tensor:
         """Forward pass through dinov2 model for segmentation.
 
@@ -220,9 +215,7 @@ class DINOv2(nn.Module):
         Returns:
         """
         # supports multi-timestep input single timestep output
-        per_timestep_dinov2_inputs = self.prepare_input(
-            masked_helios_sample, apply_imagenet_normalization
-        )
+        per_timestep_dinov2_inputs = self.prepare_input(masked_helios_sample)
         output_features = []
         for dinov2_input in per_timestep_dinov2_inputs:
             timestep_output = self.model.forward_features(dinov2_input)[
@@ -245,10 +238,9 @@ class DINOv2(nn.Module):
         self,
         masked_helios_sample: MaskedHeliosSample,
         pooling: PoolingType = PoolingType.MEAN,
-        apply_imagenet_normalization: bool = False,
     ) -> torch.Tensor:
         """Make the wrapper callable."""
-        return self.forward(masked_helios_sample, pooling, apply_imagenet_normalization)
+        return self.forward(masked_helios_sample, pooling)
 
 
 @dataclass
@@ -256,13 +248,13 @@ class DINOv2Config(Config):
     """olmo_core style config for DINOv2Wrapper."""
 
     torchhub_id: str = "dinov2_vitb14"
-    patch_size: int = 14
     use_cls_token: bool = False
+    apply_imagenet_normalization: bool = False
 
     def build(self) -> DINOv2:
         """Build the DINOv2 from this config."""
         return DINOv2(
             torchhub_id=self.torchhub_id,
-            patch_size=self.patch_size,
             use_cls_token=self.use_cls_token,
+            apply_imagenet_normalization=self.apply_imagenet_normalization,
         )
