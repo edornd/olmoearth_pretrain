@@ -940,6 +940,28 @@ class FlexiHeliosBase(nn.Module):
 
         return tokens, masks
 
+    def stack_spatial_modalities_and_masks(self, tokens_dict: dict[str, Tensor]) -> Tensor:
+        """Stack the spatial modalities together."""
+        available_modalities = return_modalities_from_dict(tokens_dict)
+        modalities_to_process = get_modalities_to_process(
+            available_modalities, self.supported_modality_names
+        )
+        mask_list = []
+        data_list = []
+        for modality in modalities_to_process:
+            if Modality.get(modality).is_spatial:
+                masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
+                logger.info(f"modality: {modality}, masked_modality_name: {masked_modality_name}")
+                data = tokens_dict[modality]
+                mask = tokens_dict[masked_modality_name]
+                logger.info(f"shape of data: {data.shape}")
+                logger.info(f"shape of mask: {mask.shape}")
+                data_list.append(data)
+                mask_list.append(mask)
+        # stack in the modality dimension
+        return torch.cat(data_list, dim=4), torch.cat(mask_list, dim=4)
+
+
     @staticmethod
     def _construct_einops_pattern(
         spatial_dims: tuple[int, ...],
@@ -1406,7 +1428,7 @@ class Encoder(FlexiHeliosBase):
                 always_pass_none_mask_to_transformer=always_pass_none_mask_to_transformer,
             )
         output = TokensAndMasks(**patchified_tokens_and_masks)
-        return output, self.project_and_aggregate(output)
+        return output, self.project_and_aggregate(output), pooled_dict
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
         """Apply FSDP to the model."""
