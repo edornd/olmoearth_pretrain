@@ -183,10 +183,11 @@ class HeliosTrainModule(TrainModule):
         self.model = model
 
         self.transform = transform_config.build()
-        logger.info(
-            "Number of encoder parameters: %d",
-            sum(p.numel() for p in self.model.encoder.parameters()),
-        )
+        if hasattr(self.model, "encoder"):
+            logger.info(
+                "Number of encoder parameters: %d",
+                sum(p.numel() for p in self.model.encoder.parameters()),
+            )
         if hasattr(self.model, "decoder") and self.model.decoder is not None:
             logger.info(
                 "Number of decoder parameters: %d",
@@ -321,6 +322,9 @@ class HeliosTrainModule(TrainModule):
                 f"global batch size ({self.trainer.global_batch_size:,d}) must be divisible by "
                 f"micro-batch size ({self.rank_microbatch_size:,d}) x DP world size ({ws})"
             )
+        if not hasattr(self.model, "encoder"):
+            # hack to allow DInov2 and panopticon for EVAL
+            return
         if self.trainer.data_loader.min_patch_size != self.model.encoder.min_patch_size:
             raise ValueError(
                 f"min_patch_size of dataloader ({self.trainer.data_loader.min_patch_size}) must match min_patch_size of model ({self.model.encoder.min_patch_size})"
