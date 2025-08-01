@@ -80,9 +80,17 @@ class AttnPool(nn.Module):
         if mask is not None:
             mask = mask[:, None, None].repeat((1, self.num_heads, 1, 1))
 
-
-        # True indicates that the token should take part in attention
-        x = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)  # [B, head, 1, D_head]
+        # H100 Max batch dim to not launch an invalid kernel
+        max_size = 63488
+        x_chunks = []
+        for i in range(0, q.shape[0], max_size):
+            q_chunk = q[i : i + max_size, ...]
+            k_chunk = k[i : i + max_size, ...]
+            v_chunk = v[i : i + max_size, ...]
+            mask_chunk = mask[i : i + max_size, ...] if mask is not None else None
+            x_chunk = F.scaled_dot_product_attention(q_chunk, k_chunk, v_chunk, attn_mask=mask_chunk)
+            x_chunks.append(x_chunk)
+        x = torch.cat(x_chunks, dim=0)
         x = rearrange(x, "b h 1 d -> b (h d)")
         # Is the final norm before this in the encoder harming
         # Not sure if we want this norm but it more closely matches what we are doign before where all tokens are normalize
