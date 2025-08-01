@@ -49,6 +49,7 @@ class AttnPool(nn.Module):
         self.kv: nn.Linear = nn.Linear(in_dim, in_dim * 2)
         self.linear: nn.Linear = nn.Linear(in_dim, out_dim)
         self.init_weights()
+        self.out_norm = nn.LayerNorm(out_dim)
 
     def init_weights(self) -> None:
         """Initialize weights for the probe."""
@@ -61,10 +62,6 @@ class AttnPool(nn.Module):
     def forward(self, feat_tokens: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Forward pass for attention pooling linear probe.
         """
-
-        # B, H, W, N, D = feat_tokens.shape
-        # feat_tokens = rearrange(feat_tokens, "b h w n d -> (b h w) n d")
-        logger.info(f"shape of feat_tokens: {feat_tokens.shape}")
         collapsed_dim , N, D = feat_tokens.shape
         q = self.query_token.expand(collapsed_dim, 1, -1)
         q = q.reshape(
@@ -72,8 +69,6 @@ class AttnPool(nn.Module):
         )  # [B, 1, head, D_head]
         q = rearrange(q, "b h n d -> b n h d")
         # log the dtype of kv weights and the feat_tokens
-        logger.info(f"dtype of kv weights: {self.kv.weight.dtype}")
-        logger.info(f"dtype of feat_tokens: {feat_tokens.dtype}")
         # convert feat_tokens to dto
         # why is this hack needed?
         feat_tokens = feat_tokens.to(self.kv.weight.dtype)
@@ -82,18 +77,15 @@ class AttnPool(nn.Module):
         )  # [B, N, 2, head, D_head]
         kv = rearrange(kv, "b n two h d -> two b h n d")
         k, v = torch.unbind(kv, dim=0)  # 2 * [B, head, N, D_head]
-        logger.info(f"shape of k: {k.shape}")
-        logger.info(f"shape of v: {v.shape}")
-        logger.info(f"shape of q: {q.shape}")
-        # mask shape
-        logger.info(f"shape of mask: {mask.shape}")
         if mask is not None:
             mask = mask[:, None, None].repeat((1, self.num_heads, 1, 1))
-        logger.info(f"shape of mask: {mask.shape}")
+
 
         # True indicates that the token should take part in attention
         x = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)  # [B, head, 1, D_head]
         x = rearrange(x, "b h 1 d -> b (h d)")
+        # Not sure if we want this norm but it more closely matches what we are doign before where all tokens are normalize
+        x = self.out_norm(self.linear(x))
         return x
 
 class PooledModalityPredictor(Predictor):
