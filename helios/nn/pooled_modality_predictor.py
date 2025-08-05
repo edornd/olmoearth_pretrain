@@ -10,6 +10,7 @@ from torch import Tensor
 from olmo_core.config import Config
 from dataclasses import dataclass
 from helios.dataset.utils import get_modality_specs_from_names
+from helios.nn.attention import Mlp
 import logging
 from einops import rearrange
 import torch.nn as nn
@@ -31,7 +32,7 @@ class AttnPool(nn.Module):
 
     Args:
         in_dim (int): Input feature dimension. Must be divisible by 64.
-        out_dim (int): Output dimension (typically num_classes * patch_size * patch_size).
+        hidden_dim (int): Output dimension (typically num_classes * patch_size * patch_size).
 
     Attributes:
         query_token (nn.Parameter): Learnable query token for attention pooling.
@@ -40,24 +41,28 @@ class AttnPool(nn.Module):
         linear (nn.Linear): Final linear layer for output logits.
     """
 
-    def __init__(self, in_dim: int, out_dim: int) -> None:
+    def __init__(self, in_dim: int, hidden_dim: int, mlp_ratio: float | None = None) -> None:
         """Initialize the attention pooling linear probe."""
         super().__init__()
         assert in_dim % 64 == 0, "in_dim must be divisible by 64"
         self.query_token: nn.Parameter = nn.Parameter(torch.empty(in_dim))
         self.num_heads: int = in_dim // 64
         self.kv: nn.Linear = nn.Linear(in_dim, in_dim * 2)
-        self.linear: nn.Linear = nn.Linear(in_dim, out_dim)
+        if mlp_ratio is not None:
+            hidden_dim = int(hidden_dim * mlp_ratio)
+        else:
+            hidden_dim = in_dim
+        self.out_layer: Mlp = Mlp(in_dim, hidden_dim)
         self.init_weights()
-        self.out_norm = nn.LayerNorm(out_dim)
+        self.out_norm = nn.LayerNorm(i_dim)
 
     def init_weights(self) -> None:
         """Initialize weights for the probe."""
         nn.init.trunc_normal_(self.query_token, std=0.02)
         nn.init.trunc_normal_(self.kv.weight, std=0.02)
         nn.init.zeros_(self.kv.bias)
-        nn.init.trunc_normal_(self.linear.weight, std=0.02)
-        nn.init.zeros_(self.linear.bias)
+        # nn.init.trunc_normal_(self.linear.weight, std=0.02)
+        # nn.init.zeros_(self.linear.bias)
 
     def forward(self, feat_tokens: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Forward pass for attention pooling linear probe.
@@ -94,7 +99,7 @@ class AttnPool(nn.Module):
         x = rearrange(x, "b h 1 d -> b (h d)")
         # Is the final norm before this in the encoder harming
         # Not sure if we want this norm but it more closely matches what we are doign before where all tokens are normalize
-        x = self.out_norm(self.linear(x))
+        x = self.out_norm(self.out_layer(x))
         return x
 
 class PooledModalityPredictor(Predictor):
@@ -283,7 +288,6 @@ class PooledModalityPredictorV2(Predictor):
     """Predictor that pools the tokens across modalities."""
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.attn_pool = AttnPool(self.embedding_size, self.embedding_size)
 
     def apply_attn(
         self,
@@ -506,9 +510,9 @@ class DimsToPool(StrEnum):
 # in the end the pooled tokens dict should just be a more granular option depending on the task so we don't have to worry about mean max pooling average pooling or anyhting like that
 class EncoderAttnPool(Encoder):
     """Encoder that pools the tokens across modalities."""
-    def __init__(self, dims_to_pool: str, *args, **kwargs) -> None:
+    def __init__(self, dims_to_pool: str, attn_pool_mlp_ratio: float | None = None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.attn_pool = AttnPool(self.embedding_size, self.embedding_size)
+        self.attn_pool = AttnPool(self.embedding_size, self.embedding_size, mlp_ratio=attn_pool_mlp_ratio)
 
         self.dims_to_pool = dims_to_pool
 
@@ -633,6 +637,7 @@ class EncoderAttnPool(Encoder):
 class EncoderAttnPoolConfig(EncoderConfig):
     """Configuration for the EncoderAttnPool."""
     dims_to_pool: DimsToPool = DimsToPool.MODALITY
+    attn_pool_mlp_ratio: float | None = None
     def build(self) -> "EncoderAttnPool":
         """Build the encoder."""
         self.validate()
