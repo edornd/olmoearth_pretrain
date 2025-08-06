@@ -9,7 +9,7 @@ from olmo_core.distributed.parallel.data_parallel import (
     DataParallelType,
 )
 from olmo_core.optim import AdamWConfig
-from olmo_core.optim.scheduler import WSD, ConstantWithWarmup
+from olmo_core.optim.scheduler import ConstantWithWarmup
 from olmo_core.train.callbacks import (
     BeakerCallback,
     CheckpointerCallback,
@@ -26,17 +26,17 @@ from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
-from helios.evals.linear_probe import ProbeType
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.internal.utils import MODEL_SIZE_ARGS
 from helios.nn.flexihelios import (
-    EncoderConfig,
     PoolingType,
-    PredictorConfig,
 )
-from helios.nn.pooled_modality_predictor import PooledModalityPredictorConfig, EncoderAttnPoolConfig, PooledModalityPredictorV2Config
 from helios.nn.latent_mim import LatentMIMConfig
+from helios.nn.pooled_modality_predictor import (
+    EncoderAttnPoolConfig,
+    PooledModalityPredictorV2Config,
+)
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
     HeliosSpeedMonitorCallback,
@@ -75,6 +75,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         mlp_ratio=model_size["mlp_ratio"],
         num_heads=model_size["decoder_num_heads"],
         supported_modality_names=common.training_modalities,
+        include_encoder_encodings=False,
         max_sequence_length=12,
     )
     model_config = LatentMIMConfig(
