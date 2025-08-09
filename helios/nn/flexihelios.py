@@ -961,8 +961,6 @@ class FlexiHeliosBase(nn.Module):
                 logger.info(f"modality: {modality}, masked_modality_name: {masked_modality_name}")
                 data = tokens_dict[modality]
                 mask = tokens_dict[masked_modality_name]
-                logger.info(f"shape of data: {data.shape}")
-                logger.info(f"shape of mask: {mask.shape}")
                 data_list.append(data)
                 mask_list.append(mask)
         # stack in the modality dimension
