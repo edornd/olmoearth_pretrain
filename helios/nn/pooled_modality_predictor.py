@@ -26,81 +26,130 @@ logger = logging.getLogger(__name__)
 
 # First I will do it after the composite encodings
 
-
 class AttnPool(nn.Module):
-    """Attention Pooling Probe.
+    """
+    Multi-query attention pooling with gated averaging.
 
     Args:
-        in_dim (int): Input feature dimension. Must be divisible by 64.
-        hidden_dim (int): Output dimension (typically num_classes * patch_size * patch_size).
-
-    Attributes:
-        query_token (nn.Parameter): Learnable query token for attention pooling.
-        num_heads (int): Number of attention heads.
-        kv (nn.Linear): Linear layer to produce keys and values.
-        linear (nn.Linear): Final linear layer for output logits.
+        in_dim (int): token dim (must be divisible by 64; head_dim=64).
+        hidden_dim (int): MLP hidden/out dim (defaults to in_dim unless mlp_ratio provided).
+        mlp_ratio (float|None): if set, hidden_dim := int(in_dim * mlp_ratio)
+        num_queries (int): number of learned queries per (t,s) group.
+        gate_temperature (float): temperature for softmax gating (>0).
     """
-
-    def __init__(self, in_dim: int, hidden_dim: int, mlp_ratio: float | None = None) -> None:
-        """Initialize the attention pooling linear probe."""
+    def __init__(
+        self,
+        in_dim: int,
+        hidden_dim: int | None = None,
+        mlp_ratio: float | None = None,
+        num_queries: int = 1,
+        gate_temperature: float = 1.0,
+    ) -> None:
         super().__init__()
         assert in_dim % 64 == 0, "in_dim must be divisible by 64"
-        self.query_token: nn.Parameter = nn.Parameter(torch.empty(in_dim))
         self.num_heads: int = in_dim // 64
+        self.num_queries: int = num_queries
+        self.gate_temperature: float = gate_temperature
+
+        # k learned queries (k, D)
+        self.query_tokens: nn.Parameter = nn.Parameter(torch.empty(num_queries, in_dim))
+
+        # shared KV projection
         self.kv: nn.Linear = nn.Linear(in_dim, in_dim * 2)
+
+        # output MLP (+ optional expansion via mlp_ratio)
         if mlp_ratio is not None:
-            hidden_dim = int(hidden_dim * mlp_ratio)
-        else:
-            hidden_dim = in_dim
+            hidden_dim = int(in_dim * mlp_ratio)
+        hidden_dim = hidden_dim or in_dim
         self.out_layer: Mlp = Mlp(in_dim, hidden_dim)
-        self.init_weights()
         self.out_norm = nn.LayerNorm(in_dim)
 
+        # gating over k query outputs (maps D -> 1 per query)
+        self.gate: nn.Linear | None = nn.Linear(in_dim, 1, bias=False) if num_queries > 1 else None
+
+        self.init_weights()
+
     def init_weights(self) -> None:
-        """Initialize weights for the probe."""
-        nn.init.trunc_normal_(self.query_token, std=0.02)
-        nn.init.trunc_normal_(self.kv.weight, std=0.02)
+        nn.init.zeros_(self.query_tokens)  # start at 0 so QK = 0 → uniform attn
+        # K = 0, V = identity at init
+        nn.init.zeros_(self.kv.weight)
+        with torch.no_grad():
+            D = self.kv.in_features
+            self.kv.weight[D:, :] = torch.eye(D)  # second half is V-proj
+
         nn.init.zeros_(self.kv.bias)
-        # nn.init.trunc_normal_(self.linear.weight, std=0.02)
-        # nn.init.zeros_(self.linear.bias)
+        if self.gate is not None:
+            nn.init.zeros_(self.gate.weight)  # start near uniform mix
 
-    def forward(self, feat_tokens: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """Forward pass for attention pooling linear probe.
+    def masked_mean(self, x, mask):  # x:[B*,N,D], mask:[B*,N] (True=masked)
         """
-        collapsed_dim , N, D = feat_tokens.shape
-        q = self.query_token.expand(collapsed_dim, 1, -1)
-        q = q.reshape(
-            collapsed_dim, 1, self.num_heads, D // self.num_heads
-        )  # [B, 1, head, D_head]
-        q = rearrange(q, "b h n d -> b n h d")
-        # log the dtype of kv weights and the feat_tokens
-        # convert feat_tokens to dto
-        # why is this hack needed?
-        feat_tokens = feat_tokens.to(self.kv.weight.dtype)
-        kv = self.kv(feat_tokens).reshape(
-            collapsed_dim, N, 2, self.num_heads, D // self.num_heads
-        )  # [B, N, 2, head, D_head]
-        kv = rearrange(kv, "b n two h d -> two b h n d")
-        k, v = torch.unbind(kv, dim=0)  # 2 * [B, head, N, D_head]
-        if mask is not None:
-            mask = mask[:, None, None].repeat((1, self.num_heads, 1, 1))
+        Compute the mean of x, weighted by the inverse of the mask.
+        """
+        if mask is None:
+            return x.mean(dim=1)
+        w = (~mask).float()
+        w = w / (w.sum(dim=1, keepdim=True).clamp_min(1))
+        return (x * w.unsqueeze(-1)).sum(dim=1)
 
-        # H100 Max batch dim to not launch an invalid kernel
+
+    def forward(self, feat_tokens: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
+        """
+        feat_tokens: [B*, N, D]  (B* = collapsed batch like B·T·S)
+        mask:       [B*, N] or None  (True/1 = mask out)
+        returns:    [B*, D]
+        """
+        Bc, N, D = feat_tokens.shape
+        H = self.num_heads
+        Dh = D // H
+
+        # queries: [B*, k, D] -> [B*, H, k, Dh]
+        q = self.query_tokens[None, :, :].expand(Bc, -1, -1).reshape(Bc, self.num_queries, H, Dh)
+        q = rearrange(q, "b k h d -> b h k d")
+
+        # K/V: [B*, N, D] -> [2, B*, H, N, Dh]
+        feat_tokens = feat_tokens.to(self.kv.weight.dtype)
+        masked_mean_feat_tokens = self.masked_mean(feat_tokens, mask)
+        logger.info(f"masked_mean_feat_tokens shape: {masked_mean_feat_tokens.shape}")
+        kv = self.kv(feat_tokens).reshape(Bc, N, 2, H, Dh)
+        kv = rearrange(kv, "b n two h d -> two b h n d")
+        k, v = torch.unbind(kv, dim=0)  # [B*, H, N, Dh] each
+
+        # mask -> [B*, H, k, N] (broadcastable is fine, but expand for clarity)
+        attn_mask = None
+        if mask is not None:
+            m = mask[:, None, None, :]  # [B*,1,1,N]
+            attn_mask = m.expand(Bc, H, self.num_queries, N)
+
+        # H100 chunking on batch axis
         max_size = 63488
         x_chunks = []
-        for i in range(0, q.shape[0], max_size):
+        for i in range(0, Bc, max_size):
             q_chunk = q[i : i + max_size, ...]
             k_chunk = k[i : i + max_size, ...]
             v_chunk = v[i : i + max_size, ...]
-            mask_chunk = mask[i : i + max_size, ...] if mask is not None else None
-            x_chunk = F.scaled_dot_product_attention(q_chunk, k_chunk, v_chunk, attn_mask=mask_chunk)
+            m_chunk = attn_mask[i : i + max_size, ...] if attn_mask is not None else None
+            # SDPA expects [B,H,Q,D] x [B,H,K,D] -> [B,H,Q,D]
+            x_chunk = F.scaled_dot_product_attention(q_chunk, k_chunk, v_chunk, attn_mask=m_chunk)
             x_chunks.append(x_chunk)
+
+        # [B*, H, k, Dh] -> [B*, k, D]
         x = torch.cat(x_chunks, dim=0)
-        x = rearrange(x, "b h 1 d -> b (h d)")
-        # Is the final norm before this in the encoder harming
-        # Not sure if we want this norm but it more closely matches what we are doign before where all tokens are normalize
-        x = self.out_norm(self.out_layer(x))
-        return x
+        o = rearrange(x, "b h k d -> b k (h d)")
+
+        # gated average across k, or pass-through if k=1
+        if self.num_queries > 1:
+            o_for_gate = F.layer_norm(o, (D,))   # normalize only for gating
+            logits = self.gate(o_for_gate).squeeze(-1)  # [B*, k]
+            w = torch.softmax(logits, dim=1)
+            z = (w.unsqueeze(-1) * o).sum(dim=1)        # mix the *unnormalized* values
+        else:
+            z = o.squeeze(1)
+
+        # MLP + LN head
+        z = self.out_norm(self.out_layer(z))
+        logger.info(f"z shape: {z.shape}")
+        logger.info(f"masked_mean_feat_tokens shape: {masked_mean_feat_tokens.shape}")
+        return z + masked_mean_feat_tokens
 
 class PooledModalityPredictor(Predictor):
     """Predictor that pools the tokens across modalities. And then predicts all the other modalities from that spatiall pooled representation"""

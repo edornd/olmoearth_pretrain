@@ -75,7 +75,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         mlp_ratio=model_size["mlp_ratio"],
         num_heads=model_size["decoder_num_heads"],
         supported_modality_names=common.training_modalities,
-        include_encoder_encodings=False,
         max_sequence_length=12,
     )
     model_config = LatentMIMConfig(
