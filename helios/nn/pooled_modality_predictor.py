@@ -70,12 +70,10 @@ class AttnPool(nn.Module):
         self.init_weights()
 
     def init_weights(self) -> None:
-        nn.init.zeros_(self.query_tokens)  # start at 0 so QK = 0 → uniform attn
-        # K = 0, V = identity at init
-        nn.init.zeros_(self.kv.weight)
-        with torch.no_grad():
-            D = self.kv.in_features
-            self.kv.weight[D:, :] = torch.eye(D)  # second half is V-proj
+        """Initialize weights for the probe."""
+        nn.init.trunc_normal_(self.query_token, std=0.02)
+        nn.init.trunc_normal_(self.kv.weight, std=0.02)
+        nn.init.zeros_(self.kv.bias)
 
         nn.init.zeros_(self.kv.bias)
         if self.gate is not None:
@@ -108,7 +106,6 @@ class AttnPool(nn.Module):
 
         # K/V: [B*, N, D] -> [2, B*, H, N, Dh]
         feat_tokens = feat_tokens.to(self.kv.weight.dtype)
-        masked_mean_feat_tokens = self.masked_mean(feat_tokens, mask)
         kv = self.kv(feat_tokens).reshape(Bc, N, 2, H, Dh)
         kv = rearrange(kv, "b n two h d -> two b h n d")
         k, v = torch.unbind(kv, dim=0)  # [B*, H, N, Dh] each
@@ -146,7 +143,7 @@ class AttnPool(nn.Module):
 
         # MLP + LN head
         z = self.out_norm(self.out_layer(z))
-        return z + masked_mean_feat_tokens
+        return z # + masked_mean_feat_tokens
 
 class PooledModalityPredictor(Predictor):
     """Predictor that pools the tokens across modalities. And then predicts all the other modalities from that spatiall pooled representation"""
