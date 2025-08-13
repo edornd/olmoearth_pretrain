@@ -10,6 +10,7 @@ import subprocess  # nosec
 from all_evals import EVAL_TASKS
 
 from helios.evals.datasets.configs import dataset_to_config, get_eval_mode
+from helios.internal.experiment import SubCmd
 from helios.nn.flexihelios import PoolingType
 
 LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
@@ -59,7 +60,7 @@ helios_args = " ".join(
 
 
 def main():
-    """Run the full evaluation sweep."""
+    """Run the full evaluation sweep or just the defaults."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--cluster", type=str, required=True, help="Cluster name")
     parser.add_argument(
@@ -71,39 +72,79 @@ def main():
     parser.add_argument(
         "--project_name", type=str, required=False, help="Wandb project name"
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--defaults_only",
+        action="store_true",
+        help="If set, only run with default values (no sweep)",
+    )
+    parser.add_argument(
+        "--dry_run",
+        action="store_true",
+        help="If set, only print the commands that would be run",
+    )
+    args, extra_cli = parser.parse_known_args()
 
     cluster = args.cluster
     checkpoint_path = args.checkpoint_path
     module_path = args.module_path
     project_name = args.project_name
+    extra = " " + " ".join(extra_cli) if extra_cli else ""
     print(
         f"Running with checkpoint path {checkpoint_path} and module path {module_path} on cluster {cluster}"
     )
-    for lr in LP_LRs:
-        for norm_mode in Normalization_MODES:
-            for pooling_type in pooling_types:
-                print(f"Running with {norm_mode} normalization and {lr} learning rate")
-                # crop the parent dirname if needed
-                parent_dir = os.path.basename(os.path.dirname(checkpoint_path))[:100]
-                base_run_name = f"{parent_dir}_{norm_mode}_lr{lr}"
-                run_name = base_run_name
-                cmd_args = lr_args.format(arg=lr)
-                cmd_args += pooling_args.format(arg=pooling_type)
-                if norm_mode == "dataset":
-                    cmd_args += dataset_args
-                elif norm_mode == "helios":
-                    cmd_args += helios_args
+    sub_command = SubCmd.launch if not args.dry_run else SubCmd.dry_run
+    if args.defaults_only:
+        # Just run with the first/default values
+        lr = LP_LRs[0]
+        norm_mode = Normalization_MODES[0]
+        pooling_type = pooling_types[0]
+        print(
+            f"Running defaults: {norm_mode} normalization, lr={lr}, pooling={pooling_type}"
+        )
+        parent_dir = os.path.basename(os.path.dirname(checkpoint_path))[:100]
+        # the step number is the last part of the checkpoint path
+        step_num = os.path.basename(checkpoint_path)
+        base_run_name = f"{parent_dir}_{step_num}_defaults"
+        run_name = base_run_name
+        if project_name is None:
+            project_name = "helios_in_loop_evals"
+            cmd = (
+                f"TRAIN_SCRIPT_PATH={module_path} python3 scripts/run_all_evals/all_evals.py "
+                f"{sub_command} {run_name} {cluster} --launch.priority=high "
+                f"--launch.task_name=eval --trainer.load_path={checkpoint_path} --trainer.callbacks.wandb.project={project_name}{extra}"
+            )
+        print(cmd)
+        subprocess.run(cmd, shell=True, check=True)  # nosec
+    else:
+        for lr in LP_LRs:
+            for norm_mode in Normalization_MODES:
+                for pooling_type in pooling_types:
+                    print(
+                        f"Running with {norm_mode} normalization and {lr} learning rate"
+                    )
+                    parent_dir = os.path.basename(os.path.dirname(checkpoint_path))[
+                        :100
+                    ]
+                    # the step number is the last part of the checkpoint path
+                    step_num = os.path.basename(checkpoint_path)
+                    base_run_name = f"{parent_dir}_{step_num}_{norm_mode}_lr{lr}"
+                    run_name = base_run_name
+                    cmd_args = lr_args.format(arg=lr)
+                    cmd_args += pooling_args.format(arg=pooling_type)
+                    if norm_mode == "dataset":
+                        cmd_args += dataset_args
+                    elif norm_mode == "helios":
+                        cmd_args += helios_args
 
-                if project_name is None:
-                    project_name = "helios_in_loop_evals"
-                cmd = (
-                    f"TRAIN_SCRIPT_PATH={module_path} python3 scripts/run_all_evals/all_evals.py "
-                    f"launch {run_name} {cluster} --launch.priority=high {cmd_args} "
-                    f"--launch.task_name=eval --trainer.load_path={checkpoint_path} --trainer.callbacks.wandb.project={project_name}"
-                )
-                print(cmd)
-                subprocess.run(cmd, shell=True)  # nosec
+                    if project_name is None:
+                        project_name = "helios_in_loop_evals"
+                    cmd = (
+                        f"TRAIN_SCRIPT_PATH={module_path} python3 scripts/run_all_evals/all_evals.py "
+                        f"{sub_command} {run_name} {cluster} --launch.priority=high {cmd_args} "
+                        f"--launch.task_name=eval --trainer.load_path={checkpoint_path} --trainer.callbacks.wandb.project={project_name}{extra}"
+                    )
+                    print(cmd)
+                    subprocess.run(cmd, shell=True, check=True)  # nosec
 
 
 if __name__ == "__main__":

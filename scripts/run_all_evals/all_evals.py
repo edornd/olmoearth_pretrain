@@ -148,7 +148,7 @@ EVAL_TASKS = {
         probe_batch_size=8,
         num_workers=2,
         pooling_type=PoolingType.MEAN,
-        norm_stats_from_pretrained=False,
+        norm_stats_from_pretrained=True,
         probe_lr=0.1,
         eval_interval=Duration.epochs(10),
     ),
