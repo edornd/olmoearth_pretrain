@@ -1,11 +1,12 @@
 """Run an evaluation sweep for an arbitrary helios checkpoint.
 
-e.g. python3 scripts/run_all_evals/full_eval_sweep.py --cluster=ai2/saturn-cirrascale --checkpoint_path=/weka/dfive-default/helios/checkpoints/henryh/latent_mim_cross_only_dec_wc_osm_srtm_dataset_percentage_sweep_.0078125/step450000  --module_path=scripts/2025_06_26_dataset_percentage_experiments/latent_mim_all_data.py
+e.g. python3 scripts/run_all_evals/full_eval_sweep.py --cluster=ai2/saturn-cirrascale --checkpoint_path=/weka/dfive-default/helios/checkpoints/henryh/latent_mim_cross_only_dec_wc_osm_srtm_dataset_percentage_sweep_.0078125/step450000  --module_path=scripts/2025_06_26_dataset_percentage_experiments/latent_mim_all_data.py (extra args here e.g --model.decoder_config.depth=1)
 """
 
 import argparse
 import os
 import subprocess  # nosec
+from logging import getLogger
 
 from all_evals import EVAL_TASKS
 
@@ -16,6 +17,8 @@ from helios.nn.flexihelios import PoolingType
 LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
 Normalization_MODES = ["dataset", "helios"]
 pooling_types = [PoolingType.MAX, PoolingType.MEAN]
+
+logger = getLogger(__name__)
 
 
 def create_linear_probe_arg(task_name: str, field_name: str) -> str:
@@ -89,7 +92,7 @@ def main():
     module_path = args.module_path
     project_name = args.project_name
     extra = " " + " ".join(extra_cli) if extra_cli else ""
-    print(
+    logger.info(
         f"Running with checkpoint path {checkpoint_path} and module path {module_path} on cluster {cluster}"
     )
     sub_command = SubCmd.launch if not args.dry_run else SubCmd.dry_run
@@ -98,7 +101,7 @@ def main():
         lr = LP_LRs[0]
         norm_mode = Normalization_MODES[0]
         pooling_type = pooling_types[0]
-        print(
+        logger.info(
             f"Running defaults: {norm_mode} normalization, lr={lr}, pooling={pooling_type}"
         )
         parent_dir = os.path.basename(os.path.dirname(checkpoint_path))[:100]
@@ -113,13 +116,13 @@ def main():
                 f"{sub_command} {run_name} {cluster} --launch.priority=high "
                 f"--launch.task_name=eval --trainer.load_path={checkpoint_path} --trainer.callbacks.wandb.project={project_name}{extra}"
             )
-        print(cmd)
+        logger.info(cmd)
         subprocess.run(cmd, shell=True, check=True)  # nosec
     else:
         for lr in LP_LRs:
             for norm_mode in Normalization_MODES:
                 for pooling_type in pooling_types:
-                    print(
+                    logger.info(
                         f"Running with {norm_mode} normalization and {lr} learning rate"
                     )
                     parent_dir = os.path.basename(os.path.dirname(checkpoint_path))[
@@ -143,7 +146,7 @@ def main():
                         f"{sub_command} {run_name} {cluster} --launch.priority=high {cmd_args} "
                         f"--launch.task_name=eval --trainer.load_path={checkpoint_path} --trainer.callbacks.wandb.project={project_name}{extra}"
                     )
-                    print(cmd)
+                    logger.info(cmd)
                     subprocess.run(cmd, shell=True, check=True)  # nosec
 
 
