@@ -804,7 +804,7 @@ class EncodeEarlyAttnPool(Encoder):
         input_res: int = BASE_GSD,
         token_exit_cfg: dict | None = None,
         always_pass_none_mask_to_transformer: bool = False,
-    ) -> tuple[TokensAndMasks, torch.Tensor, dict[str, Tensor]]:
+    ) -> dict[str, Any]:
         """Process masked input samples into token representations.
 
         Args:
@@ -834,11 +834,14 @@ class EncodeEarlyAttnPool(Encoder):
         else:
             pooled_dict = {}
 
-        return (
-            tokenized_output,
-            self.project_and_aggregate(tokenized_output),
-            pooled_dict,
-        )
+        output_dict: dict[str, Any] = {
+            "tokens_and_masks": tokenized_output,
+            "project_aggregated": self.project_and_aggregate(tokenized_output),
+        }
+        if pooled_dict:
+            output_dict["pooled_tokens_and_masks"] = pooled_dict
+
+        return output_dict
 
 
 @dataclass

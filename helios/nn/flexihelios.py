@@ -1430,7 +1430,7 @@ class Encoder(FlexiHeliosBase):
         input_res: int = BASE_GSD,
         token_exit_cfg: dict | None = None,
         always_pass_none_mask_to_transformer: bool = False,
-    ) -> tuple[TokensAndMasks, torch.Tensor, dict[str, torch.Tensor]]:
+    ) -> dict[str, Any]:
         """Process masked input samples into token representations.
 
         Args:
@@ -1458,8 +1458,11 @@ class Encoder(FlexiHeliosBase):
             )
         output = TokensAndMasks(**patchified_tokens_and_masks)
         # TODO: we should probably switch this to a dict
-        pooled_dict: dict[str, torch.Tensor] = {}
-        return output, self.project_and_aggregate(output), pooled_dict
+        output_dict = {
+            "tokens_and_masks": output,
+            "project_aggregated": self.project_and_aggregate(output),
+        }
+        return output_dict
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
         """Apply FSDP to the model."""

@@ -82,7 +82,7 @@ class HeliosEvalWrapper(EvalWrapper):
         if not self.use_pooled_tokens:
             batch_embeddings: TokensAndMasks = self.model(
                 masked_helios_sample, patch_size=self.patch_size
-            )[0]  # (bsz, dim)
+            )["tokens_and_masks"]  # (bsz, dim)
             # Concat features across modalities in space averaged across time
             batch_embeddings = batch_embeddings.pool_unmasked_tokens(
                 self.pooling_type,
@@ -92,7 +92,7 @@ class HeliosEvalWrapper(EvalWrapper):
         else:
             pooled_tokens_dict = self.model(
                 masked_helios_sample, patch_size=self.patch_size
-            )[2]
+            )["pooled_tokens_and_masks"]
             pooled_tokens = pooled_tokens_dict["modality_pooled_tokens"]
             # spatial pool is true means we want to keep the spatial dimensions
             # so here we just need to pool across time
