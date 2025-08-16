@@ -732,7 +732,6 @@ class EncodeEarlyAttnPool(Encoder):
             )
         cu_seqlens = get_cumulative_sequence_lengths(seq_lengths)
 
-
         attn_mask = self.get_attn_or_none_mask(
             new_mask, always_pass_none_mask_to_transformer
         )
@@ -764,7 +763,6 @@ class EncodeEarlyAttnPool(Encoder):
                 # we will have to specify k and q lens for cross attention
                 attn_mask=attn_mask,
             )
-
 
         if exit_ids_seq is not None:
             # this should only ever be called by the target encoder,
