@@ -1794,7 +1794,7 @@ class GalileoConfig(Config):
     """olmo_core style config for GalileoWrapper."""
 
     model_size: str = "base"
-    patch_size: int = 8,
+    patch_size: int = 8
     month: int = 6,
     add_layernorm_on_exit: bool = True,
 
