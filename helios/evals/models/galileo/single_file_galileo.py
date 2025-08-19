@@ -1604,7 +1604,7 @@ class GalileoWrapper(nn.Module):
     ):
         """Init GalileoWrapper."""
         super().__init__()
-        self.encoder = Encoder.load_from_folder(pretrained_path, device=get_default_device())
+        self.galileo_encoder = Encoder.load_from_folder(pretrained_path, device=get_default_device())
         self.dim = self.encoder.embedding_size
         self.patch_size = patch_size
         self.grid_size: int | None = None
@@ -1755,7 +1755,7 @@ class GalileoWrapper(nn.Module):
             s1=x.sentinel1,
             months=x.timestamps[:, :, 1] if x.timestamps is not None else None,
         )
-        output = self.encoder(
+        output = self.galileo_encoder(
             s_t_x,
             sp_x,
             t_x,
@@ -1770,7 +1770,7 @@ class GalileoWrapper(nn.Module):
         )
         s_t_x, sp_x, t_x, st_x, s_t_m, sp_m, t_m, st_m, _ = output
         if not spatial_pool:
-            return self.encoder.average_tokens(
+            return self.galileo_encoder.average_tokens(
                 s_t_x, sp_x, t_x, st_x, s_t_m, sp_m, t_m, st_m, pooling=pooling
             )
         else:
