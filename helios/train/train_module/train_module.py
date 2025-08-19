@@ -325,6 +325,9 @@ class HeliosTrainModule(TrainModule):
         if not hasattr(self.model, "encoder"):
             # hack to allow DInov2 and panopticon for EVAL
             return
+        if not hasattr(self.model.encoder, "min_patch_size"):
+            # hack to allow Galileo for EVAL
+            return
         if self.trainer.data_loader.min_patch_size != self.model.encoder.min_patch_size:
             raise ValueError(
                 f"min_patch_size of dataloader ({self.trainer.data_loader.min_patch_size}) must match min_patch_size of model ({self.model.encoder.min_patch_size})"
