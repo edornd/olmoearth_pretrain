@@ -1795,8 +1795,8 @@ class GalileoConfig(Config):
 
     model_size: str = "base"
     patch_size: int = 8
-    month: int = 6,
-    add_layernorm_on_exit: bool = True,
+    month: int = 6
+    add_layernorm_on_exit: bool = True
 
     def build(self) -> GalileoWrapper:
         """Build the Galileo model."""
