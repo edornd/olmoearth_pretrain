@@ -1168,8 +1168,11 @@ class Encoder(GalileoBase):
         else:
             # 1 = masked, 0 = unmasked
             cur_min = x.min()
-            new_min = m * (cur_min - 1)
-            x = x + new_min
+            new_min = repeat(m * (cur_min - 1), "b n -> b n d", d=x.shape[-1])
+            # we have 0d out all the masked elements of x.
+            # now, we will add the minimum value of x to those masked values,
+            # so they should be ignored in the max.
+            x = (x * (1 - m.unsqueeze(-1))) + new_min
             return torch.max(x, dim=1)[0]
 
     @classmethod
