@@ -170,10 +170,9 @@ def test_build_global_indices_different_epochs_different_shuffle(
         "Different epochs should produce same length indices"
     )
 
-    if len(set(indices1)) > 1:  # Only test if we have multiple unique indices
-        assert not np.array_equal(indices1, indices2), (
-            "Different epochs should produce different shuffled order"
-        )
+    assert not np.array_equal(indices1, indices2), (
+        "Different epochs should produce different shuffled order"
+    )
 
 
 def test_build_global_indices_no_shuffle_consistent(tmp_path: Path) -> None:
@@ -227,10 +226,9 @@ def test_build_global_indices_different_seeds_different_results(tmp_path: Path) 
     indices2 = dataloader2._build_global_indices()
 
     # Different seeds should produce different results (with high probability)
-    if len(set(indices1)) > 1:  # Only test if we have multiple unique indices
-        assert not np.array_equal(indices1, indices2), (
-            "Different seeds should produce different results"
-        )
+    assert not np.array_equal(indices1, indices2), (
+        "Different seeds should produce different results"
+    )
 
 
 def test_build_global_indices_multiple_repeats_length(tmp_path: Path) -> None:
@@ -279,8 +277,6 @@ def test_build_global_indices_dataset_percentage_subset_consistency(
     """Test that dataset percentage selects consistent subset across different shuffle epochs."""
     # Skip test if dataset is too small
     temp_dataloader = _create_test_dataloader(tmp_path)
-    if len(temp_dataloader.dataset) <= 10:
-        return
 
     dataloader1 = _create_test_dataloader(tmp_path, seed=456, dataset_percentage=0.7)
     dataloader1._epoch = 1
