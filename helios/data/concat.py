@@ -98,12 +98,6 @@ class HeliosConcatDataset(ConcatDataset):
                     "expected all sub datasets to have same training modalities"
                 )
 
-    def filter_dataset_by_percentage(self, percentage: float, seed: int) -> None:
-        """Filter the dataset by a percentage of the total number of samples."""
-        for dataset in self.datasets:
-            dataset.filter_dataset_by_percentage(percentage, seed)
-        self._set_latlon_distribution()
-
 
 @dataclass
 class HeliosConcatDatasetConfig(Config):
