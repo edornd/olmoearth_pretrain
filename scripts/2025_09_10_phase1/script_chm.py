@@ -46,7 +46,7 @@ def my_build_common_components(
         Modality.SRTM.name,
         Modality.OPENSTREETMAP_RASTER.name,
         Modality.ERA5_10.name,
-        Modality.WRI_CANOPY_HEIGHT_MAP,
+        Modality.WRI_CANOPY_HEIGHT_MAP.name,
     ]
     config.launch.num_gpus = 8
     return config
