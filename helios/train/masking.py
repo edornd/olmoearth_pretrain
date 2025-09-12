@@ -1009,12 +1009,12 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         """
         masked_batch_dict = masked_batch.as_dict(return_none=False)
         for modality in masked_batch.modalities:
-            logger.info(f"Modality: {modality}")
             if modality == "timestamps":
                 continue
             masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
             modality_spec = Modality.get(modality)
             modality_mask = masked_batch_dict[masked_modality_name]
+            # with 1-12 patch size I got a run time aliasing error when writing to the modality mask
             out_modality_mask = modality_mask.clone()
             num_bandsets = modality_mask.shape[-1]
 
