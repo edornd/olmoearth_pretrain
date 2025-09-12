@@ -1009,11 +1009,13 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         """
         masked_batch_dict = masked_batch.as_dict(return_none=False)
         for modality in masked_batch.modalities:
+            logger.info(f"Modality: {modality}")
             if modality == "timestamps":
                 continue
             masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
             modality_spec = Modality.get(modality)
             modality_mask = masked_batch_dict[masked_modality_name]
+            out_modality_mask = modality_mask.clone()
             num_bandsets = modality_mask.shape[-1]
 
             for sample_idx in range(masked_batch.timestamps.shape[0]):
@@ -1053,7 +1055,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             modality_mask[sample_idx, ..., bandset_idx]
                             != MaskValue.MISSING.value
                         )
-                        modality_mask[sample_idx, ..., bandset_idx] = torch.where(
+                        out_modality_mask[sample_idx, ..., bandset_idx] = torch.where(
                             not_missing_mask,
                             forced_mask_value,
                             modality_mask[sample_idx, ..., bandset_idx],
@@ -1066,8 +1068,9 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             modality_mask[sample_idx, ..., bandset_idx]
                             == MaskValue.ONLINE_ENCODER.value
                         )
-                        modality_mask[sample_idx, ..., bandset_idx] = torch.where(
-                            online_encoder_mask,
+
+                        out_modality_mask[sample_idx, ..., bandset_idx] = torch.where(
+                            online_encoder_mask.clone(),
                             MaskValue.TARGET_ENCODER_ONLY.value,
                             modality_mask[sample_idx, ..., bandset_idx],
                         )
@@ -1078,13 +1081,14 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             modality_mask[sample_idx, ..., bandset_idx]
                             == MaskValue.DECODER.value
                         )
-                        modality_mask[sample_idx, ..., bandset_idx] = torch.where(
+
+                        out_modality_mask[sample_idx, ..., bandset_idx] = torch.where(
                             decoder_mask,
                             MaskValue.TARGET_ENCODER_ONLY.value,
                             modality_mask[sample_idx, ..., bandset_idx],
                         )
 
-            masked_batch_dict[masked_modality_name] = modality_mask
+            masked_batch_dict[masked_modality_name] = out_modality_mask
 
         masked_batch = MaskedHeliosSample(**masked_batch_dict)
         return masked_batch
