@@ -177,8 +177,6 @@ class Croma(nn.Module):
         for data in per_timestep_inputs:
             timestep_output = self.model(**data)[output_key]
             if not spatial_pool:
-                # TODO: maybe right?
-                print("Spatial pooling")
                 timestep_output = timestep_output.mean(dim=1)
             else:
                 side = math.isqrt(timestep_output.shape[1])
