@@ -304,6 +304,8 @@ def _get_module_path(args: argparse.Namespace) -> str:
         return get_launch_script_path("panopticon")
     elif args.galileo:
         return get_launch_script_path("galileo")
+    elif args.satlas:
+        return get_launch_script_path("satlas")
     else:
         raise ValueError(f"Invalid model name: {args.model_name}")
 
