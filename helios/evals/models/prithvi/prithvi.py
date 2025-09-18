@@ -101,8 +101,10 @@ class Prithvi(nn.Module):
         data_list = []
 
         for i in range(t_dim):
-            data_i = rearrange(data[:, :, :, i, :], "b h w c -> b c h w")
-            data_i = data_i[:, self.helios_s2_to_prithvi, :, :]
+            data_i = data[:, :, :, i, self.helios_s2_to_prithvi]
+            if self.use_pretrained_normalizer:
+                data_i = self.normalize(data_i)
+            data_i = rearrange(data_i, "b h w c -> b c h w")
 
             new_height = (
                 self.patch_size if original_height == 1 else self.image_resolution
@@ -114,8 +116,7 @@ class Prithvi(nn.Module):
                 mode="bilinear",
                 align_corners=False,
             )
-            if self.use_pretrained_normalizer:
-                data_i = self.normalize(data_i)
+
             data_list.append(data_i)
 
         return data_list
