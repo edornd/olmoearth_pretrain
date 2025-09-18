@@ -143,7 +143,7 @@ def get_satlas_args(pretrained_normalizer: bool = True) -> str:
     """Get the satlas arguments."""
     satlas_args = dataset_args
     if pretrained_normalizer:
-        # To use galileo pretrained normalizer we want to leave normalization to the galileo wrapper
+        # To use satlas pretrained normalizer we want to leave normalization to the satlas wrapper
         satlas_args = dataset_args
         satlas_args += " " + " ".join(
             [
