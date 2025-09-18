@@ -74,7 +74,7 @@ class Satlas(nn.Module):
             use_pretrained_normalizer: Whether or not to apply satlas pretraining normalization
         """
         super().__init__()
-        self.satlas: satlaspretrain_models.Model | None = None
+        self.model: satlaspretrain_models.Model | None = None
         self.size = size
         self.dim = 1024 if size == "base" else 768
         self.load_directory = UPath(load_directory)
@@ -89,7 +89,7 @@ class Satlas(nn.Module):
             self.load_directory / self.modality_size_to_weights[self.size][modality],
             map_location="cpu",
         )  # todo: how to select this?
-        self.satlas = satlaspretrain_models.Model(
+        self.model = satlaspretrain_models.Model(
             num_channels=len(HELIOS_TO_SATLAS[modality]),
             multi_image=False,
             backbone=self.size_to_backbone[self.size],
@@ -175,8 +175,8 @@ class Satlas(nn.Module):
         processed_inputs = self.prepare_input(masked_helios_sample)
         outputs_list: list[torch.Tensor] = []
         for per_t_input in processed_inputs:
-            assert self.satlas is not None  # since we called self.prepare_input
-            output = self.satlas(per_t_input)[-1]
+            assert self.model is not None  # since we called self.prepare_input
+            output = self.model(per_t_input)[-1]
             # output shape for atto: (bsz, 320, 7, 7)
             # output shape for tiny: (bsz, 768, 6, 6)
             if not spatial_pool:
