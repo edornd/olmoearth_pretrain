@@ -16,7 +16,7 @@ from helios.train.masking import MaskedHeliosSample
 logger = logging.getLogger(__name__)
 
 
-class AnySatWrapper(nn.Module):
+class AnySat(nn.Module):
     """AnySat wrapper for MaskedHelioSample."""
 
     # these are the bands which AnySat accepts
@@ -225,9 +225,9 @@ class AnySatWrapper(nn.Module):
 
 
 @dataclass
-class CromaConfig(Config):
-    """olmo_core style config for AnySatWrapper."""
+class AnySatConfig(Config):
+    """olmo_core style config for AnySat."""
 
-    def build(self) -> AnySatWrapper:
+    def build(self) -> AnySat:
         """Build the Croma model."""
-        return AnySatWrapper()
+        return AnySat()
