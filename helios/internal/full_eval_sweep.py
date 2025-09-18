@@ -152,7 +152,7 @@ def get_galileo_args(pretrained_normalizer: bool = True) -> str:
 
 
 def get_prithvi_args(pretrained_normalizer: bool = True) -> str:
-    """Get the galileo arguments."""
+    """Get the Prithvi arguments."""
     prithvi_args = dataset_args
     if pretrained_normalizer:
         # To use Prithvi pretrained normalizer we want to leave normalization to the Prithvi wrapper
