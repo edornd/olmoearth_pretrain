@@ -2,14 +2,16 @@
 
 import logging
 import math
+from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
 from einops import rearrange
+from olmo_core.config import Config
 from upath import UPath
 
 from helios.data.constants import Modality
-from helios.evals.models.copernicus_fm.src.model_vit import vit_base_patch16
+from helios.evals.models.copernicusfm.src.model_vit import vit_base_patch16
 from helios.nn.flexihelios import PoolingType
 from helios.train.masking import MaskedHeliosSample
 
@@ -248,3 +250,16 @@ class CopernicusFM(torch.nn.Module):
         elif pooling == PoolingType.MAX:
             output_features = torch.max(torch.cat(output_features, dim=0), dim=0)[0]
         return output_features
+
+
+@dataclass
+class CopernicusFMConfig(Config):
+    """olmo_core style config for CopernicusFMConfig."""
+
+    load_directory: str = "/weka/dfive-default/helios/models/copernicusfm"
+
+    def build(self) -> CopernicusFM:
+        """Build the CopernicusFM model."""
+        return CopernicusFM(
+            load_directory=self.load_directory,
+        )
