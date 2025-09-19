@@ -68,7 +68,8 @@ class Prithvi(nn.Module):
         self.model.load_state_dict(state_dict, strict=False)
         self.image_resolution = config["img_size"]
         self.bands = config["bands"]
-        self.patch_size = config["patch_size"]
+        # patch size is a list [t, h, w], where h == w
+        self.patch_size = config["patch_size"][-1]
         self.helios_s2_to_prithvi = [
             Modality.SENTINEL2_L2A.band_order.index(b) for b in self.bands
         ]
