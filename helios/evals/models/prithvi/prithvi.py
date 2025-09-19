@@ -187,7 +187,8 @@ class Prithvi(nn.Module):
             output = output.mean(dim=1)
         else:
             side = math.isqrt((output).shape[1] / t)
-            output = rearrange(output, "b (h w t) c -> b t h w c", h=side, w=side)
+            # (t h w) following the unpatchify order
+            output = rearrange(output, "b (t h w) c -> b t h w c", h=side, w=side)
 
         # stack in the timestep dimension and take the mean or maybe the max?
         if pooling == PoolingType.MEAN:
