@@ -37,7 +37,7 @@ def base_args() -> argparse.Namespace:
         panopticon=False,
         galileo=False,
         croma=False,
-        prithvi=False,
+        prithvi_v2=False,
     )
 
 
@@ -56,7 +56,7 @@ def minimal_args() -> argparse.Namespace:
         panopticon=False,
         galileo=False,
         croma=False,
-        prithvi=False,
+        prithvi_v2=False,
     )
 
 
