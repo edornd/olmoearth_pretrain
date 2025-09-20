@@ -440,7 +440,7 @@ class PrithviViT(nn.Module):
         # embed patches
         x = self.patch_embed(x)
 
-        pos_embed = self.interpolate_pos_encoding(sample_shape)
+        pos_embed = self.interpolate_pos_encoding(sample_shape).to(x.device)
         # add pos embed w/o cls token
         x = x + pos_embed[:, 1:, :]
 
@@ -483,7 +483,7 @@ class PrithviViT(nn.Module):
         # embed patches
         x = self.patch_embed(x)
 
-        pos_embed = self.interpolate_pos_encoding(sample_shape)
+        pos_embed = self.interpolate_pos_encoding(sample_shape).to(x.device)
         # add pos embed w/o cls token
         x = x + pos_embed[:, 1:, :]
 
