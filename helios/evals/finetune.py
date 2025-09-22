@@ -182,7 +182,7 @@ def run_finetune_eval(
     logger.info(f"Total parameters: {total:,}")
     logger.info(f"Trainable parameters: {trainable:,}")
 
-    opt = torch.optim.AdamW(ft.parameters(), lr=lr)
+    opt = torch.optim.AdamW(ft.parameters(), lr=lr, foreach=False)
     if task_config.task_type == TaskType.CLASSIFICATION:
         loss_fn: nn.Module = (
             nn.MultiLabelSoftMarginLoss()
@@ -230,7 +230,7 @@ def run_finetune_eval(
                 max_lr=lr,
                 min_lr=1.0e-5,
             )
-            torch.nn.utils.clip_grad_norm_(ft.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(ft.parameters(), 1.0, foreach=False)
             opt.step()
             opt.zero_grad()
 
