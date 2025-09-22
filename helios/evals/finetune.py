@@ -44,7 +44,7 @@ class _BackboneWithHead(nn.Module):
         self._head = nn.Linear(1, 1, bias=True)
         self._inited = False
 
-    def _init_head(self, emb_dim: int) -> None:
+    def _init_head(self, emb_dim: int, device: torch.device) -> None:
         """Initialize the head based on the embedding dimension."""
         if self.task_type == TaskType.CLASSIFICATION:
             self._head = nn.Linear(emb_dim, self.num_classes, bias=True)
@@ -53,14 +53,18 @@ class _BackboneWithHead(nn.Module):
             self._head = nn.Linear(emb_dim, logits_per_patch, bias=True)
         nn.init.trunc_normal_(self._head.weight, std=0.02)
         nn.init.zeros_(self._head.bias)
+        self._head = self._head.to(device=device)
         self._inited = True
 
     def forward(self, batch: MaskedHeliosSample) -> torch.Tensor:
         """Forward pass through the model and head."""
+        dev = next(self.wrapper.parameters()).device
         emb = self.wrapper(batch)  # CLS: (B, D)  |  SEG: (B, H, W, D)
         emb_dim = emb.shape[-1]
         if not self._inited:
-            self._init_head(emb_dim)
+            self._init_head(emb_dim, dev)
+        if emb.device != dev:
+            emb = emb.to(dev, non_blocking=True)
         return self._head(emb)
 
 
