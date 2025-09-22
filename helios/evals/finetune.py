@@ -204,18 +204,18 @@ def run_finetune_eval(
                 logger.info(
                     f"Finetune Epoch [{epoch + 1}/{epochs}] Step [{i + 1}/{len(train_loader)}] Loss: {loss.item():.4f}"
                 )
-                loss.backward()
-                adjust_learning_rate(
-                    optimizer=opt,
-                    epoch=epoch + (i / max(1, len(train_loader))),
-                    total_epochs=epochs,
-                    warmup_epochs=max(1, int(0.1 * epochs)),
-                    max_lr=lr,
-                    min_lr=1.0e-5,
-                )
-                torch.nn.utils.clip_grad_norm_(ft.parameters(), 1.0)
-                opt.step()
-                opt.zero_grad()
+            loss.backward()
+            adjust_learning_rate(
+                optimizer=opt,
+                epoch=epoch + (i / max(1, len(train_loader))),
+                total_epochs=epochs,
+                warmup_epochs=max(1, int(0.1 * epochs)),
+                max_lr=lr,
+                min_lr=1.0e-5,
+            )
+            torch.nn.utils.clip_grad_norm_(ft.parameters(), 1.0)
+            opt.step()
+            opt.zero_grad()
 
     if task_config.task_type == TaskType.CLASSIFICATION:
         return _eval_cls(ft, val_loader, device)
