@@ -253,7 +253,12 @@ def _build_default_command(
     )
     run_name = f"{base_run_name}_defaults"
 
+    # Add model-specific args
     cmd_args = _get_model_specific_args(args)
+
+    # Add normalization-specific args
+    cmd_args += _get_normalization_args(args, norm_mode)
+
     module_path = (
         args.module_path if args.module_path is not None else _get_module_path(args)
     )

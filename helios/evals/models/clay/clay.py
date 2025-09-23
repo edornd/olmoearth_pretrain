@@ -50,7 +50,8 @@ class Clay(nn.Module):
     """Class containing the Clay model that can ingest MaskedHeliosSample objects."""
 
     patch_size: int = 8
-    image_resolution: int = 120
+    image_resolution: int = 256
+    use_cls_token: bool = False
     supported_modalities: list[str] = [
         Modality.SENTINEL2_L2A.name,
         Modality.SENTINEL1.name,
@@ -74,6 +75,7 @@ class Clay(nn.Module):
                 shuffle=False,
             )
         elif size == "base":
+            raise ValueError("base size doesn't work in v1.5")
             return ClayMAEModule.load_from_checkpoint(
                 checkpoint_path=path,
                 model_size="base",
@@ -88,7 +90,7 @@ class Clay(nn.Module):
 
     def __init__(
         self,
-        size: str = "base",
+        size: str = "large",
         load_path: str = "/weka/dfive-default/helios/models/clay/clay-v1.5.ckpt",
         metadata_path: str = "helios/evals/models/clay/metadata.yaml",
         use_pretrained_normalizer: bool = True,
@@ -104,7 +106,7 @@ class Clay(nn.Module):
         super().__init__()
         with open(metadata_path) as f:
             self.metadata = yaml.safe_load(f)
-        self.model = self._load_model(size, load_path, metadata_path)
+        self.model = self._load_model(size, load_path, metadata_path).model
         self.use_pretrained_normalizer = use_pretrained_normalizer
 
     def _process_modality_data(
@@ -138,12 +140,6 @@ class Clay(nn.Module):
         means = means.view(1, -1, 1, 1).to(device=data.device)
         stds = stds.view(1, -1, 1, 1).to(device=data.device)
 
-        wavelengths = []
-        for band in self.metadata[sensor]["band_order"]:
-            wavelengths.append(
-                self.metadata[sensor]["bands"]["wavelength"][band] * 1000
-            )  # Convert to nm
-
         for i in range(t_dim):
             data_i = rearrange(data[:, :, :, i, :], "b h w c -> b c h w")
 
@@ -169,12 +165,7 @@ class Clay(nn.Module):
                 mode="bilinear",
                 align_corners=False,
             )
-            data_list.append(
-                (
-                    data_i,
-                    torch.tensor([wavelengths] * data_i.shape[0], dtype=torch.float32),
-                )
-            )
+            data_list.append(data_i)
         return data_list
 
     def prepare_input(
@@ -223,9 +214,28 @@ class Clay(nn.Module):
         for data in per_timestep_inputs:
             embedding_list = []
             for sensor in data.keys():
-                sensor_data, wavelengths = data[sensor]
-                timestamps = torch.zeros(1, 4)
-                embeddings = self.model.encoder(sensor_data, timestamps, wavelengths)
+                sensor_data = data[sensor]
+                device = sensor_data.device
+
+                wavelengths = []
+                for band in self.metadata[sensor]["band_order"]:
+                    wavelengths.append(
+                        self.metadata[sensor]["bands"]["wavelength"][band] * 1000
+                    )  # Convert to nm
+
+                cube = {
+                    "platform": sensor,
+                    "time": torch.zeros(sensor_data.shape[0], 4).to(device=device),
+                    "latlon": torch.zeros(sensor_data.shape[0], 4).to(device=device),
+                    "pixels": sensor_data,
+                    "waves": torch.tensor(wavelengths),
+                    "gsd": torch.tensor(self.metadata[sensor]["gsd"]),
+                }
+                embeddings, *_ = self.model.encoder(cube)
+                if self.use_cls_token and not spatial_pool:
+                    embeddings = embeddings[:, 0, :]  # cls_token
+                else:
+                    embeddings = embeddings[:, 1:, :]  # exclude cls_token
                 embedding_list.append(embeddings)
             timestep_output = torch.stack(embedding_list, dim=0).mean(dim=0)
             if not spatial_pool:
@@ -248,7 +258,7 @@ class Clay(nn.Module):
 class ClayConfig(Config):
     """olmo_core style config for ClayWrapper."""
 
-    size: str = "base"
+    size: str = "large"
     load_path: str = "/weka/dfive-default/helios/models/clay/clay-v1.5.ckpt"
     metadata_path: str = "helios/evals/models/clay/metadata.yaml"
     use_pretrained_normalizer: bool = True
