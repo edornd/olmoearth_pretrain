@@ -2,10 +2,9 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 
 import torch
-from einops import rearrange, repeat
+from einops import rearrange
 from olmo_core.config import Config
 from torch import nn
 
@@ -87,23 +86,48 @@ class AnySat(nn.Module):
                 if v in Modality.LANDSAT.band_order
             ],
         }
-        self.month = 5  # default month, if none is given (indexing from 0)
 
     @staticmethod
-    def _month_day_to_day_of_year(
-        months: torch.Tensor, days: torch.Tensor | None = None
-    ) -> torch.Tensor:
-        output_tensors = []
-        for i in range(months.shape[0]):
-            output_tensors.append(
-                torch.tensor(
-                    [datetime(2025, m + 1, 1).timetuple().tm_yday for m in months[i]]
-                ).to(device=months.device)
-            )
-        months_as_doy = torch.stack(output_tensors)
-        if days is not None:
-            months_as_doy += days - 1
-        return months_as_doy
+    def calculate_day_of_year(timestamp: torch.Tensor) -> torch.Tensor:
+        """Calculate day of year from timestamp.
+
+        Args:
+            timestamp: Tensor of shape (..., 3) where last dim is [day, month, year]
+
+        Returns:
+            Tensor of same shape as input without last dim, with day of year as int
+        """
+        # timestamp[..., 0] = day, timestamp[..., 1] = month, timestamp[..., 2] = year
+        day = timestamp[..., 0]
+        month = timestamp[..., 1]
+        year = timestamp[..., 2]
+
+        # Days in months for non-leap years
+        days_in_month = torch.tensor(
+            [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], device=timestamp.device
+        )
+
+        # Check for leap year: (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+        is_leap = ((year % 4 == 0) & (year % 100 != 0)) | (year % 400 == 0)
+
+        # Cumulative days at the start of each month (0 for Jan, 31 for Feb, etc.)
+        cum_days = torch.cat(
+            [
+                torch.zeros(1, device=timestamp.device, dtype=days_in_month.dtype),
+                days_in_month.cumsum(0)[:-1],
+            ]
+        )
+
+        # Get cumulative days for the given month
+        # month is 1-based (Jan=1), so subtract 1 for indexing
+        month_idx = month.long() - 1
+        cum_days_for_month = cum_days[month_idx]
+
+        # Add 1 if leap year and month > 2
+        leap_day = (is_leap & (month > 2)).long()
+
+        doy = cum_days_for_month + day + leap_day
+        return doy
 
     def _calculate_patch_size(self, h: int) -> int:
         # based on https://arxiv.org/pdf/2412.14123, a patch size of
@@ -162,19 +186,7 @@ class AnySat(nn.Module):
             if num_timesteps > 1:
                 assert masked_helios_sample.timestamps is not None
 
-            # Note that time series requires a _dates companion tensor containing the day of
-            # the year: 01/01 = 0, 31/12=364.
-            if masked_helios_sample.timestamps is None:
-                months = repeat(
-                    torch.tensor([self.month]).to(device=processed_data.device),
-                    "d -> b d",
-                    b=processed_data.shape[0],
-                )
-                doy = self._month_day_to_day_of_year(months=months)
-            else:
-                months = masked_helios_sample.timestamps[:, :, 1]
-                days = masked_helios_sample.timestamps[:, :, -1]
-                doy = self._month_day_to_day_of_year(months=months, days=days)
+            doy = self.calculate_day_of_year(masked_helios_sample.timestamps)
             input_data[f"{self.helios_modalities_to_anysat_names[modality]}_dates"] = (
                 doy
             )
@@ -199,7 +211,7 @@ class AnySat(nn.Module):
             raise RuntimeError("Expected all inputs to have the same dimension")
         patch_size = self._calculate_patch_size(hs[0])
 
-        # from the README:
+        # from the README (https://github.com/gastruc/AnySat/blob/main/README.md):
         # "The sub patches are 1x1 pixels for time series and 10x10 pixels for VHR images.
         # If using output='dense', specify the output_modality."
         # Let's preferentially use output_modality in this order: [s2, s1, landsat]
