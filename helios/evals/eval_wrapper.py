@@ -16,6 +16,7 @@ from helios.evals.models import (
     Panopticon,
     PrithviV2,
     Satlas,
+    Tessera,
 )
 from helios.nn.flexihelios import FlexiHeliosBase, PoolingType, TokensAndMasks
 from helios.nn.pooled_modality_predictor import EncodeEarlyAttnPool
@@ -237,6 +238,19 @@ class SatlasEvalWrapper(EvalWrapper):
         return batch_embeddings
 
 
+class TesseraEvalWrapper(EvalWrapper):
+    """Wrapper for Tessera models."""
+
+    def __call__(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
+        """Forward pass through the model produces the embedding specified by initialization."""
+        batch_embeddings = self.model(
+            masked_helios_sample,
+            pooling=self.pooling_type,
+            spatial_pool=self.spatial_pool,
+        )
+        return batch_embeddings
+
+
 def get_eval_wrapper(model: nn.Module, **kwargs: Any) -> EvalWrapper:
     """Factory function to get the appropriate eval wrapper for a given model.
 
@@ -268,6 +282,9 @@ def get_eval_wrapper(model: nn.Module, **kwargs: Any) -> EvalWrapper:
     elif isinstance(model, Satlas):
         logger.info("Using SatlasEvalWrapper")
         return SatlasEvalWrapper(model=model, **kwargs)
+    elif isinstance(model, Tessera):
+        logger.info("Using TesseraEvalWrapper")
+        return TesseraEvalWrapper(model=model, **kwargs)
     elif isinstance(model, PrithviV2):
         logger.info("Using PrithviEvalWrapper")
         return PrithviV2EvalWrapper(model=model, **kwargs)
