@@ -634,7 +634,7 @@ FT_EVAL_TASKS = {
 def _select_tasks_from_env() -> dict[str, DownstreamTaskConfig]:
     """If FINETUNE=1 use FT_EVAL_TASKS, otherwise use EVAL_TASKS."""
     finetune_flag = os.environ.get("FINETUNE", "0")
-    use_ft = finetune_flag in ("1", "true", "TRUE", "True", "yes", "YES")
+    use_ft = finetune_flag == "1"
     tasks = FT_EVAL_TASKS if use_ft else EVAL_TASKS
     logger.info(
         f"Using {'FT_EVAL_TASKS' if use_ft else 'EVAL_TASKS'} (FINETUNE={finetune_flag})"

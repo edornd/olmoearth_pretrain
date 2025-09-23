@@ -546,9 +546,9 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
                 continue
             config = dataset_to_config(task.dataset)
             if config.task_type == TaskType.SEGMENTATION:
-                if task.probe_lr is None or task.ft_lr is None:
+                if task.probe_lr is None and task.ft_lr is None:
                     raise ValueError(
-                        f"probe_lr and ft_lr cannot be None for {task.dataset}"
+                        f"probe_lr and ft_lr cannot both be None for {task.dataset}"
                     )
 
             self.verify_input_modalities(task, config)
