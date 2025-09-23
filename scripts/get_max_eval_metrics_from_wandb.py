@@ -181,10 +181,7 @@ def main():
                         rows.append((partition, name_for_print, val))
             else:
                 print(f"\n{partition}: no runs found")
-                # Optionally record that in CSV (comment out if you don't want it)
-                # rows.append((partition, "", "no runs found"))
 
-        # Write per-partition CSV (long format)
         with open(args.output_file, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["partition", "metric", "value"])
