@@ -171,10 +171,6 @@ class PrestoWrapper(nn.Module):
         spatial_pool: bool = False,
     ) -> torch.Tensor:
         """Forward pass through presto model."""
-        if pooling == PoolingType.MAX:
-            # should this throw an exception?
-            logger.warning("MAX pooling ignored by presto")
-
         s2 = getattr(masked_helios_sample, Modality.SENTINEL2_L2A.name)
         s1 = getattr(masked_helios_sample, Modality.SENTINEL1.name)
         months = masked_helios_sample.timestamps[:, :, 1]
