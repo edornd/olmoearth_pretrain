@@ -177,9 +177,10 @@ class DownstreamEvaluator:
             "pooling_type": self.pooling_type,
             "concat_features": (self.probe_type == "attn_pool"),
             "use_pooled_tokens": self.use_pooled_tokens,
+            "is_train": is_train,
         }
         model = get_eval_wrapper(model, **wrapper_kwargs)
-        return get_embeddings(data_loader=data_loader, model=model, is_train=is_train)
+        return get_embeddings(data_loader=data_loader, model=model)
 
     def val(self) -> float:
         """Validate the model on the downstream task."""
