@@ -108,7 +108,7 @@ class PASTISRProcessor:
                     img = self.impute(img)
                 else:
                     raise ValueError(
-                        f"Sentinal2 image has {img.shape[1]} bands, expected 10. Shape is {img}!"
+                        f"Sentinal2 image has {img.shape[1]} bands, expected 10. Shape is {img.shape}!"
                     )
             months_dict[month].append(img)
 
