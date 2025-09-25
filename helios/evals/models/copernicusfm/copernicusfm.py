@@ -91,52 +91,22 @@ class CopernicusFM(torch.nn.Module):
             state_dict = check_point
         self.model.load_state_dict(state_dict, strict=False)
 
-        self.modality_to_wavelength_bandwidths = {
-            Modality.SENTINEL2_L2A.name: {
-                "band_wavelengths": [
-                    MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL2_L2A.name][
-                        "band_wavelengths"
-                    ][
-                        MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL2_L2A.name][
-                            "band_names"
-                        ].index(b)
-                    ]
-                    for b in Modality.SENTINEL2_L2A.band_order
-                ],
-                "band_bandwidths": [
-                    MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL2_L2A.name][
-                        "band_bandwidths"
-                    ][
-                        MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL2_L2A.name][
-                            "band_names"
-                        ].index(b)
-                    ]
-                    for b in Modality.SENTINEL2_L2A.band_order
-                ],
-            },
-            Modality.SENTINEL1.name: {
-                "band_wavelengths": [
-                    MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL1.name][
-                        "band_wavelengths"
-                    ][
-                        MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL1.name][
-                            "band_names"
-                        ].index(b)
-                    ]
-                    for b in Modality.SENTINEL1.band_order
-                ],
-                "band_bandwidths": [
-                    MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL1.name][
-                        "band_bandwidths"
-                    ][
-                        MODALITY_TO_WAVELENGTH_BANDWIDTHS[Modality.SENTINEL1.name][
-                            "band_names"
-                        ].index(b)
-                    ]
-                    for b in Modality.SENTINEL1.band_order
-                ],
-            },
-        }
+        # take MODALITY_TO_WAVELENGTH_BANDWIDTHS and rearrage it so that it has the same
+        # ordering as the Helios band orders, defined by Modality.band_order
+        self.modality_to_wavelength_bandwidths = {}
+        for modality in [Modality.SENTINEL2_L2A, Modality.SENTINEL1]:
+            modality_name = modality.name
+            wavelength_bandwidths = MODALITY_TO_WAVELENGTH_BANDWIDTHS[modality_name]
+            wavelengths = []
+            bandwidths = []
+            for b in modality.band_order:
+                cfm_idx = wavelength_bandwidths["band_names"].index(b)
+                wavelengths.append(wavelength_bandwidths["band_wavelengths"][cfm_idx])
+                bandwidths.append(wavelength_bandwidths["band_bandwidths"][cfm_idx])
+            self.modality_to_wavelength_bandwidths[modality_name] = {
+                "band_bandwidths": bandwidths,
+                "band_wavelengths": wavelengths,
+            }
 
     def _process_modality_data(
         self, data: torch.Tensor, modality: str
