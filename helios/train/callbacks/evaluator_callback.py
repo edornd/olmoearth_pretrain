@@ -363,7 +363,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
         # Check that input_modalities is only set for multimodal tasks
         if (
             not (
-                (task.dataset in ["pastis", "pastis128", "sickle"])
+                (task.dataset in ["pastis", "pastis128", "sickle", "nandi", "awf"])
                 or task.dataset.startswith("cropharvest")
             )
             and len(task.input_modalities) > 0

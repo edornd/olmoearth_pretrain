@@ -96,6 +96,7 @@ EVAL_TASKS = {
         pooling_type=PoolingType.MEAN,
         norm_stats_from_pretrained=True,
         input_modalities=[Modality.LANDSAT.name],
+        eval_interval=Duration.epochs(5),
     ),
     "nandi_sentinel2_sentinel1": DownstreamTaskConfig(
         dataset="nandi",
