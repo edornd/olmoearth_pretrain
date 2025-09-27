@@ -90,6 +90,7 @@ class DownstreamEvaluator:
         self.pooling_type = task.pooling_type
         self.norm_stats_from_pretrained = task.norm_stats_from_pretrained
         self.input_modalities = task.input_modalities
+        self.input_layers = task.input_layers
         self.probe_lr = task.probe_lr
         self.patch_size = task.patch_size
         self.probe_batch_size = task.probe_batch_size
@@ -143,6 +144,7 @@ class DownstreamEvaluator:
                 partition=self.partition,
                 norm_stats_from_pretrained=self.norm_stats_from_pretrained,
                 input_modalities=self.input_modalities,
+                input_layers=self.input_layers,
                 norm_method=self.norm_method,
             ),
             collate_fn=eval_collate_fn,
