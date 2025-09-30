@@ -15,15 +15,28 @@ def run_knn(
     config: EvalDatasetConfig,
     train_embeddings: torch.Tensor,
     train_labels: torch.Tensor,
+    val_embeddings: torch.Tensor,
+    val_labels: torch.Tensor,
     test_embeddings: torch.Tensor,
     test_labels: torch.Tensor,
     device: torch.device,
     k: int = 20,
     skip_idx: bool = False,
-) -> float:
+) -> tuple[float, float]:
     """Run KNN on the Helios model."""
     if not config.is_multilabel:
-        predictions = _run_knn_for_k(
+        val_predictions = _run_knn_for_k(
+            train_embeddings=train_embeddings,
+            train_labels=train_labels,
+            test_embeddings=val_embeddings,
+            num_classes=config.num_classes,
+            k=k,
+            device=device,
+            skip_idx=skip_idx,
+        )
+        val_score = accuracy_score(y_true=val_labels, y_pred=val_predictions)
+
+        test_predictions = _run_knn_for_k(
             train_embeddings=train_embeddings,
             train_labels=train_labels,
             test_embeddings=test_embeddings,
@@ -32,17 +45,31 @@ def run_knn(
             device=device,
             skip_idx=skip_idx,
         )
-        return accuracy_score(y_true=test_labels, y_pred=predictions)
+        test_score = accuracy_score(y_true=test_labels, y_pred=test_predictions)
+        return val_score, test_score
     else:
         # multilabel dataset, e.g., BigEarthNet
         # we will run KNN or K-Means once per class to compute predictions
         # labels are shape (num_samples, num_classes)
         assert config.num_classes == train_labels.shape[-1]
         assert config.num_classes == test_labels.shape[-1]
-        predictions = []
+        assert config.num_classes == val_labels.shape[-1]
+        val_predictions = []
+        test_predictions = []
         for class_idx in range(config.num_classes):
             train_single_labels = train_labels[:, class_idx]  # (num_samples)
-            single_predictions = _run_knn_for_k(
+            single_val_predictions = _run_knn_for_k(
+                train_embeddings=train_embeddings,
+                train_labels=train_single_labels,
+                test_embeddings=val_embeddings,
+                num_classes=2,  # binary prediction for each class
+                k=k,
+                device=device,
+                skip_idx=skip_idx,
+            )  # (num_samples)
+            val_predictions.append(single_val_predictions)
+
+            single_test_predictions = _run_knn_for_k(
                 train_embeddings=train_embeddings,
                 train_labels=train_single_labels,
                 test_embeddings=test_embeddings,
@@ -51,10 +78,19 @@ def run_knn(
                 device=device,
                 skip_idx=skip_idx,
             )  # (num_samples)
-            predictions.append(single_predictions)
+            test_predictions.append(single_test_predictions)
 
-        predictions = torch.stack(predictions, dim=1)  # (num_samples, num_classes)
-        return f1_score(y_true=test_labels, y_pred=predictions, average="micro")
+        val_predictions = torch.stack(
+            val_predictions, dim=1
+        )  # (num_samples, num_classes)
+        test_predictions = torch.stack(
+            test_predictions, dim=1
+        )  # (num_samples, num_classes)
+        val_score = f1_score(y_true=val_labels, y_pred=val_predictions, average="micro")
+        test_score = f1_score(
+            y_true=test_labels, y_pred=test_predictions, average="micro"
+        )
+        return val_score, test_score
 
 
 def _run_knn_for_k(

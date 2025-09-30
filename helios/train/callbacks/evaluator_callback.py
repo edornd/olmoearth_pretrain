@@ -50,6 +50,7 @@ class DownstreamTaskConfig:
     patch_size: int = 4
     probe_batch_size: int = 32
     epochs: int = 50  # Number of training epochs for linear probing task
+    linear_probe_eval_interval: int = 50  # calculate val results every N epochs
     eval_interval: Duration = field(default_factory=lambda: Duration.epochs(1))
     eval_mode: str | None = None
     probe_type: ProbeType = ProbeType.LINEAR
@@ -91,6 +92,7 @@ class DownstreamEvaluator:
         self.patch_size = task.patch_size
         self.probe_batch_size = task.probe_batch_size
         self.epochs = task.epochs
+        self.linear_probe_eval_interval = task.linear_probe_eval_interval
         self.eval_interval = task.eval_interval
         self.eval_mode = task.eval_mode
         self.probe_type = task.probe_type
@@ -122,7 +124,7 @@ class DownstreamEvaluator:
                 train_and_eval_probe,
                 batch_size=self.probe_batch_size,
                 epochs=self.epochs,
-                eval_interval=self.eval_interval.value,
+                eval_interval=self.linear_probe_eval_interval,
                 probe_type=self.probe_type,
                 lr=self.probe_lr,
             )
