@@ -24,8 +24,6 @@ from torch.utils.data import Dataset
 from upath import UPath
 
 from helios.data.constants import YEAR_NUM_TIMESTEPS
-
-# helios
 from helios.data.constants import Modality as DataModality
 from helios.data.utils import convert_to_db
 from helios.train.masking import HeliosSample, MaskedHeliosSample
@@ -77,7 +75,6 @@ def build_rslearn_model_dataset(
 
     transforms = []
     if input_size is not None:
-        # Use the rslearn Pad to match its loader pipeline
         transforms.append(
             RsPad(
                 size=input_size,
@@ -87,7 +84,7 @@ def build_rslearn_model_dataset(
         )
 
     inputs: dict[str, RsDataInput] = {}
-    # Expand each rslearn layer name to time-indexed variants; keep the first *per base layer*
+    # Expand each rslearn layer name to time-indexed variants, keep the first *per base layer*
     for helios_key, per_key_layers in layers_by_helios.items():
         expanded: list[str] = []
         for base in per_key_layers:
@@ -102,7 +99,6 @@ def build_rslearn_model_dataset(
             load_all_layers=True,
         )
 
-    # Always include the targets layer if it exists
     inputs["targets"] = RsDataInput(
         data_type="vector",
         layers=["label"],
@@ -120,9 +116,8 @@ def build_rslearn_model_dataset(
         dataset=rslearn_dataset,
         split_config=split_config,
         inputs=inputs,
-        # Dummy task to allow vector labels to flow (not used for metrics here)
+        # TODO: add task type if later we would like to support segmentation task
         task=RsClassificationTask(
-            # TODO: add property name and classes as args
             property_name=property_name,
             classes=classes,
         ),
@@ -180,9 +175,9 @@ class RslearnToHeliosDataset(Dataset):
         split: str = "train",
         property_name: str = "category",
         classes: list[str] | None = None,
-        partition: str = "default",  # accepted but unused (rslearn)
+        partition: str = "default",
         norm_stats_from_pretrained: bool = True,
-        norm_method: str = "norm_no_clip",  # accepted but unused (rslearn)
+        norm_method: str = "norm_no_clip",
         input_modalities: list[str] | None = None,
         start_time: str = "2022-09-01",
         end_time: str = "2023-09-01",
@@ -212,15 +207,10 @@ class RslearnToHeliosDataset(Dataset):
 
         self.norm_stats_from_pretrained = norm_stats_from_pretrained
         self.input_modalities = input_modalities
-        self.timestamps = torch.stack(
-            get_timestamps(start_time, end_time)
-        )  # (T, 3) long
+        self.timestamps = torch.stack(get_timestamps(start_time, end_time))  # (T, 3)
 
         if self.norm_stats_from_pretrained:
-            from helios.data.normalize import (  # lazy import to avoid heavy deps on import time
-                Normalizer,
-                Strategy,
-            )
+            from helios.data.normalize import Normalizer, Strategy
 
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
 
@@ -240,26 +230,21 @@ class RslearnToHeliosDataset(Dataset):
                 raise ValueError(f"Modality {modality} not found in dataset inputs")
 
             x = input_dict[modality]
-            # Expect (T*C, H, W)
             if x.ndim != 3:
                 raise ValueError(
                     f"Expected (T*C, H, W) for {modality}, got {tuple(x.shape)}"
                 )
-
             # Convert to dB for Sentinel-1
             if modality == DataModality.SENTINEL1.name:
                 x = convert_to_db(x)
-
-            # (T*C, H, W) -> (H, W, T, C)
             x = rearrange(x, "(t c) h w -> h w t c", t=T)
 
             if self.norm_stats_from_pretrained:
                 x = self.normalizer_computed.normalize(DataModality.get(modality), x)
 
-            # ensure float32 tensor
             sample_dict[modality] = torch.as_tensor(x, dtype=torch.float32)
 
-        sample_dict["timestamps"] = self.timestamps  # (T, 3) long
+        sample_dict["timestamps"] = self.timestamps
 
         helios_sample = HeliosSample(**sample_dict)
         masked_sample = MaskedHeliosSample.from_heliossample(helios_sample)

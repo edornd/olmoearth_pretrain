@@ -57,7 +57,7 @@ EVAL_TASKS = {
     ),
     "m_forestnet": DownstreamTaskConfig(
         dataset="m-forestnet",
-        embedding_batch_size=128,
+        embedding_batch_size=64,
         num_workers=4,
         pooling_type=PoolingType.MEAN,
         norm_stats_from_pretrained=False,
@@ -307,6 +307,42 @@ EVAL_TASKS = {
         probe_lr=0.1,
         epochs=50,
     ),
+    "pastis128_sentinel2": DownstreamTaskConfig(
+        dataset="pastis128",
+        embedding_batch_size=32,
+        probe_batch_size=8,
+        num_workers=2,
+        pooling_type=PoolingType.MAX,
+        norm_stats_from_pretrained=True,
+        probe_lr=0.1,
+        eval_interval=Duration.epochs(50),
+        input_modalities=[Modality.SENTINEL2_L2A.name],
+        epochs=50,
+    ),
+    "pastis128_sentinel1": DownstreamTaskConfig(
+        dataset="pastis128",
+        embedding_batch_size=32,
+        probe_batch_size=8,
+        num_workers=2,
+        pooling_type=PoolingType.MEAN,
+        norm_stats_from_pretrained=True,
+        probe_lr=0.1,
+        eval_interval=Duration.epochs(50),
+        input_modalities=[Modality.SENTINEL1.name],
+        epochs=50,
+    ),
+    "pastis128_sentinel1_sentinel2": DownstreamTaskConfig(
+        dataset="pastis128",
+        embedding_batch_size=32,
+        probe_batch_size=8,
+        num_workers=2,
+        pooling_type=PoolingType.MEAN,
+        norm_stats_from_pretrained=True,
+        probe_lr=0.1,
+        eval_interval=Duration.epochs(20),
+        input_modalities=[Modality.SENTINEL1.name, Modality.SENTINEL2_L2A.name],
+        epochs=50,
+    ),
     "nandi_sentinel2": DownstreamTaskConfig(
         dataset="nandi",
         embedding_batch_size=128,
@@ -315,7 +351,6 @@ EVAL_TASKS = {
         norm_stats_from_pretrained=True,
         input_modalities=[Modality.SENTINEL2_L2A.name],
         input_layers=["sentinel2"],
-        # Use patch size 1 to be consistent with AEF exp
         patch_size=1,
     ),
     "m_forestnet": DownstreamTaskConfig(
@@ -350,7 +385,6 @@ EVAL_TASKS = {
         norm_stats_from_pretrained=True,
         input_modalities=[Modality.SENTINEL1.name],
         input_layers=["sentinel1_ascending"],
-        # Use patch size 1 to be consistent with AEF exp
         patch_size=1,
     ),
     "nandi_landsat": DownstreamTaskConfig(
@@ -361,7 +395,6 @@ EVAL_TASKS = {
         norm_stats_from_pretrained=True,
         input_modalities=[Modality.LANDSAT.name],
         input_layers=["landsat"],
-        # Use patch size 1 to be consistent with AEF exp
         patch_size=1,
     ),
     "awf_sentinel2": DownstreamTaskConfig(
