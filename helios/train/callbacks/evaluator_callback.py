@@ -184,18 +184,21 @@ class DownstreamEvaluator:
         model = get_eval_wrapper(model, **wrapper_kwargs)
         return get_embeddings(data_loader=data_loader, model=model)
 
-    def val(self) -> float:
+    def val(self) -> tuple[float, float]:
         """Validate the model on the downstream task."""
         train_loader = self._get_data_loader("train")
         val_loader = self._get_data_loader("valid")
+        test_loader = self._get_data_loader("test")
 
         start_time = time.time()
         logger.info(f"Getting train embeddings for {self.dataset}...")
         train_embeddings, train_labels = self._get_embeddings(
             train_loader, is_train=True
         )
+        logger.info(f"Getting val embeddings for {self.dataset}...")
+        val_embeddings, val_labels = self._get_embeddings(val_loader, is_train=False)
         logger.info(f"Getting test embeddings for {self.dataset}...")
-        test_embeddings, test_labels = self._get_embeddings(val_loader, is_train=False)
+        test_embeddings, test_labels = self._get_embeddings(test_loader, is_train=False)
         logger.info(
             f"Time to get embeddings for {self.dataset}: {time.time() - start_time:.2f}s"
         )
@@ -203,21 +206,25 @@ class DownstreamEvaluator:
         logger.info(
             f"train embeddings shape for {self.dataset}: {train_embeddings.shape}"
         )
+        logger.info(f"val embeddings shape for {self.dataset}: {val_embeddings.shape}")
         logger.info(
             f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
         )
         logger.info(f"train labels shape for {self.dataset}: {train_labels.shape}")
+        logger.info(f"val labels shape for {self.dataset}: {val_labels.shape}")
         logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
 
         kwargs = {
             "config": self.config,
             "train_embeddings": train_embeddings,
             "train_labels": train_labels,
+            "val_embeddings": val_embeddings,
+            "val_labels": val_labels,
             "test_embeddings": test_embeddings,
             "test_labels": test_labels,
             "device": self.device,
         }
-        val_result = self.eval_function(**kwargs)  # type: ignore
+        val_result, test_result = self.eval_function(**kwargs)  # type: ignore
         logger.info(f"Downstream evaluator {self.evaluation_name} score: {val_result}")
         # free memory
         del train_embeddings, train_labels, test_embeddings, test_labels
@@ -226,7 +233,7 @@ class DownstreamEvaluator:
         torch.cuda.empty_cache()
         gc.collect()
 
-        return val_result
+        return val_result, test_result
 
 
 @dataclass
@@ -305,10 +312,13 @@ class DownstreamEvaluatorCallback(Callback):
                         f"Skipping {evaluator.evaluation_name} because it doesn't match input requirements of the model"
                     )
                     continue
-                val_result, eval_time = self._perform_eval(evaluator)
+                val_result, test_result, eval_time = self._perform_eval(evaluator)
                 if wandb_callback.enabled:
                     wandb_callback.wandb.log(
                         {"eval/" + evaluator.evaluation_name: val_result}
+                    )
+                    wandb_callback.wandb.log(
+                        {"eval/test/" + evaluator.evaluation_name: test_result}
                     )
                     wandb_callback.wandb.log(
                         {"eval_time/" + evaluator.evaluation_name: eval_time}
@@ -330,18 +340,23 @@ class DownstreamEvaluatorCallback(Callback):
                 continue
             self._perform_eval(evaluator)
 
-    def _perform_eval(self, evaluator: DownstreamEvaluator) -> tuple[float, float]:
+    def _perform_eval(
+        self, evaluator: DownstreamEvaluator
+    ) -> tuple[float, float, float]:
         """Run the evaluator."""
         logger.info(f"Running {evaluator.evaluation_name} evaluations...")
         start_time = time.monotonic()
-        val_result = evaluator.val()
+        val_result, test_result = evaluator.val()
         self.trainer.record_metric(f"eval/{evaluator.evaluation_name}", val_result)
+        self.trainer.record_metric(
+            f"eval/test/{evaluator.evaluation_name}", test_result
+        )
         eval_time = time.monotonic() - start_time
         self.trainer.record_metric(f"eval_time/{evaluator.evaluation_name}", eval_time)
         logger.info(
             f"Finished {evaluator.evaluation_name} evaluations in {eval_time:.1f} seconds."
         )
-        return val_result, eval_time
+        return val_result, test_result, eval_time
 
 
 @dataclass
