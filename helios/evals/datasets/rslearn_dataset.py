@@ -47,7 +47,9 @@ def build_rslearn_model_dataset(
     Args:
         rslearn_dataset: The source RslearnDataset.
         rslearn_dataset_groups: Optional list of dataset group names to include.
-        layers: Optional list of rslearn layer names to use as model inputs. Example: "sentinel2", only include the base name, no need to include base.1, base.n
+        layers: Optional list of rslearn layer names to use as model inputs.
+            Example: "sentinel2". Only provide the base name, do not include
+            layer names such as "sentinel2.1" or "sentinel2.n".
         input_size: Optional input patch size (pixels) to crop/resize samples to.
         split: Dataset split to use (e.g., "train", "val", "test").
         property_name: The property in the dataset to use as the target label.
