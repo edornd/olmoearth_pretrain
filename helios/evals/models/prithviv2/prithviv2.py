@@ -1,8 +1,8 @@
 """Helios wrapper for Prithvi v2."""
 
-import logging
 import math
 from dataclasses import dataclass
+from enum import StrEnum
 
 import torch
 import torch.nn as nn
@@ -14,7 +14,6 @@ from olmo_core.config import Config
 from upath import UPath
 
 from helios.data.constants import Modality
-from helios.evals.models.prithviv2.constants import MODEL_TO_HF_INFO, PrithviV2Models
 from helios.evals.models.prithviv2.prithvi_mae import PrithviMAE
 from helios.nn.flexihelios import PoolingType
 from helios.train.masking import MaskedHeliosSample
@@ -38,7 +37,25 @@ PRITHVI_STD = [
 ]
 
 
-logger = logging.getLogger(__name__)
+class PrithviV2Models(StrEnum):
+    """Names for different Prithvi models on torch hub."""
+
+    VIT_300 = "Prithvi_EO_V2_300M"
+    VIT_600 = "Prithvi_EO_V2_600M"
+
+
+MODEL_TO_HF_INFO = {
+    PrithviV2Models.VIT_300: {
+        "hf_hub_id": f"ibm-nasa-geospatial/{PrithviV2Models.VIT_300.value}",
+        "weights": f"{PrithviV2Models.VIT_300.value}.pt",
+        "revision": "b2f2520ab889f42a25c5361ba18761fcb4ea44ad",
+    },
+    PrithviV2Models.VIT_600: {
+        "hf_hub_id": f"ibm-nasa-geospatial/{PrithviV2Models.VIT_600.value}",
+        "weights": f"{PrithviV2Models.VIT_600.value}.pt",
+        "revision": "87f15784813828dc37aa3197a143cd4689e4d080",
+    },
+}
 
 
 class PrithviV2(nn.Module):
@@ -49,7 +66,7 @@ class PrithviV2(nn.Module):
     def __init__(
         self,
         load_directory: str,
-        size: PrithviV2Models.VIT_300,
+        size: PrithviV2Models,
         use_pretrained_normalizer: bool = True,
     ):
         """Initialize the PrithviV2 wrapper.
