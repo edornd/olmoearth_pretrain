@@ -439,7 +439,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         .with_callback(
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
-                tasks=EVAL_TASKS,
+                tasks=FT_EVAL_TASKS if os.environ.get("FINETUNE") else EVAL_TASKS,
                 eval_on_startup=True,
                 cancel_after_first_eval=True,
                 run_on_test=False,
