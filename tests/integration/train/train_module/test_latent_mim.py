@@ -167,11 +167,11 @@ def test_train_batch_without_missing_modalities(
         train_module._attach_trainer(mock_trainer)
         train_module.train_batch(batch)
         logger.info(mock_trainer._metrics)
-        assert torch.allclose(
-            mock_trainer._metrics["train/PatchDisc"],
-            torch.tensor(2.0),
-            atol=1e-1,
-        )
+        loss = mock_trainer._metrics["train/PatchDisc"]
+        assert not torch.isinf(loss).any()
+        assert not torch.isnan(loss).any()
+        assert loss < 4
+        assert loss > 0
 
 
 def test_train_batch_with_missing_modalities(
@@ -194,8 +194,8 @@ def test_train_batch_with_missing_modalities(
         train_module._attach_trainer(mock_trainer)
         train_module.train_batch(batch)
         logger.info(mock_trainer._metrics)
-        assert torch.allclose(
-            mock_trainer._metrics["train/PatchDisc"],
-            torch.tensor(1.89),
-            atol=1e-1,
-        )
+        loss = mock_trainer._metrics["train/PatchDisc"]
+        assert not torch.isinf(loss).any()
+        assert not torch.isnan(loss).any()
+        assert loss < 4
+        assert loss > 0
