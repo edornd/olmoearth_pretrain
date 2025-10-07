@@ -8,3 +8,5 @@ python scripts/2025_10_02_phase2/ablations/base_mae.py phase2.0_base_mae ai2/cer
 python scripts/2025_10_02_phase2/ablations/no_ag_maps.py phase2.0_base_mae ai2/ceres-cirrascale  --launch.clusters='[ai2/jupiter-cirrascale-2]' --launch.priority=high
 # no maps (removing ag maps + worldcover, openstreetmap, canopy height)
 python scripts/2025_10_02_phase2/ablations/no_maps.py phase2.0_base_mae ai2/ceres-cirrascale  --launch.clusters='[ai2/jupiter-cirrascale-2]' --launch.priority=high
+# random init the target projections
+python scripts/2025_10_02_phase2/base.py launch phase2.0_base_random_target ai2/ceres-cirrascale  --train_module.reinit_targets=True --launch.clusters='[ai2/jupiter-cirrascale-2]' --launch.priority=high
