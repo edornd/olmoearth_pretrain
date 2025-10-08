@@ -20,4 +20,4 @@ python scripts/2025_10_02_phase2/ablations/base.py phase2.0_base_no_maps_srtm ai
 # no landsat
 python scripts/2025_10_02_phase2/ablations/base.py phase2.0_base_no_maps_srtm_landsat ai2/ceres-cirrascale  --launch.clusters='[ai2/jupiter-cirrascale-2]' --launch.priority=normal --common.training_modalities='[sentinel2_l2a,sentinel1]' --train_module.masking_config.strategy_config.only_decode_modalities='[]'
 # s2 only (no s1)
-python scripts/2025_10_02_phase2/ablations/base.py phase2.0_base_no_maps_srtm_landsat_s1 ai2/ceres-cirrascale  --launch.clusters='[ai2/jupiter-cirrascale-2]' --launch.priority=normal --common.training_modalities='[sentinel2_l2a]' --train_module.masking_config.strategy_config.only_decode_modalities='[]'
+python scripts/2025_10_02_phase2/ablations/base.py phase2.0_base_no_maps_srtm_landsat_s1 ai2/ceres-cirrascale  --launch.clusters='[ai2/jupiter-cirrascale-2]' --launch.priority=high --common.training_modalities='[sentinel2_l2a]' --train_module.masking_config.strategy_config.only_decode_modalities='[]'
