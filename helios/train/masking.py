@@ -1009,6 +1009,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             tuple[set[tuple[str, int]], set[tuple[str, int]]]
         ],
         present_modalities_bandsets: list[list[tuple[str, int]]],
+        patch_size: int,
     ) -> MaskedHeliosSample:
         """Compute masks for each band set based on the encode and decode selections.
 
@@ -1018,6 +1019,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             masked_batch: The masked batch to apply the mask to.
             encoded_decoded_bandsets: The encoded and decoded bandsets for each sample.
             present_modalities_bandsets: The present modalities and bandsets for each sample.
+            patch_size: The patch size being applied
 
         Returns:
             The masked batch with the masks applied.
@@ -1129,29 +1131,91 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         for i in no_encoded_indices:
             for key, val in masked_batch_dict.items():
                 if key.endswith("mask"):
-                    modality_index = val[i]
-                    # will this happen inplace?
-                    modality_index[
-                        modality_index == MaskValue.TARGET_ENCODER_ONLY.value
-                    ] = MaskValue.ONLINE_ENCODER.value
-                    masked_batch_dict[key][i] = modality_index
+                    modality_mask = val[i]
+                    modality_name = "_".join(key.split("_")[:-1])
+                    modality_spec = Modality.get(modality_name)
+                    masked_batch_dict[key][i] = self._random_fill_unmasked(
+                        modality_mask, modality_spec, patch_size
+                    )
         for i in no_decoded_indices:
             for key, val in masked_batch_dict.items():
                 if key.endswith("mask"):
-                    modality_index = val[i]
-                    # will this happen inplace?
-                    modality_index[
-                        modality_index == MaskValue.TARGET_ENCODER_ONLY.value
-                    ] = MaskValue.DECODER.value
-                    masked_batch_dict[key][i] = modality_index
+                    modality_mask = val[i]
+                    modality_name = "_".join(key.split("_")[:-1])
+                    modality_spec = Modality.get(modality_name)
+                    masked_batch_dict[key][i] = self._random_fill_unmasked(
+                        modality_mask, modality_spec, patch_size
+                    )
         masked_batch = MaskedHeliosSample(**masked_batch_dict)
 
         return masked_batch
+
+    def _random_fill_unmasked(
+        self,
+        mask: torch.Tensor,
+        modality: ModalitySpec,
+        patch_size_at_16: int,
+        encode_ratio: float | None = None,
+        decode_ratio: float | None = None,
+    ) -> ArrayTensor:
+        """This function assumes B=1."""
+        assert mask.shape[0] == 1, (
+            f"_random_fill_unmasked does not support B != 1, got input shape {mask.shape}"
+        )
+        device = mask.device
+        if modality.is_spatial:
+            patch_size = patch_size_at_16 * modality.image_tile_size_factor
+            # the first two dimensions are spatial; lets turn them
+            # from h, w to p_h, p_w
+            mask = mask[:, 0::patch_size, 0::patch_size]
+
+        original_shape = mask.shape
+        # this only works because we assume B = 1
+        flat_mask = mask.flatten()  # N tokens
+        not_missing_tokens = flat_mask != MaskValue.MISSING.value
+        num_not_missing_tokens = sum(not_missing_tokens)
+
+        if encode_ratio is None:
+            encode_ratio = self.encode_ratio
+        if decode_ratio is None:
+            decode_ratio = self.decode_ratio
+
+        encode_tokens = int(num_not_missing_tokens * encode_ratio)
+        decode_tokens = int(num_not_missing_tokens * decode_ratio)
+        target_tokens = int(num_not_missing_tokens - (encode_tokens + decode_tokens))
+        flat_mask_tokens = torch.cat(
+            [
+                torch.full(
+                    (encode_tokens,), MaskValue.ONLINE_ENCODER.value, device=device
+                ),
+                torch.full((decode_tokens,), MaskValue.DECODER.value, device=device),
+                torch.full(
+                    (target_tokens,), MaskValue.TARGET_ENCODER_ONLY.value, device=device
+                ),
+            ]
+        )
+
+        flat_mask_tokens = flat_mask_tokens[
+            torch.randperm(num_not_missing_tokens, device=device)
+        ]
+        flat_mask[not_missing_tokens] = flat_mask_tokens
+        mask = flat_mask.view(*original_shape)
+        if modality.is_spatial:
+            mask = repeat(
+                mask, "b h w ... -> b (h hp) (w wp) ...", hp=patch_size, wp=patch_size
+            )
+
+        return mask
 
     def apply_mask(
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedHeliosSample:
         """Apply space masking to the input data."""
+        if patch_size is None:
+            # this is because we use a random-masking proxy in case of
+            # no encoded or decoded tokens.
+            raise ValueError("patch_size must be provided for cross masking")
+
         masked_sample = self.strategy.apply_mask(batch, patch_size, **kwargs)
         present_modalities_bandsets = self.get_sample_present_modalities_bandsets(
             masked_sample
@@ -1160,7 +1224,10 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             present_modalities_bandsets
         )
         masked_sample = self.apply_bandset_mask_rules(
-            masked_sample, encoded_decoded_bandsets, present_modalities_bandsets
+            masked_sample,
+            encoded_decoded_bandsets,
+            present_modalities_bandsets,
+            patch_size,
         )
 
         return masked_sample
