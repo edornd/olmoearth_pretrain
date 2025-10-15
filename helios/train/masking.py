@@ -335,8 +335,12 @@ class MaskingStrategy:
         if decode_ratio is None:
             decode_ratio = self.decode_ratio
 
-        encode_tokens = int(num_not_missing_tokens * encode_ratio)
-        decode_tokens = int(num_not_missing_tokens * decode_ratio)
+        if num_not_missing_tokens == 1:
+            encode_tokens = 1
+            decode_tokens = 0
+        else:
+            encode_tokens = int(num_not_missing_tokens * encode_ratio)
+            decode_tokens = int(num_not_missing_tokens * decode_ratio)
 
         target_tokens = int(num_not_missing_tokens - (encode_tokens + decode_tokens))
         flat_mask_tokens = torch.cat(
