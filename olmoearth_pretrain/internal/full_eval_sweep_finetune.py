@@ -247,6 +247,7 @@ def _format_launch_command(
         run_name,
         cluster,
         "--launch.priority=urgent",
+        "--launch.num_gpus=1",
         "--launch.preemptible=True",
         "--launch.task_name=eval",
     ]
@@ -290,7 +291,7 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
                 if norm_val is True:
                     run_suffix = f"FT_lr{lr}_norm_pretrained_True"
                 else:
-                    run_suffix = f"FT_lr{lr}_norm_pretrained_False"
+                    run_suffix = f"FT_lr{lr}"
             run_name = f"{base_run_name}_{run_suffix}"
 
             model_args = _build_model_args(selected_flag, norm_val)
