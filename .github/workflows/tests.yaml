@@ -32,4 +32,4 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest -n auto tests/
+        uv run pytest -n auto tests/
