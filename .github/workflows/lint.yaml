@@ -24,6 +24,11 @@ jobs:
           # Install a specific version of uv.
           version: "0.9.4"
 
+      - name: Set up Python
+        run: uv python install
+        with:
+          python-version-file: "pyproject.toml"
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
