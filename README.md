@@ -11,6 +11,8 @@ launching training runs on beaker
 2. Navigate to root directory of this repo and run `uv sync --locked --all-groups`
 3. Install the pre-commit tool `uv tool install pre-commit --with pre-commit-uv --force-reinstall`
 
+uv installs everything into a venv, so to keep using `python` commands you can activate uv's venv. Otherwise, swap to `uv run python`.
+
 ## Training Setup
 1. Create a Github Token that is able to clone this repo on beaker. You can generate a token [here](https://github.com/settings/tokens) Following permissions are sufficient
     - repo
