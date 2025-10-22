@@ -17,6 +17,7 @@ from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 
 from olmoearth_pretrain.data.constants import Modality
+from olmoearth_pretrain.evals.datasets.normalize import NormMethod
 from olmoearth_pretrain.internal.constants import EVAL_WANDB_PROJECT, WANDB_ENTITY
 from olmoearth_pretrain.internal.experiment import (
     CommonComponents,
