@@ -166,6 +166,8 @@ def build_launch_config(
             'export PATH="/root/.local/bin:$PATH" ',
             "uv sync --locked --all-groups",
             "alias python='uv run python'",
+            # lets see if that worked
+            "alias",
             'uv run python -c "import sys; print(sys.executable)"',
             'python -c "import sys; print(sys.executable)"',
         ],
