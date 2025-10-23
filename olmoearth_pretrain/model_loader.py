@@ -51,9 +51,8 @@ def load_model(model_id: ModelID, load_weights: bool = True) -> torch.nn.Module:
     """
     # We ignore bandit warnings here since we are just downloading config and weights,
     # not any code.
-    config_fname = hf_hub_download(
-        repo_id="allenai/olmoearth_pretrain", filename=f"{model_id.value}-config.json"
-    )  # nosec
+    repo_id = f"allenai/{model_id.value}"
+    config_fname = hf_hub_download(repo_id=repo_id, filename="config.json")  # nosec
     with open(config_fname) as f:
         config_dict = json.load(f)
         model_config = Config.from_dict(config_dict["model"])
@@ -63,9 +62,7 @@ def load_model(model_id: ModelID, load_weights: bool = True) -> torch.nn.Module:
     if not load_weights:
         return model
 
-    pth_fname = hf_hub_download(
-        repo_id="allenai/olmoearth_pretrain", filename=f"{model_id.value}.pth"
-    )  # nosec
-    state_dict = torch.load(pth_fname)
+    pth_fname = hf_hub_download(repo_id=repo_id, filename="weights.pth")  # nosec
+    state_dict = torch.load(pth_fname, map_location="cpu")
     model.load_state_dict(state_dict)
     return model
