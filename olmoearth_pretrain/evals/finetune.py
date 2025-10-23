@@ -43,6 +43,7 @@ class BackboneWithHead(nn.Module):
             pooling_type=pooling_type,
             concat_features=False,
             use_pooled_tokens=use_pooled_tokens,
+            is_train=False,
         )
         self.task_type = task_type
         self.patch_size = patch_size
