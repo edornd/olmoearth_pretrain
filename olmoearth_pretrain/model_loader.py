@@ -54,9 +54,6 @@ def load_model(model_id: ModelID, load_weights: bool = True) -> torch.nn.Module:
     config_fname = hf_hub_download(
         repo_id="allenai/olmoearth_pretrain", filename=f"{model_id.value}-config.json"
     )  # nosec
-    pth_fname = hf_hub_download(
-        repo_id="allenai/olmoearth_pretrain", filename=f"{model_id.value}.pth"
-    )  # nosec
     with open(config_fname) as f:
         config_dict = json.load(f)
         model_config = Config.from_dict(config_dict["model"])
@@ -66,6 +63,9 @@ def load_model(model_id: ModelID, load_weights: bool = True) -> torch.nn.Module:
     if not load_weights:
         return model
 
+    pth_fname = hf_hub_download(
+        repo_id="allenai/olmoearth_pretrain", filename=f"{model_id.value}.pth"
+    )  # nosec
     state_dict = torch.load(pth_fname)
     model.load_state_dict(state_dict)
     return model
