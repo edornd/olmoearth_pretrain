@@ -67,7 +67,8 @@ class BackboneWithHead(nn.Module):
     ) -> torch.Tensor:
         """Forward pass through the model and head."""
         dev = next(self.wrapper.parameters()).device
-        # classification: (B, D), segmentation: (B, H, W, D)
+        # The wrapper requires both batch and labels as input, mainly for model
+        # like AnySat that modify the shape of labels during training
         emb, labels = self.wrapper(batch, labels)
         emb = cast(torch.Tensor, emb)
         emb_dim = emb.shape[-1]
@@ -105,7 +106,7 @@ def _eval_cls(
         label = label.to(device=device)
         masked = _to_device(masked, device)
         with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
-            logits, label = module(masked, label)  # (B, C)
+            logits, _ = module(masked, label)  # (B, C)
         logits_all.append(logits.float().cpu())
         labels_all.append(label.cpu())
     logits = torch.cat(logits_all, 0)
@@ -138,7 +139,7 @@ def _eval_seg(
         label = label.to(device=device)
         masked = _to_device(masked, device)
         with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
-            logits, label = module(masked, label)  # (B, H, W, C*p*p)
+            logits, _ = module(masked, label)  # (B, H, W, C*p*p)
             H, W = logits.shape[1], logits.shape[2]
             logits = rearrange(
                 logits,
