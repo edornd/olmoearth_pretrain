@@ -3,11 +3,7 @@ name = "olmoearth_pretrain"
 version = "0.0.1"
 description = "A library for developing earth system foundation models"
 authors = [
-    {name = "Favyen Bastani", email = "favyenb@allenai.org"},
-    {name = "Patrick Beukema", email = "patrickb@allenai.org"},
-    {name = "Henry Herzog", email = "henryh@allenai.org"},
-    {name = "Gabriel Tseng", email = "gabrielt@allenai.org"},
-    {name = "Yawen Zhang", email = "yawenz@allenai.org"},
+    { name = "OlmoEarth Team" },
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
