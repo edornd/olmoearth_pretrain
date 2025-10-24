@@ -308,8 +308,8 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
                     run_suffix = f"FT_lr{lr}_norm_pretrained_True"
                 else:
                     run_suffix = f"FT_lr{lr}_norm_pretrained_False"
-            run_name = f"{base_run_name}_{run_suffix}"
 
+            run_name = f"{base_run_name}_{run_suffix}"
             model_args = _build_model_args(selected_preset, norm_val)
 
             commands.append(
@@ -371,7 +371,7 @@ def main() -> None:
     parser.add_argument(
         "--sweep_normalizer",
         action="store_true",
-        help="Add a variant with --model.use_pretrained_normalizer=True (per-task NO_NORM).",
+        help="Sweep normalization methods (pretrained and dataset stats).",
     )
 
     args, extra_cli = parser.parse_known_args()
