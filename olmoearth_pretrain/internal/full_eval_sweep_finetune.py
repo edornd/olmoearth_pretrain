@@ -23,7 +23,8 @@ from olmoearth_pretrain.internal.experiment import SubCmd
 logger = getLogger(__name__)
 
 # Learning rates to sweep over.
-FT_LRS = [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
+# FT_LRS = [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
+FT_LRS = [5e-5, 1e-4, 5e-4]
 
 TASK_ARG_PREFIX = "--trainer.callbacks.downstream_evaluator.tasks"
 FT_TASK_NAMES = list(FT_EVAL_TASKS.keys())
@@ -302,7 +303,7 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
             if args.defaults_only:
                 run_suffix = "FT_defaults"
             elif args.checkpoint_path:
-                run_suffix = f"FT_lr{lr}"
+                run_suffix = f"FT_lr{lr}_freezeunfreeze"
             else:
                 if norm_val is True:
                     run_suffix = f"FT_lr{lr}_norm_pretrained_True"

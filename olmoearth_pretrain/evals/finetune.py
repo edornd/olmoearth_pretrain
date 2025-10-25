@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from logging import getLogger
 from typing import cast
 
@@ -10,12 +11,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from sklearn.metrics import accuracy_score, f1_score
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
 from olmoearth_pretrain.evals.datasets.configs import EvalDatasetConfig, TaskType
 from olmoearth_pretrain.evals.eval_wrapper import get_eval_wrapper
 from olmoearth_pretrain.evals.metrics import mean_iou
-from olmoearth_pretrain.evals.utils import adjust_learning_rate
 from olmoearth_pretrain.train.masking import MaskedOlmoEarthSample
 
 logger = getLogger(__name__)
@@ -180,6 +181,12 @@ def _snapshot_state_dict(module: nn.Module) -> dict[str, torch.Tensor]:
     return {k: v.detach().cpu().clone() for k, v in module.state_dict().items()}
 
 
+def _set_backbone_trainable(backbone: nn.Module, requires_grad: bool) -> None:
+    """Toggle gradient computation for backbone parameters."""
+    for param in backbone.parameters():
+        param.requires_grad = requires_grad
+
+
 def run_finetune_eval(
     task_config: EvalDatasetConfig,
     model: nn.Module,
@@ -208,6 +215,14 @@ def run_finetune_eval(
         sample_batch, label = next(iter(train_loader))
         _, _ = ft(_to_device(sample_batch, device), label.to(device))
 
+    freeze_epochs = math.ceil(0.2 * epochs) if epochs > 0 else 0
+    backbone_unfrozen = freeze_epochs == 0
+    if not backbone_unfrozen:
+        _set_backbone_trainable(ft.backbone, False)
+        logger.info(
+            f"Freezing backbone for the first {freeze_epochs} epoch(s) before unfreezing."
+        )
+
     total_backbone, trainable_backbone, total_head, trainable_head = count_params(
         ft.backbone, ft._head
     )
@@ -216,7 +231,16 @@ def run_finetune_eval(
     logger.info(f"Total head parameters: {total_head:,}")
     logger.info(f"Trainable head parameters: {trainable_head:,}")
 
-    opt = torch.optim.AdamW(ft.parameters(), lr=lr)
+    current_lr = lr
+    opt = torch.optim.AdamW(ft.parameters(), lr=current_lr)
+    scheduler = ReduceLROnPlateau(
+        opt,
+        mode="max",
+        factor=0.2,
+        patience=2,
+        min_lr=0.0,
+        cooldown=10,
+    )
     if task_config.task_type == TaskType.CLASSIFICATION:
         loss_fn: nn.Module = (
             nn.MultiLabelSoftMarginLoss()
@@ -237,6 +261,17 @@ def run_finetune_eval(
 
     ft.train()
     for epoch in range(epochs):
+        if not backbone_unfrozen and epoch >= freeze_epochs:
+            _set_backbone_trainable(ft.backbone, True)
+            backbone_unfrozen = True
+            current_lr = lr / 10.0
+            for group in opt.param_groups:
+                group["lr"] = current_lr
+            logger.info(
+                "Backbone unfrozen; reducing optimizer learning rate to "
+                f"{current_lr:.3e} for remaining epochs."
+            )
+
         for i, (masked, label) in enumerate(train_loader):
             label = label.to(device=device)
             masked = _to_device(masked, device)
@@ -265,14 +300,6 @@ def run_finetune_eval(
                     f"Finetune Epoch [{epoch + 1}/{epochs}] Step [{i + 1}/{len(train_loader)}] Loss: {loss.item():.4f}"
                 )
             loss.backward()
-            adjust_learning_rate(
-                optimizer=opt,
-                epoch=epoch + (i / max(1, len(train_loader))),
-                total_epochs=epochs,
-                warmup_epochs=max(1, int(0.1 * epochs)),
-                max_lr=lr,
-                min_lr=1.0e-6,
-            )
             opt.step()
             opt.zero_grad()
 
@@ -289,6 +316,7 @@ def run_finetune_eval(
         logger.info(
             f"Finetune Epoch [{epoch + 1}/{epochs}] Validation Metric: {val_metric:.4f}"
         )
+        scheduler.step(val_metric)
 
         if val_metric > best_val_metric:
             best_val_metric = val_metric
