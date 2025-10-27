@@ -31,7 +31,10 @@ PARTITIONS = [
 def get_run_group_name(run_name: str) -> str:
     """Extracts the group name from a run name, e.g., 'my_experiment_step_100' -> 'my_experiment'."""
     # just split on _step and take the first part
-    return run_name.split("_step")[0]
+    if "step" in run_name:
+        return run_name.split("_step")[0]
+    else:
+        return run_name.split("_")[0]
 
 
 def get_run_groups(
