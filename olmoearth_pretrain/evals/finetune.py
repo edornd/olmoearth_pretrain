@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from olmo_core.train.trainer import Trainer
 from sklearn.metrics import accuracy_score, f1_score
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -21,7 +22,6 @@ from olmoearth_pretrain.evals.datasets.configs import EvalDatasetConfig, TaskTyp
 from olmoearth_pretrain.evals.eval_wrapper import get_eval_wrapper
 from olmoearth_pretrain.evals.metrics import mean_iou
 from olmoearth_pretrain.train.masking import MaskedOlmoEarthSample
-from olmoearth_pretrain.train.trainer import Trainer
 
 logger = getLogger(__name__)
 
