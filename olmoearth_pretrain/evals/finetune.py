@@ -309,6 +309,7 @@ def run_finetune_eval(
                 loss = loss_fn(logits, label)
                 trainer.global_step = epoch * len(train_loader) + i
                 trainer.record_metric(f"finetune/{task_name}/train/loss", loss.item())
+                trainer._log_metrics()
                 logger.info(
                     f"Finetune Epoch [{epoch + 1}/{epochs}] Step [{i + 1}/{len(train_loader)}] Loss: {loss.item():.4f}"
                 )
@@ -327,6 +328,7 @@ def run_finetune_eval(
                 patch_size,
             )
         trainer.record_metric(f"finetune/{task_name}/val/metric", val_metric)
+        trainer._log_metrics()
         logger.info(
             f"Finetune Epoch [{epoch + 1}/{epochs}] Validation Metric: {val_metric:.4f}"
         )

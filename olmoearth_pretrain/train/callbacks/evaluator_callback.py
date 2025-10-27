@@ -350,6 +350,9 @@ class DownstreamEvaluator:
                 seed=self.finetune_seed,
                 save_folder=self.trainer.save_folder,
             )
+            logger.info(
+                f"Downstream evaluator {self.evaluation_name} val score: {val_result}, test score: {test_result}"
+            )
             # Restore the original global step
             self.trainer.global_step = original_global_step
         finally:
@@ -358,10 +361,6 @@ class DownstreamEvaluator:
                 model.train()
             else:
                 model.eval()
-
-        logger.info(
-            f"Downstream evaluator {self.evaluation_name} val score: {val_result}, test score: {test_result}"
-        )
 
         torch.cuda.empty_cache()
         gc.collect()
