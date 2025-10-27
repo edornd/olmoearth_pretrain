@@ -352,8 +352,11 @@ def run_finetune_eval(
     ft.load_state_dict(best_state)
     if save_folder is not None:
         checkpoint_path = os.path.join(save_folder, task_name, f"lr{lr}", "best.ckpt")
+        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
         torch.save(best_state, checkpoint_path)
         logger.info(f"Saved best checkpoint to {checkpoint_path}")
+    else:
+        logger.info("No save folder provided, skipping saving best checkpoint")
 
     if task_config.task_type == TaskType.CLASSIFICATION:
         val_acc = best_val_metric
