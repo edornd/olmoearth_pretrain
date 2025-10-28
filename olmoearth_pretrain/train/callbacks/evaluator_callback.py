@@ -39,6 +39,14 @@ from olmoearth_pretrain.train.callbacks.wandb import OlmoEarthWandBCallback
 logger = logging.getLogger(__name__)
 
 
+def _seed_worker(worker_id: int, base_seed: int) -> None:
+    """Seed DataLoader worker RNGs deterministically."""
+    worker_seed = base_seed + worker_id
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
+
+
 class EvalMode(StrEnum):
     """Eval mode."""
 
@@ -200,14 +208,7 @@ class DownstreamEvaluator:
             split_seed = seed + split_offsets.get(split, 0)
             generator = torch.Generator()
             generator.manual_seed(split_seed)
-
-            def _worker_init_fn(worker_id: int) -> None:
-                worker_seed = split_seed + worker_id
-                random.seed(worker_seed)
-                np.random.seed(worker_seed)
-                torch.manual_seed(worker_seed)
-
-            worker_init_fn = _worker_init_fn
+            worker_init_fn = partial(_seed_worker, base_seed=split_seed)
 
         return DataLoader(
             get_eval_dataset(
