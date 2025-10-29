@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_NAME="2025_10_26_olmoearth_finetune"
-CLUSTER="ai2/jupiter"
+CLUSTER="ai2/ceres"
 SCRIPT="python olmoearth_pretrain/internal/full_eval_sweep_finetune.py"
 
 # Dinov3
@@ -53,9 +53,9 @@ $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.0
 $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name $PROJECT_NAME --module_path scripts/2025_10_02_phase2/nano.py --cluster $CLUSTER --finetune_seed 1234
 
 # Satlas
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 1234 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 42 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 0 --launch.priority=high
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 1234
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 42
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 0
 
 # Satlas, dataset norm
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 1234 --use_dataset_normalizer
