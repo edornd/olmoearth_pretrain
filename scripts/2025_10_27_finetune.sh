@@ -2,13 +2,13 @@
 set -euo pipefail
 
 PROJECT_NAME="2025_10_26_olmoearth_finetune"
-CLUSTER="ai2/titan"
+CLUSTER="ai2/jupiter"
 SCRIPT="python olmoearth_pretrain/internal/full_eval_sweep_finetune.py"
 
 # Dinov3
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/dinov3/dino_v3_launch.py --cluster $CLUSTER --model dino_v3 --finetune_seed 1234 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/dinov3/dino_v3_launch.py --cluster $CLUSTER --model dino_v3 --finetune_seed 42 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/dinov3/dino_v3_launch.py --cluster $CLUSTER --model dino_v3 --finetune_seed 0 --launch.priority=high
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/dinov3/dino_v3_launch.py --cluster $CLUSTER --model dino_v3 --finetune_seed 1234
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/dinov3/dino_v3_launch.py --cluster $CLUSTER --model dino_v3 --finetune_seed 42
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/dinov3/dino_v3_launch.py --cluster $CLUSTER --model dino_v3 --finetune_seed 0
 
 # Anysat
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/anysat/anysat_launch.py --cluster $CLUSTER --model anysat --finetune_seed 0
@@ -58,6 +58,26 @@ $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/mode
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 0 --launch.priority=high
 
 # Galileo
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo --finetune_seed 1234 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo --finetune_seed 42 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo --finetune_seed 0 --launch.priority=high
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo --finetune_seed 1234
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo --finetune_seed 42
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo --finetune_seed 0
+
+# Clay
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/clay/clay_launch.py --cluster $CLUSTER --model clay --finetune_seed 1234 --launch.priority=high
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/clay/clay_launch.py --cluster $CLUSTER --model clay --finetune_seed 42 --launch.priority=high
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/clay/clay_launch.py --cluster $CLUSTER --model clay --finetune_seed 0 --launch.priority=high
+
+# Prithvi V2
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 1234 --launch.priority=high
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 42 --launch.priority=high
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 0 --launch.priority=high
+
+# Terramind
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py --cluster $CLUSTER --model terramind --finetune_seed 1234
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py --cluster $CLUSTER --model terramind --finetune_seed 42
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py --cluster $CLUSTER --model terramind --finetune_seed 0
+
+# Terramind_large
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py --cluster $CLUSTER --model terramind_large --finetune_seed 1234
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py --cluster $CLUSTER --model terramind_large --finetune_seed 42
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py --cluster $CLUSTER --model terramind_large --finetune_seed 0
