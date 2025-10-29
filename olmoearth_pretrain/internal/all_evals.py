@@ -469,7 +469,7 @@ FT_EVAL_TASKS = {
     # ),
     "m_cashew_plant": DownstreamTaskConfig(
         dataset="m-cashew-plant",
-        ft_batch_size=8,
+        ft_batch_size=4,
         num_workers=4,
         pooling_type=PoolingType.MEAN,
         norm_stats_from_pretrained=False,
