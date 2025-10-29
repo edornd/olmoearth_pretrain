@@ -475,7 +475,7 @@ FT_EVAL_TASKS = {
         norm_stats_from_pretrained=False,
         norm_method=NormMethod.NORM_NO_CLIP_2_STD,
         epochs=50,
-        patch_size=8,
+        patch_size=16,
     ),
     # "m_forestnet": DownstreamTaskConfig(
     #     dataset="m-forestnet",
