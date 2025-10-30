@@ -9,7 +9,9 @@
   </a>
 </p>
 
-OlmoEarth is a a flexible, multi-modal, spatio-temporal family of foundation models for Earth Observations.
+The OlmoEarth models are a flexible, multi-modal, spatio-temporal family of foundation models for Earth Observations.
+
+The OlmoEarth models exist as part of the [OlmoEarth platform](https://allenai.org/olmoearth). The OlmoEarth Platform is an end-to-end solution for scalable planetary intelligence, providing everything needed to go from raw data through R&D, to fine-tuning and production deployment.
 
 ## Installation
 
@@ -51,6 +53,12 @@ The dataset can be downloaded [here](https://huggingface.co/datasets/allenai/olm
 
 Detailed instructions on how to pretrain your own OlmoEarth model are available in [Pretraining.md](docs/Pretraining.md).
 
-# Evaluations
+## Evaluations
 
 Detailed instructions on how to replicate our evaluations is available in #TODO.
+
+## Deploying OlmoEarth
+
+The OlmoEarth models exist as part of the [OlmoEarth platform](https://allenai.org/olmoearth). The OlmoEarth Platform is an end-to-end solution for scalable planetary intelligence, providing everything needed to go from raw data through R&D, to fine-tuning and production deployment.
+
+Examples of active OlmoEarth deployments are available at [`olmoearth_projects`](github.com/allenai/olmoearth_projects).
