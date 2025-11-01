@@ -55,9 +55,6 @@ $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.0
 $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name $PROJECT_NAME --module_path scripts/2025_10_02_phase2/nano.py --cluster $CLUSTER --finetune_seed 42
 $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name $PROJECT_NAME --module_path scripts/2025_10_02_phase2/nano.py --cluster $CLUSTER --finetune_seed 1234
 
-# Test local evaluation
-python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name 2025_11_01_test_local_evaluation --module_path scripts/archived/2025_10_02_phase2/nano.py --cluster local
-
 # Satlas
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 1234
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 42
@@ -159,3 +156,7 @@ python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmo
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix galileo_ps16_seed --finetune --get_test_metrics
 # AnySat ps16
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix anysat_ps16_seed --finetune --get_test_metrics
+
+# Test local evaluation
+python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name 2025_11_01_test_local_evaluation --module_path scripts/archived/2025_10_02_phase2/nano.py --cluster local --defaults_only
+python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py --project_name 2025_11_01_test_local_evaluation --model terramind --cluster local --defaults_only
