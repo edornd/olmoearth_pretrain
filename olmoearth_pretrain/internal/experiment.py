@@ -135,6 +135,7 @@ class OlmoEarthEvaluateConfig(Config):
     model: Config
     train_module: OlmoEarthTrainModuleConfig
     trainer: TrainerConfig
+    init_seed: int = 12536
 
 
 @dataclass
