@@ -321,6 +321,16 @@ class DownstreamEvaluator:
 
         return val_result, test_result
 
+    def _get_best_checkpoint_path(self) -> str:
+        """Get the best checkpoint path."""
+        best_checkpoint_path = os.path.join(
+            self.trainer.save_folder,
+            self.evaluation_name,
+            f"lr{self.ft_lr}",
+            "best.ckpt",
+        )
+        return best_checkpoint_path
+
     def _val_finetune(self) -> tuple[float, float]:
         """Validate the model using finetuning."""
         logger.info(f"Validating {self.dataset} with finetune")
@@ -359,13 +369,8 @@ class DownstreamEvaluator:
                 f"No patch size found for {self.dataset}, using patch size {self.patch_size}"
             )
 
-        # Skip task if best checkpoint path already exists
-        best_checkpoint_path = os.path.join(
-            self.trainer.save_folder,
-            self.evaluation_name,
-            f"lr{self.ft_lr}",
-            "best.ckpt",
-        )
+        # Skip task if best checkpoint already exists
+        best_checkpoint_path = self._get_best_checkpoint_path()
         if os.path.exists(best_checkpoint_path):
             logger.info("Best checkpoint already exists, skipping finetuning")
             return 0.0, 0.0
