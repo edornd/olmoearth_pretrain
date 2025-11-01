@@ -516,7 +516,7 @@ If running command on a local machine ie from a session, you can use the [b]loca
             inference_benchmarking_config_builder=inference_benchmarking_config_builder,
             overrides=overrides,
         )
-    elif cmd == SubCmd.evaluate:
+    elif cmd == SubCmd.evaluate or script == "olmoearth_pretrain/internal/all_evals.py":
         assert model_config_builder is not None
         assert trainer_config_builder is not None
         config = build_evaluate_config(
