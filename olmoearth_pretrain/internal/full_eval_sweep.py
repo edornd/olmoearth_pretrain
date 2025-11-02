@@ -349,7 +349,7 @@ def get_prithviv2_args(pretrained_normalizer: bool = True) -> str:
 def _get_sub_command(args: argparse.Namespace) -> str:
     """Determine the sub command based on args and cluster."""
     if args.dry_run:
-        return SubCmd.dry_run
+        return SubCmd.dry_run_evaluate
     # If cluster is local, we run eval locally, if not, we launch evaluation on beaker
     if args.cluster == "local":
         return SubCmd.evaluate

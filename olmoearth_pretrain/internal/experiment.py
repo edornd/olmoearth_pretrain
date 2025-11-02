@@ -377,6 +377,7 @@ class SubCmd(StrEnum):
     prep = "prep"
     launch_prep = "launch_prep"
     dry_run = "dry_run"
+    dry_run_evaluate = "dry_run_evaluate"
     visualize = "visualize"
     benchmark = "benchmark"
     launch_benchmark = "launch_benchmark"
@@ -417,7 +418,7 @@ class SubCmd(StrEnum):
 
         if self == SubCmd.launch or self == SubCmd.launch_evaluate:
             launch(config)
-        elif self == SubCmd.dry_run:
+        elif self == SubCmd.dry_run or self == SubCmd.dry_run_evaluate:
             logger.info(config)
         elif self == SubCmd.visualize:
             seed_all(config.init_seed)
@@ -519,7 +520,11 @@ If running command on a local machine ie from a session, you can use the [b]loca
             inference_benchmarking_config_builder=inference_benchmarking_config_builder,
             overrides=overrides,
         )
-    elif cmd == SubCmd.evaluate or cmd == SubCmd.launch_evaluate:
+    elif (
+        cmd == SubCmd.evaluate
+        or cmd == SubCmd.launch_evaluate
+        or cmd == SubCmd.dry_run_evaluate
+    ):
         # Evaluation mode
         assert model_config_builder is not None
         assert trainer_config_builder is not None

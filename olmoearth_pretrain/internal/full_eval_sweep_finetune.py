@@ -233,7 +233,7 @@ def _resolve_module_path(args: argparse.Namespace, selected_preset: str | None) 
 def _get_sub_command(args: argparse.Namespace) -> str:
     """Get the sub command."""
     if args.dry_run:
-        return SubCmd.dry_run
+        return SubCmd.dry_run_evaluate
     # If cluster is local, we run eval locally, if not, we launch evaluation on beaker
     if args.cluster == "local":
         return SubCmd.evaluate
