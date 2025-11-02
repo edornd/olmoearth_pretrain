@@ -217,7 +217,6 @@ def build_evaluate_config(
     logger.info("Common overrides: %s", common_overrides)
     common = common.merge(common_overrides)
     logger.info("Common: %s", common)
-    logger.info("Overrides: %s", overrides)
     model_config = model_config_builder(common)
     trainer_config = trainer_config_builder(common)
     config = OlmoEarthEvaluateConfig(

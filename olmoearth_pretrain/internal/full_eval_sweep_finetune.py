@@ -290,7 +290,7 @@ def _format_launch_command(
         "--trainer.max_duration.value=10000000",
         "--trainer.max_duration.unit=steps",
     ]
-    if sub_command != SubCmd.evaluate:
+    if cluster != "local":
         parts.extend(
             [
                 "--launch.priority=urgent",
