@@ -54,8 +54,6 @@ BAND_STATS = {
 class BreizhCropsDataset(Dataset):
     """The Breizhcrops dataset."""
 
-    is_active: bool
-
     def __init__(
         self,
         path_to_splits: Path,
@@ -86,20 +84,14 @@ class BreizhCropsDataset(Dataset):
         """
         global breizhcrops
         if breizhcrops is None:
-            try:
+            if self.is_active():
                 # breizhcrops==0.0.4.1 must be explictly imported
                 # for this eval to run.
                 import breizhcrops
                 from breizhcrops import BreizhCrops
                 from breizhcrops.datasets.breizhcrops import SELECTED_BANDS
 
-                self.is_active = True
-
-            except ImportError:
-                self.is_active = False
-                logger.info(
-                    "breizhcrops package not available. The Breizhcrops eval will be skipped."
-                )
+            else:
                 return None
 
         self.bc_selected_bands = SELECTED_BANDS
@@ -159,6 +151,19 @@ class BreizhCropsDataset(Dataset):
             from olmoearth_pretrain.data.normalize import Normalizer, Strategy
 
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+
+    @staticmethod
+    def is_active() -> bool:
+        """Check if the breizhcrops package is present in the environment."""
+        try:
+            import breizhcrops  # noqa
+
+            return True
+        except ImportError:
+            logger.info(
+                "breizhcrops package not available. The Breizhcrops eval will be skipped."
+            )
+            return False
 
     @staticmethod
     def _get_norm_stats(

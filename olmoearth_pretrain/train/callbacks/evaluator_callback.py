@@ -20,6 +20,7 @@ from olmoearth_pretrain.data.constants import Modality
 from olmoearth_pretrain.evals.datasets import (
     EvalDatasetPartition,
     get_eval_dataset,
+    is_dataset_active,
 )
 from olmoearth_pretrain.evals.datasets.configs import (
     EvalDatasetConfig,
@@ -118,10 +119,7 @@ class DownstreamEvaluator:
         self.device = device
         # Add all task attributes to self
         self.dataset = task.dataset
-        # datasets can have an "is_active" attribute. if its false, we
-        # should skip it. We assume its true by default. Currently (20251103)
-        # this only applies to Breizhcrops
-        self.is_dataset_active = getattr(self.dataset, "is_active", True)
+        self.is_dataset_active = is_dataset_active(self.dataset)
         self.embedding_batch_size = task.embedding_batch_size
         self.num_workers = task.num_workers
         self.pooling_type = task.pooling_type
