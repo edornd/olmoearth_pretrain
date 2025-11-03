@@ -205,8 +205,6 @@ class MockOlmoEarthDataLoader(DataLoaderBase):
             dp_rank=0,
             fs_local_rank=0,
         )
-        self.min_patch_size = 1
-        self.max_patch_size = 8
         self._seed = 42
         self._epoch = 0
 

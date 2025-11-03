@@ -125,14 +125,14 @@ Remove `--dry_run` once the command looks correct. Pick the launch target you ne
 
 ## KNN / Linear Probing
 
-Use this script for KNN and linear probing evaluations. Invoke it either through `python -m olmoearth_pretrain.internal.full_eval_sweep` or by running the file directly.
+Use `olmoearth_pretrain/internal/full_eval_sweep.py` for KNN and linear probing tasks.
 
 ### Required flags
 
-- `--cluster`: Cluster identifier (`local` for on-box runs).
+- `--cluster`: Cluster identifier (`local` for local runs, clusters are only avaiavle to Ai2 internal users).
 - Exactly one of:
-  - `--checkpoint_path=~/Downloads/OlmoEarth-v1-Base`: Evaluate an OlmoEarth checkpoint.
-  - `--model=<baseline_name>` or `--model=all`: Evaluate published baseline models defined in [`evals/models`](../olmoearth_pretrain/evals/models).
+  - `--checkpoint_path`: Passing OlmoEarth checkpoint.
+  - `--model=<baseline_name>` or `--model=all`: Evaluate baseline models defined in [`evals/models`](../olmoearth_pretrain/evals/models).
 
 ### Common optional flags
 
@@ -152,13 +152,13 @@ When `--model=all`, the script automatically switches to the correct launcher fo
 
 ## Finetune Sweep
 
-Use `olmoearth_pretrain/internal/full_eval_sweep_finetune.py` for downstream fine-tuning tasks. It shares many flags with the KNN and linear probing sweep but adds fine-tune–specific knobs.
+Use `olmoearth_pretrain/internal/full_eval_sweep_finetune.py` for fine-tuning tasks.
 
 ### Required flags
 
-- `--cluster`: Cluster identifier.
+- `--cluster`: Cluster identifier (`local` for local runs, clusters are only avaiavle to Ai2 internal users).
 - One of:
-  - `--checkpoint_path=~/Downloads/OlmoEarth-v1-Base`: Fine-tune an OlmoEarth checkpoint.
+  - `--checkpoint_path`: Fine-tune an OlmoEarth checkpoint.
   - `--model=<preset_key>`: Use a baseline preset (choices listed in the script’s help).
 
 ### Fine-tune specific flags
@@ -166,22 +166,17 @@ Use `olmoearth_pretrain/internal/full_eval_sweep_finetune.py` for downstream fin
 - `--defaults_only`: Run only the first learning rate in `FT_LRS`.
 - `--module_path`: Override the launch script (defaults to the preset’s launcher).
 - `--use_dataset_normalizer`: Force dataset statistics even when a preset ships its own pretrained normalizer. Leave unset to keep the pretrained normalizer.
-- `--finetune_seed`: Apply a single base seed across every downstream task (otherwise each task chooses its own default).
-- Extra CLI arguments append to every command (e.g. `--trainer.max_duration.value=50000`).
-- `--dry_run`: Preview commands (`dry_run_evaluate`).
-
-The script sets `FINETUNE=1` in the environment before launching so downstream code enables fine-tuning heads automatically.
-
-Launch behavior mirrors the linear-probe sweep: `--cluster=local` runs `evaluate`, any other cluster uses `launch_evaluate`.
+- `--finetune_seed`: Apply a single base seed across every downstream task.
+- `--dry_run`: Print commands without launching (`dry_run_evaluate`).
 
 ### Example: Local OlmoEarth sanity check
 
 ```bash
 python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
   --cluster=local \
-  --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
-  --module_path=scripts/2025_10_02_phase2/base.py \
-  --project_name=2025_11_15_local_sanity \
+  --checkpoint_path=/your/path/to/OlmoEarth-v1-Base \
+  --module_path=scripts/official/base.py \
+  --project_name=OlmoEarth_evals \
   --defaults_only \
   --dry_run
 ```
@@ -191,9 +186,9 @@ python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
 ```bash
 python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
   --cluster=ai2/titan \
-  --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
-  --module_path=scripts/2025_10_02_phase2/base.py \
-  --project_name=2025_11_15_phase2_finetune \
+  --checkpoint_path=/your/path/to/OlmoEarth-v1-Base \
+  --module_path=scripts/official/base.py \
+  --project_name=OlmoEarth_evals \
   --finetune_seed=42
 ```
 
@@ -201,32 +196,25 @@ python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
 
 ```bash
 python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
-  --cluster=ai2/saturn-cirrascale \
+  --cluster=local \
   --model=terramind \
-  --project_name=2025_11_15_baseline_comparison \
+  --project_name=Baseline_evals \
   --use_dataset_normalizer \
   --defaults_only
 ```
-
-For a local sanity check, add `--cluster=local --dry_run` first, then drop `--dry_run` to execute on your workstation.
 
 ---
 
 ## Monitoring & Outputs
 
 - **W&B logging:** Both scripts default to `EVAL_WANDB_PROJECT`. Override with `--project_name` or disable W&B via `--trainer.callbacks.wandb.enabled=False`.
-- **Checkpoints:** Evaluation launches set `--trainer.no_checkpoints=True` for baseline models so runs do not write new checkpoints. OlmoEarth checkpoints keep checkpointing enabled by default.
-- **Run names:** Generated from the checkpoint directory (`<run>/<step>`) or baseline name plus the swept hyperparameters to simplify aggregation.
 - **Inspecting results:** Use [`scripts/get_max_eval_metrics_from_wandb.py`](../scripts/get_max_eval_metrics_from_wandb.py) to pull the best MIoU/accuracy per task across runs.
-- **Dry run safety:** Always start with `--dry_run` when editing sweeps or passing overrides—command strings can be long and the dry run verifies the generated arguments.
 
 ---
 
 ## Helpful Files
 
-- [`internal/all_evals.py`](../olmoearth_pretrain/internal/all_evals.py): Lists frozen and fine-tune tasks, feature extractor settings, and metric names.
-- [`evals/models`](../olmoearth_pretrain/evals/models): Launcher modules and wrappers for baseline models.
-- [`evals/datasets/configs.py`](../olmoearth_pretrain/evals/datasets/configs.py): Dataset configs used when constructing evaluation commands.
-- [`docs/Pretraining.md`](Pretraining.md): Shared environment setup; refer back if you need to rebuild Docker images or install dependencies.
-
-Happy evaluating! Let the team know in `#olmoearth` if new baselines or tasks need presets added to the sweep scripts.
+- [`evals/models`](../olmoearth_pretrain/evals/models): Baseline models and their launchers.
+- [`evals/eval_wrapper.py`](../olmoearth_pretrain/evals/eval_wrapper.py): Eval wrapper contract to be able to run evals on various models.
+- [`evals/datasets`](../olmoearth_pretrain/evals/datasets/): Dataset loaders and shared dataset utils.
+- [`evals/datasets/configs.py`](../olmoearth_pretrain/evals/datasets/configs.py): Dataset definitions (paths, splits, normalization) used to build commands.
