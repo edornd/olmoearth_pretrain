@@ -31,23 +31,23 @@ This guide explains how we launch evaluations for OlmoEarth checkpoints and base
 We run evaluations through the same `olmoearth_pretrain/internal/experiment.py` entrypoint used for pretraining. The helper scripts below build the underlying launch commands:
 
 - `olmoearth_pretrain/internal/full_eval_sweep.py` runs KNN (classification) and linear probing (segmentation) sweeps for OlmoEarth checkpoints or baseline models, with optional sweeps over learning rate, pretrained/dataset normalizers, and pooling (mean or max).
-- `olmoearth_pretrain/internal/full_eval_sweep_finetune.py` runs fine-tuning sweeps for OlmoEarth checkpoints or baseline models, with optional sweeps over learning rate, and pretrained/dataset normalizers.
+- `olmoearth_pretrain/internal/full_eval_sweep_finetune.py` runs fine-tuning sweeps for OlmoEarth checkpoints or baseline models, with optional sweeps over learning rate and pretrained/dataset normalizers.
 
-Both scripts rely on:
-- [`olmoearth_pretrain/internal/all_evals.py`](../olmoearth_pretrain/internal/all_evals.py) for the task registry (`EVAL_TASKS` for KNN and learning probing, and `FT_EVAL_TASKS` for fine-tuning).
-- [`olmoearth_pretrain/evals`](../olmoearth_pretrain/evals) for dataset/model wrappers.
+Both scripts use:
+- [`olmoearth_pretrain/internal/all_evals.py`](../olmoearth_pretrain/internal/all_evals.py) for the task registry (`EVAL_TASKS` for KNN and linear probing, and `FT_EVAL_TASKS` for fine-tuning).
+- [`olmoearth_pretrain/evals`](../olmoearth_pretrain/evals) for dataset and model wrappers.
 
-Every launch uses the evaluation subcommands from `experiment.py`:
+Every launch uses one of the evaluation subcommands in `experiment.py`:
 - `dry_run_evaluate` prints the config (no execution) for quick checks.
-- `evaluate` runs evaluation job locally.
-- `launch_evaluate` submits evaluation job to Beaker.
+- `evaluate` runs the job locally.
+- `launch_evaluate` submits the job to Beaker.
 
-The sweep scripts set `TRAIN_SCRIPT_PATH` automatically and choose `torchrun` for local runs and `python3` for Beaker jobs.
+The sweep scripts set `TRAIN_SCRIPT_PATH` automatically and select `torchrun` for local runs and `python3` for Beaker jobs.
 
 ### Prerequisites
 
 - Python environment configured as described in [Pretraining.md](Pretraining.md#environment-setup).
-- One 80 GB GPU (A100 or H100 recommended). If you see OOM errors when running some tasks, consider reducing the fine-tuning batch size by passing the override `--TASK_NAME.ft_batch_size`.
+- One 80 GB GPU (A100 or H100 recommended). If you see OOM errors when running some tasks, consider reducing the fine-tuning batch size via the override `--TASK_NAME.ft_batch_size`.
 
 ### Supported Models
 
@@ -56,21 +56,22 @@ The sweep scripts set `TRAIN_SCRIPT_PATH` automatically and choose `torchrun` fo
 
 ---
 
-## Assets & Paths
+## Datasets & Model Checkpoints
 
 - **Evaluation datasets**
-  - *Internal*: All datasets live on Weka; the defaults in [`evals/datasets/paths.py`](../olmoearth_pretrain/evals/datasets/paths.py) point to shared mounts.
-  - *External*: Download from `gs://ai2-olmoearth-projects-public-data/research_benchmarks` (e.g. with `gsutil -m rsync`). Update the same `paths.py` file or override the environment variables (`GEOBENCH_DIR`, `CROPHARVEST_DIR`, etc.) so the loaders can resolve local copies.
+  - *Internal*: All datasets live on Weka, the defaults in [`evals/datasets/paths.py`](../olmoearth_pretrain/evals/datasets/paths.py) point to shared mounts.
+  - *External*: Follow the download instructions in [Pretraining.md](Pretraining.md#evaluation-datasets).
 - **OlmoEarth checkpoints**
-  - Clone the release repos from Hugging Face, e.g.:
+  - *Internal*: All checkpoints live on Weka.
+  - *External*: Clone the release repos from Hugging Face, e.g.:
     ```bash
     git clone git@hf.co:allenai/OlmoEarth-v1-Nano
     git clone git@hf.co:allenai/OlmoEarth-v1-Tiny
     git clone git@hf.co:allenai/OlmoEarth-v1-Base
     git clone git@hf.co:allenai/OlmoEarth-v1-Large
     ```
-  - Pass the desired checkpoint directory via `--checkpoint_path` when invoking the sweeps (or set it inside your finetune/LP launch scripts).
-- **Baselines**: When using `--model=<name>`, the sweeps download/load checkpoints through the model wrappers; no extra setup required beyond dataset paths.
+  - Pass the desired checkpoint directory via `--checkpoint_path` when running the evaluation sweeps.
+- **Baselines**: When using `--model=<name>`, the sweeps download/load checkpoints through the model wrappers, no extra setup required beyond dataset paths.
 
 ---
 
