@@ -88,7 +88,7 @@ source .venv-olmoearth_pretrain/bin/activate
 ```bash
 python -m olmoearth_pretrain.internal.full_eval_sweep \
   --cluster=local \
-  --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
+  --checkpoint_path=/your/path/to/OlmoEarth-v1-Base \
   --defaults_only \
   --dry_run
 ```
@@ -97,26 +97,28 @@ This prints the exact command that would run inside `experiment.py dry_run_evalu
 
 ### 3. Launch for real
 
-Remove `--dry_run` once the command looks correct. The helper picks the right subcommand for you:
+Remove `--dry_run` once the command looks correct. Pick the launch target you need:
 
 - **Local GPUs (`--cluster=local`)**
 
   ```bash
   python -m olmoearth_pretrain.internal.full_eval_sweep \
     --cluster=local \
-    --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
-    --module_path=scripts/2025_10_02_phase2/base.py \
+    --checkpoint_path=/your/path/to/OlmoEarth-v1-Base \
+    --module_path=scripts/official/base.py \
+    --project_name=OlmoEarth_evals \
     --defaults_only
   ```
 
-- **Beaker (`--cluster=<ai2 cluster>`)**
+- **Beaker (`--cluster=<ai2 cluster>`, internal only)**
 
   ```bash
   python -m olmoearth_pretrain.internal.full_eval_sweep \
-    --cluster=ai2/saturn-cirrascale \
-    --model=dino_v3 \
-    --project_name=2025_10_eval_comparison \
-    --lr_only
+    --cluster=ai2/jupiter \
+    --checkpoint_path=/your/path/to/OlmoEarth-v1-Base \
+    --module_path=scripts/official/base.py \
+    --project_name=OlmoEarth_evals \
+    --defaults_only
   ```
 
 ---
