@@ -63,7 +63,7 @@ Additionally, [`olmoearth_projects`](https://github.com/allenai/olmoearth_projec
 
 ## Data Summary
 
-Our pretraining dataset contains around 285,288 samples from around the world of 2.56km×2.56km regions, although many samples contain only a subset of the timesteps and modalities.
+Our pretraining dataset contains 285,288 samples from around the world of 2.56km×2.56km regions, although many samples contain only a subset of the timesteps and modalities.
 
 The distribution of the samples is available below:
 
