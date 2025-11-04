@@ -80,3 +80,7 @@ Detailed instructions on how to pretrain your own OlmoEarth model are available 
 ## Evaluations
 
 Detailed instructions on how to replicate our evaluations is available in [Evaluation.md](docs/Evaluation.md).
+
+## License
+
+This code is licensed under the [OlmoEarth Artifact License](LICENSE).
