@@ -59,7 +59,7 @@ We also have several more in-depth tutorials for computing OlmoEarth embeddings 
 - [Computing Embeddings using OlmoEarth](https://github.com/allenai/rslearn/blob/master/docs/examples/OlmoEarthEmbeddings.md)
 - [Fine-tuning OlmoEarth in rslearn](https://github.com/allenai/rslearn/blob/master/docs/examples/FinetuneOlmoEarth.md)
 
-Additionally, [`olmoearth_projects`](github.com/allenai/olmoearth_projects) has several examples of active OlmoEarth deployments.
+Additionally, [`olmoearth_projects`](https://github.com/allenai/olmoearth_projects) has several examples of active OlmoEarth deployments.
 
 ## Data Summary
 
