@@ -63,7 +63,7 @@ Additionally, [`olmoearth_projects`](github.com/allenai/olmoearth_projects) has 
 
 ## Data Summary
 
-Our pretraining dataset contains around 300,000 samples from around the world of 2.56km×2.56km regions, although many samples contain only a subset of the timesteps and modalities.
+Our pretraining dataset contains around 285,288 samples from around the world of 2.56km×2.56km regions, although many samples contain only a subset of the timesteps and modalities.
 
 The distribution of the samples is available below:
 
@@ -71,7 +71,7 @@ The distribution of the samples is available below:
 
 The dataset can be downloaded [here](https://huggingface.co/datasets/allenai/olmoearth_pretrain_dataset).
 
-Detailed instructions on how to make your own pretraining dataset are available in [the dataset README](olmoearth_pretrain/dataset_creation/README.md).
+Detailed instructions on how to make your own pretraining dataset are available in [the dataset README](docs/Dataset-Creation.md).
 
 ## Training scripts
 
@@ -79,7 +79,10 @@ Detailed instructions on how to pretrain your own OlmoEarth model are available 
 
 ## Evaluations
 
-Detailed instructions on how to replicate our evaluations is available in [Evaluation.md](docs/Evaluation.md).
+Detailed instructions on how to replicate our evaluations is available here:
+
+- [Evaluations on Research Benchmarks](docs/Evaluation.md)
+- [Evaluations on Partner Tasks](https://github.com/allenai/rslearn_projects/blob/master/rslp/olmoearth_evals/README.md)
 
 ## License
 
