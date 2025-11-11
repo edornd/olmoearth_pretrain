@@ -82,6 +82,8 @@ def flops_per_model(model, samples: list[MaskedOlmoEarthSample, int, bool]) -> f
         elif isinstance(model, AnySat):
             inputs = (i, PoolingType.MEAN, spatial_pool)
             model.patch_size = min(i.sentinel2_l2a.shape[1], 4)
+        else:
+            inputs = (i,)
         with suppress_stdout():
             macs, _ = profile(model, inputs=inputs)
         for _ in range(multiplier):
