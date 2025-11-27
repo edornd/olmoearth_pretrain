@@ -1,5 +1,5 @@
 # Script to deploy OlmoEarth docker container
-# Has to be run from olmoearth_pretrain root directory: sh scripts/inference/deploy.sh
+# Has to be run from olmoearth_pretrain root directory: sh scripts/tools/cloud_run/deploy.sh
 set -e
 GCLOUD_PROJECT="ai2-ivan"
 REGION="us-central1"
