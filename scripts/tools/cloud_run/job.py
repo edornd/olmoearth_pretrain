@@ -44,10 +44,10 @@ computed = Normalizer(Strategy.COMPUTED)
 predefined = Normalizer(Strategy.PREDEFINED)
 
 class OlmoEarthGEEDataset(Dataset):
-    """Dataset for iterating through Google Earth Engine based geotiff file"""
+    """Dataset for iterating through Google Earth Engine based geotiff file."""
     
     def __init__(self, tif_path, timestamps):
-        """Initializes dataset from a Google Earth Engine based geotiff file"""
+        """Initializes dataset from a Google Earth Engine based geotiff file."""
         profile, input_dict = self._read_geotiff(tif_path, timestamps)
         self.profile = profile
         self.tensors = {
@@ -90,17 +90,17 @@ class OlmoEarthGEEDataset(Dataset):
         return profile, input_dict
 
     def __len__(self):
-        """Returns amount of pixels in geotiff file"""
+        """Returns amount of pixels in geotiff file."""
         return self.profile["width"] * self.profile["height"]
 
     def __getitem__(self, idx):
-        """Returns single pixel of data"""
+        """Returns single pixel of data."""
         sample = {k: v[idx] for k, v in self.tensors.items()}
         return sample
 
     
 def run_inference_on_tile(tile, timestamps):
-    """Runs inference on all pixels in a tile"""
+    """Runs inference on all pixels in a tile."""
     print(tile)
     print(f"\n\tDownloading input data ...\t", end="")
     start = time.perf_counter()
@@ -177,7 +177,7 @@ def run_inference_on_tile(tile, timestamps):
     Path("out.tif").unlink()
 
 def to_date_obj(d): 
-    "Converts date string to date object"
+    "Converts date string to date object."
     return dt.strptime(d, "%Y-%m-%d").date()
 
 if __name__ == "__main__":
