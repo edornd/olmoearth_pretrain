@@ -26,11 +26,22 @@ BATCH_SIZE = 128 * 128
 BANDS = {
     # Matches Modality.SENTINEL1.band_order: ['vv', 'vh']
     "sentinel1": ["VV", "VH"],
-
     # Matches Modality.SENTINEL2_L2A.band_order
     # ['B02', 'B03', 'B04', 'B08', 'B05', 'B06', 'B07', 'B8A', 'B11', 'B12', 'B01', 'B09']
-    "sentinel2": ["B2", "B3", "B4", "B8", "B5", "B6", "B7", "B8A", "B11", "B12", "B1", "B9"],
-    
+    "sentinel2": [
+        "B2",
+        "B3",
+        "B4",
+        "B8",
+        "B5",
+        "B6",
+        "B7",
+        "B8A",
+        "B11",
+        "B12",
+        "B1",
+        "B9",
+    ],
     # Matches Modality.LANDSAT.band_order
     # ['B8', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B9', 'B10', 'B11']
     "landsat": ["B8", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9", "B10", "B11"],
