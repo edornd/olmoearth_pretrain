@@ -1,6 +1,7 @@
 """Compute sample entropy."""
 
 import csv
+import random
 from typing import Any
 
 import h5py
@@ -60,10 +61,11 @@ def compute_histogram_entropy(modality_name: str, modality: np.ndarray) -> float
 
 
 if __name__ == "__main__":
+    NUM_FILES_TO_PROCESS = 100000
     path_to_h5s = UPath(
         "/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_zstd_3_128_x_4/cdl_gse_landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcereal_worldcover_worldpop_wri_canopy_height_map/1138828"
     )
-    save_filepath = UPath("sample_diversity_output.csv")
+    save_filepath = UPath(f"sample_diversity_output_{NUM_FILES_TO_PROCESS}.csv")
     h5s_to_process = list(path_to_h5s.glob("*.h5"))
     print(f"Processing {len(h5s_to_process)} files")
 
@@ -74,8 +76,8 @@ if __name__ == "__main__":
         with open(save_filepath, "w", newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=FIELDS)
             writer.writeheader()
-
-    for h5_file in tqdm(h5s_to_process):
+    random.shuffle(h5s_to_process)
+    for h5_file in tqdm(h5s_to_process[:NUM_FILES_TO_PROCESS]):
         if h5_file.name in done_files:
             continue
         elif h5_file.name == "normalizing_dict.h5":
