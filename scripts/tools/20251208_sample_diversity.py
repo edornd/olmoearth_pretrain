@@ -5,6 +5,7 @@ import random
 from typing import Any
 
 import h5py
+import hdf5plugin  # noqa
 import numpy as np
 import pandas as pd
 from scipy.stats import entropy
@@ -62,9 +63,10 @@ def compute_histogram_entropy(modality_name: str, modality: np.ndarray) -> float
 
 if __name__ == "__main__":
     NUM_FILES_TO_PROCESS = 100000
-    path_to_h5s = UPath(
-        "/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_zstd_3_128_x_4/cdl_gse_landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcereal_worldcover_worldpop_wri_canopy_height_map/1138828"
-    )
+    # path_to_h5s = UPath(
+    #     "/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_zstd_3_128_x_4/cdl_gse_landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcereal_worldcover_worldpop_wri_canopy_height_map/1138828"
+    # )
+    path_to_h5s = UPath(".")
     save_filepath = UPath(f"sample_diversity_output_{NUM_FILES_TO_PROCESS}.csv")
     h5s_to_process = list(path_to_h5s.glob("*.h5"))
     print(f"Processing {len(h5s_to_process)} files")
