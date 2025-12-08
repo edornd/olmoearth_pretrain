@@ -11,7 +11,6 @@ from tqdm import tqdm
 from upath import UPath
 
 from olmoearth_pretrain.data.constants import MISSING_VALUE, Modality
-from olmoearth_pretrain.dataset.convert_to_h5py import ConvertToH5py
 
 # lets start with these two modalities for now
 MODALITIES = ["sentinel2_l2a", "worldcover"]
@@ -40,21 +39,6 @@ def read_h5_file(h5_file_path: UPath) -> dict[str, Any]:
                     sample_dict[Modality.WORLDCOVER.name]
                 )
 
-            if (
-                missing_mask_group_name
-                := ConvertToH5py.missing_timesteps_mask_group_name
-            ) in h5file:
-                missing_timesteps_masks = {
-                    k: v[()]
-                    for k, v in h5file[missing_mask_group_name].items()
-                    if k in MODALITIES
-                }
-            else:
-                # To preserve backwards compatibility, we set missing_timesteps_masks to an empty dict if it doesn't exist in file
-                missing_timesteps_masks = {}
-            for key, val in missing_timesteps_masks.items():
-                if key in sample_dict:
-                    sample_dict[key] = sample_dict[key][:, :, val, :]
     return sample_dict
 
 
