@@ -5,7 +5,7 @@ import random
 from typing import Any
 
 import h5py
-import hdf5plugin  # noqa
+import hdf5plugin  # noqa: F401
 import numpy as np
 import pandas as pd
 from scipy.stats import entropy
