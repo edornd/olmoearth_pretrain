@@ -80,11 +80,14 @@ if __name__ == "__main__":
             continue
         elif h5_file.name == "normalizing_dict.h5":
             continue
-        sample_dict = read_h5_file(h5_file)
-        output = {"filename": h5_file.name}
-        for key, val in sample_dict.items():
-            output[key] = compute_histogram_entropy(key, val)
+        try:
+            sample_dict = read_h5_file(h5_file)
+            output = {"filename": h5_file.name}
+            for key, val in sample_dict.items():
+                output[key] = compute_histogram_entropy(key, val)
 
-        with open(save_filepath, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=FIELDS)
-            writer.writerow(output)
+            with open(save_filepath, "a", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=FIELDS)
+                writer.writerow(output)
+        except Exception as e:
+            print(e)
