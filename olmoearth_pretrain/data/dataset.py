@@ -639,6 +639,7 @@ class OlmoEarthDataset(Dataset):
         self.sample_indices: np.ndarray | None = None
         self.latlon_distribution: np.ndarray | None = None
         self.apply_cutmix = apply_cutmix
+        self.filter_idx_file = filter_idx_file
         if filter_idx_file is not None:
             self.indices_to_filter = np.load(filter_idx_file)
         else:
@@ -679,11 +680,16 @@ class OlmoEarthDataset(Dataset):
 
         tile_path = self.h5py_dir.parent.parent.parent
 
+        if self.filter_idx_file is not None:
+            filter_file_string = f",filter_idx_file={self.filter_idx_file}"
+        else:
+            filter_file_string = ""
+
         sha256_hash.update(
             f"tile_path={tile_path},"
             f"supported_modalities={sorted(supported_modalities)},"
             f"sample_size={num_samples},"
-            f"dtype={self.dtype}".encode()
+            f"dtype={self.dtype}{filter_file_string}".encode()
         )
         return sha256_hash.hexdigest()
 
