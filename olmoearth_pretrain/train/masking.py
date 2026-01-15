@@ -1599,6 +1599,80 @@ class RandomFixedModalityMaskingStrategy(FixedModalityMaskingStrategy):
         )
 
 
+@MASKING_STRATEGY_REGISTRY.register("random_with_decode")
+class RandomWithDecodeMaskingStrategy(MaskingStrategy):
+    """Random masking strategy except for decode modalities, which only get decoded."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+        only_decode_modalities: list[str] = [],
+    ):
+        """Random masking strategy except for decode modalities, which only get decoded."""
+        self._encode_ratio = encode_ratio
+        self._decode_ratio = decode_ratio
+        self.only_decode_modalities = only_decode_modalities
+
+    def apply_mask(
+        self, batch: OlmoEarthSample, patch_size: int | None = None, **kwargs: Any
+    ) -> MaskedOlmoEarthSample:
+        """Apply masking to the input data."""
+        if patch_size is None:
+            raise ValueError("patch_size must be provided for random masking")
+        output_dict: dict[str, ArrayTensor | None] = {}
+        for modality_name in batch.modalities:
+            instance = getattr(batch, modality_name)
+            if instance is None:
+                # set instance and mask to None
+                output_dict[modality_name] = None
+                output_dict[
+                    MaskedOlmoEarthSample.get_masked_modality_name(modality_name)
+                ] = None
+            elif modality_name == "timestamps":
+                output_dict[modality_name] = instance
+                continue
+            else:
+                if isinstance(instance, torch.Tensor):
+                    device: torch.device | None = instance.device
+                else:
+                    device = None
+                modality = Modality.get(modality_name)
+
+                mask_shape = instance.shape[:-1] + (len(modality.band_sets),)
+                if modality.name in self.only_decode_modalities:
+                    # if its a decode only modality, we will decode every token that isn't missing
+                    mask = (
+                        torch.ones(mask_shape, device=device).long()
+                        * MaskValue.DECODER.value
+                    )
+                    mask = self.fill_mask_with_missing_values(instance, mask, modality)
+                    output_dict[modality_name] = instance
+                    output_dict[
+                        MaskedOlmoEarthSample.get_masked_modality_name(modality_name)
+                    ] = mask
+                else:
+                    # because of the missing values, we will need to iterate through every instance in the batch
+                    mask = (
+                        torch.ones(mask_shape, device=device).long()
+                        * MaskValue.DECODER.value
+                    )
+                    mask = self.fill_mask_with_missing_values(instance, mask, modality)
+                    for sample_idx in range(mask.shape[0]):
+                        mask[sample_idx : sample_idx + 1] = self._random_fill_unmasked(
+                            mask[sample_idx : sample_idx + 1],
+                            modality,
+                            patch_size,
+                            self.encode_ratio,
+                            self.decode_ratio,
+                        )
+                    output_dict[modality_name] = instance
+                    output_dict[
+                        MaskedOlmoEarthSample.get_masked_modality_name(modality_name)
+                    ] = mask
+        return MaskedOlmoEarthSample(**output_dict)
+
+
 @dataclass
 class MaskingConfig(Config):
     """Configuration for masking strategies.

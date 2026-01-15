@@ -14,6 +14,7 @@ from olmoearth_pretrain.train.masking import (
     ModalityCrossSpaceMaskingStrategy,
     RandomMaskingStrategy,
     RandomRangeMaskingStrategy,
+    RandomWithDecodeMaskingStrategy,
     SpaceMaskingStrategy,
     TimeMaskingStrategy,
 )
@@ -1436,3 +1437,154 @@ class TestModalityCrossMaskingStrategy:
             for encoded_decoded_tuple in encoded_decoded_bandsets
         }
         assert counts == {2, 3, 4, 5}
+
+
+def test_random_decode_masking_with_missing_modality_mask() -> None:
+    """Test RandomWithDecodeMaskingStrategy with missing_modalities_masks."""
+    b, h, w, t = 10, 16, 16, 8
+
+    days = torch.randint(1, 31, (b, t, 1), dtype=torch.long)
+    months = torch.randint(1, 13, (b, t, 1), dtype=torch.long)
+    years = torch.randint(2018, 2020, (b, t, 1), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
+    # Include all modalities but mark some sentinel1 samples as missing
+    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
+    sentinel1_num_bands = Modality.SENTINEL1.num_bands
+    worldcover_num_bands = Modality.WORLDCOVER.num_bands
+    latlon_num_bands = Modality.LATLON.num_bands
+
+    # Create a missing mask for sentinel1 where half the batch is missing
+    sentinel1 = torch.ones((b, h, w, t, sentinel1_num_bands))
+    sentinel1[b // 2 :] = MISSING_VALUE
+
+    # Create the OlmoEarthSample with missing_modalities_masks
+    batch = OlmoEarthSample(
+        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
+        sentinel1=sentinel1,
+        latlon=torch.ones((b, latlon_num_bands)),
+        timestamps=timestamps,
+        worldcover=torch.ones((b, h, w, worldcover_num_bands)),
+    )
+
+    # Test the RandomMaskingStrategy
+    encode_ratio, decode_ratio = 0.25, 0.5
+    strategy = RandomWithDecodeMaskingStrategy(
+        encode_ratio=encode_ratio,
+        decode_ratio=decode_ratio,
+        only_decode_modalities=["worldcover"],
+    )
+
+    for patch_size in [1, 2, 4]:
+        # Apply masking
+        masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
+
+        # first, lets check that worldcover is all decode only
+        assert isinstance(masked_sample.worldcover_mask, torch.Tensor)
+        assert (masked_sample.worldcover_mask == MaskValue.DECODER.value).all()
+        # then, lets check s2 has the appropriate splits *per instance*
+        assert isinstance(masked_sample.sentinel2_l2a_mask, torch.Tensor)
+        for idx in range(masked_sample.sentinel2_l2a_mask.shape[0]):
+            instance_mask = masked_sample.sentinel2_l2a_mask[idx]
+            mask_as_tokens = instance_mask[0::patch_size, 0::patch_size]
+            num_tokens = mask_as_tokens.numel()
+            num_encoded = mask_as_tokens[
+                mask_as_tokens == MaskValue.ONLINE_ENCODER.value
+            ].numel()
+            num_decoded = mask_as_tokens[
+                mask_as_tokens == MaskValue.DECODER.value
+            ].numel()
+            assert num_encoded / num_tokens == encode_ratio
+            assert num_decoded / num_tokens == decode_ratio
+
+        # then we check that half the s1 batch was masked correctly
+        assert isinstance(masked_sample.sentinel1_mask, torch.Tensor)
+        for idx in range(masked_sample.sentinel1_mask.shape[0]):
+            instance_mask = masked_sample.sentinel1_mask[idx]
+            if idx < (masked_sample.sentinel1_mask.shape[0] // 2):
+                mask_as_tokens = instance_mask[0::patch_size, 0::patch_size]
+                num_tokens = mask_as_tokens.numel()
+                num_encoded = mask_as_tokens[
+                    mask_as_tokens == MaskValue.ONLINE_ENCODER.value
+                ].numel()
+                num_decoded = mask_as_tokens[
+                    mask_as_tokens == MaskValue.DECODER.value
+                ].numel()
+                assert num_encoded / num_tokens == encode_ratio
+                assert num_decoded / num_tokens == decode_ratio
+            else:
+                assert (instance_mask == MaskValue.MISSING.value).all()
+
+
+def test_random_decode_masking_with_missing_modality_mask_in_instance() -> None:
+    """Test RandomWithDecodeMaskingStrategy with missing_modalities_masks."""
+    b, h, w, t = 10, 16, 16, 8
+
+    days = torch.randint(1, 31, (b, t, 1), dtype=torch.long)
+    months = torch.randint(1, 13, (b, t, 1), dtype=torch.long)
+    years = torch.randint(2018, 2020, (b, t, 1), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
+    # Include all modalities but mark some sentinel1 samples as missing
+    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
+    sentinel1_num_bands = Modality.SENTINEL1.num_bands
+    worldcover_num_bands = Modality.WORLDCOVER.num_bands
+    latlon_num_bands = Modality.LATLON.num_bands
+
+    # Create a missing mask for sentinel1 where half the timesteps are missing
+    sentinel1 = torch.ones((b, h, w, t, sentinel1_num_bands))
+    sentinel1[:, :, :, t // 2 :] = MISSING_VALUE
+
+    # Create the OlmoEarthSample with missing_modalities_masks
+    batch = OlmoEarthSample(
+        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
+        sentinel1=sentinel1,
+        latlon=torch.ones((b, latlon_num_bands)),
+        timestamps=timestamps,
+        worldcover=torch.ones((b, h, w, worldcover_num_bands)),
+    )
+
+    # Test the RandomMaskingStrategy
+    encode_ratio, decode_ratio = 0.25, 0.5
+    strategy = RandomWithDecodeMaskingStrategy(
+        encode_ratio=encode_ratio,
+        decode_ratio=decode_ratio,
+        only_decode_modalities=["worldcover"],
+    )
+
+    for patch_size in [1, 2, 4]:
+        # Apply masking
+        masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
+
+        # first, lets check that worldcover is all decode only
+        assert isinstance(masked_sample.worldcover_mask, torch.Tensor)
+        assert (masked_sample.worldcover_mask == MaskValue.DECODER.value).all()
+        # then, lets check s2 has the appropriate splits *per instance*
+        assert isinstance(masked_sample.sentinel2_l2a_mask, torch.Tensor)
+        for idx in range(masked_sample.sentinel2_l2a_mask.shape[0]):
+            instance_mask = masked_sample.sentinel2_l2a_mask[idx]
+            mask_as_tokens = instance_mask[0::patch_size, 0::patch_size]
+            num_tokens = mask_as_tokens.numel()
+            num_encoded = mask_as_tokens[
+                mask_as_tokens == MaskValue.ONLINE_ENCODER.value
+            ].numel()
+            num_decoded = mask_as_tokens[
+                mask_as_tokens == MaskValue.DECODER.value
+            ].numel()
+            assert num_encoded / num_tokens == encode_ratio
+            assert num_decoded / num_tokens == decode_ratio
+
+        # then we check that half the s1 batch was masked correctly
+        assert isinstance(masked_sample.sentinel1_mask, torch.Tensor)
+        for idx in range(masked_sample.sentinel1_mask.shape[0]):
+            instance_mask = masked_sample.sentinel1_mask[idx]
+            mask_as_tokens = instance_mask[0::patch_size, 0::patch_size]
+            assert (mask_as_tokens[:, :, t // 2 :] == MaskValue.MISSING.value).all()
+            # half the tokens are missing tokens
+            num_tokens = mask_as_tokens.numel() // 2
+            num_encoded = mask_as_tokens[
+                mask_as_tokens == MaskValue.ONLINE_ENCODER.value
+            ].numel()
+            num_decoded = mask_as_tokens[
+                mask_as_tokens == MaskValue.DECODER.value
+            ].numel()
+            assert num_encoded / num_tokens == encode_ratio
+            assert num_decoded / num_tokens == decode_ratio
