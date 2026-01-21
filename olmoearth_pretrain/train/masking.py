@@ -1703,7 +1703,9 @@ class RandomWithDecodeMaskingStrategy(MaskingStrategy):
                 output_dict[masked_modality_name][
                     i : i + 1, ..., bandset_idx : bandset_idx + 1  # type: ignore
                 ] = self._random_fill_unmasked(
-                    output_dict[masked_modality_name][i : i + 1, ..., bandset_idx],  # type: ignore
+                    output_dict[masked_modality_name][
+                        i : i + 1, ..., bandset_idx : bandset_idx + 1
+                    ],  # type: ignore
                     Modality.get(modality_name),
                     patch_size,
                     self.encode_ratio,
