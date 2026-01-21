@@ -1731,49 +1731,6 @@ class RandomWithDecodeMaskingStrategy(MaskingStrategy):
                         self.decode_ratio,
                     )
 
-        # for modality_name in batch.modalities:
-        #     instance = getattr(batch, modality_name)
-        #     if instance is None:
-        #         # set instance and mask to None
-        #         output_dict[modality_name] = None
-        #         output_dict[
-        #             MaskedOlmoEarthSample.get_masked_modality_name(modality_name)
-        #         ] = None
-        #     elif modality_name == "timestamps":
-        #         output_dict[modality_name] = instance
-        #         continue
-        #     else:
-        #         if isinstance(instance, torch.Tensor):
-        #             device: torch.device | None = instance.device
-        #         else:
-        #             device = None
-        #         modality = Modality.get(modality_name)
-
-        #         mask_shape = instance.shape[:-1] + (len(modality.band_sets),)
-        #         mask = torch.full(
-        #             mask_shape, fill_value=MaskValue.DECODER.value, device=device
-        #         )
-        #         mask = self.fill_mask_with_missing_values(instance, mask, modality)
-        #         if modality.name in self.only_decode_modalities:
-        #             # if its a decode only modality, we will decode every token that isn't missing
-        #             output_dict[modality_name] = instance
-        #             output_dict[
-        #                 MaskedOlmoEarthSample.get_masked_modality_name(modality_name)
-        #             ] = mask
-        #         else:
-        #             # because of the missing values, we will need to iterate through every instance in the batch
-        #             for sample_idx in range(mask.shape[0]):
-        #                 mask[sample_idx : sample_idx + 1] = self._random_fill_unmasked(
-        #                     mask[sample_idx : sample_idx + 1],
-        #                     modality,
-        #                     patch_size,
-        #                     self.encode_ratio,
-        #                     self.decode_ratio,
-        #                 )
-        #             output_dict[modality_name] = instance
-        #             output_dict[
-        #                 MaskedOlmoEarthSample.get_masked_modality_name(modality_name)
-        #             ] = mask
         return MaskedOlmoEarthSample(**output_dict)
 
 
