@@ -1618,7 +1618,23 @@ class RandomWithDecodeMaskingStrategy(MaskingStrategy):
     def apply_mask(
         self, batch: OlmoEarthSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedOlmoEarthSample:
-        """Apply masking to the input data."""
+        """Apply masking to the input data.
+
+        This function has three parts:
+
+        1. First, we create masks for all the present modalities. These masks have
+           two values: MISSING and DECODER. This allows us to keep track of which values
+           are missing, and also handles mask creation for all the only_decode_modalities.
+        2. Now, we are dealing with *not* only_decode_modalities (i.e. modalities that can
+           be either encoded or decoded). We do this in two steps:
+
+           For each instance in the batch, we:
+
+           i. Populate encode_decode_bandsets. This list tells us which bandsets for this
+              instance have at least one non-missing token.
+           ii. Split encode_decode_bandsets into encode-only or decode-only. We then randomly
+              select tokens to encode / decode within that bandset.
+        """
         if patch_size is None:
             raise ValueError("patch_size must be provided for random masking")
         output_dict: dict[str, ArrayTensor | None] = {"timestamps": batch.timestamps}
