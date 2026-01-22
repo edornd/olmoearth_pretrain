@@ -6,6 +6,7 @@ import os
 import psutil
 
 from olmoearth_pretrain.data.dataset import OlmoEarthSample
+from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,52 @@ def split_batch(batch: OlmoEarthSample, microbatch_size: int) -> list[OlmoEarthS
 
         # Create a new OlmoEarthSample from the sliced fields
         microbatches.append(OlmoEarthSample(**microbatch_dict))
+
+    return microbatches
+
+
+def split_masked_batch(
+    batch: MaskedOlmoEarthSample, microbatch_size: int
+) -> list[MaskedOlmoEarthSample]:
+    """Split a 'batch' MaskedOlmoEarthSample into a list of micro-batches.
+
+    Each micro-batch has a batch dimension up to microbatch_size.
+
+    Args:
+        batch (MaskedOlmoEarthSample): A MaskedOlmoEarthSample object whose first
+            dimension (B) is the batch size.
+        microbatch_size (int): The maximum batch size for each micro-batch.
+
+    Returns:
+        list[MaskedOlmoEarthSample]: List of MaskedOlmoEarthSample objects.
+    """
+    # Get batch size from timestamps (always present)
+    batch_size = batch.timestamps.shape[0]
+
+    # If the batch is already small enough, no need to split.
+    if batch_size <= microbatch_size:
+        return [batch]
+
+    # Calculate how many micro-batches we need.
+    num_microbatches = (batch_size + microbatch_size - 1) // microbatch_size
+    microbatches = []
+
+    # Convert the MaskedOlmoEarthSample to a dictionary so we can slice each field if present.
+    batch_dict = batch.as_dict(return_none=False)
+
+    for mb_idx in range(num_microbatches):
+        start = mb_idx * microbatch_size
+        end = min(start + microbatch_size, batch_size)
+
+        # Create a new dict for the sliced data
+        microbatch_dict = {}
+        for field_name, data in batch_dict.items():
+            assert data is not None
+            # Slice the first dimension (batch dimension)
+            microbatch_dict[field_name] = data[start:end]
+
+        # Create a new MaskedOlmoEarthSample from the sliced fields
+        microbatches.append(MaskedOlmoEarthSample(**microbatch_dict))
 
     return microbatches
 

@@ -166,3 +166,19 @@ class MaskedOlmoEarthSample(NamedTuple):
             dict: Dictionary representation of the MaskedOlmoEarthSample.
         """
         return cls(**dict)
+
+    def to_device(self, device: torch.device) -> MaskedOlmoEarthSample:
+        """Move all tensors to the specified device.
+
+        Args:
+            device: The device to move the tensors to.
+
+        Returns:
+            A new MaskedOlmoEarthSample with all tensors moved to the specified device.
+        """
+        return MaskedOlmoEarthSample(
+            **{
+                key: val.to(device)
+                for key, val in self.as_dict(return_none=False).items()
+            }
+        )

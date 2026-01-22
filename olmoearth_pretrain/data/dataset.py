@@ -1,5 +1,7 @@
 """Dataset module for OlmoEarth Pretrain."""
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import shutil
@@ -7,7 +9,10 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
-from typing import Any, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
+
+if TYPE_CHECKING:
+    from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
 
 import h5py
 
@@ -132,7 +137,7 @@ class OlmoEarthSample(NamedTuple):
         """
         return [modality for modality in self.as_dict(ignore_nones=True).keys()]
 
-    def to_device(self, device: torch.device) -> "OlmoEarthSample":
+    def to_device(self, device: torch.device) -> OlmoEarthSample:
         """Move all tensors to the specified device.
 
         Args:
@@ -149,7 +154,7 @@ class OlmoEarthSample(NamedTuple):
             }
         )
 
-    def distribute_tensors(self, device_mesh: DeviceMesh) -> "OlmoEarthSample":
+    def distribute_tensors(self, device_mesh: DeviceMesh) -> OlmoEarthSample:
         """Distribute the tensors to the specified device mesh."""
         return OlmoEarthSample(
             **{
@@ -356,7 +361,7 @@ class OlmoEarthSample(NamedTuple):
         sampled_hw_p: int,
         current_length: int,
         missing_timesteps_masks: dict[str, Any] = {},
-    ) -> "OlmoEarthSample":
+    ) -> OlmoEarthSample:
         """Subset a OlmoEarthSample using default rectangular cropping.
 
         Args:
@@ -429,7 +434,7 @@ class OlmoEarthSample(NamedTuple):
         sampled_hw_p: int,
         current_length: int,
         missing_timesteps_masks: dict[str, Any] = {},
-    ) -> "OlmoEarthSample":
+    ) -> OlmoEarthSample:
         """Subset a OlmoEarthSample using CutMix patch sampling.
 
         Args:
@@ -494,15 +499,15 @@ class OlmoEarthSample(NamedTuple):
 
         return OlmoEarthSample(**new_data_dict)
 
-    def scale(self, s: float) -> "OlmoEarthSample":
+    def scale(self, s: float) -> OlmoEarthSample:
         """Multiply a OlmoEarthSample by a float."""
         return OlmoEarthSample(
             **{k: cast(ArrayTensor, v) * s for k, v in self.as_dict().items()}
         )
 
     def add(
-        self, other: "OlmoEarthSample", timestamps_to_keep: ArrayTensor
-    ) -> "OlmoEarthSample":
+        self, other: OlmoEarthSample, timestamps_to_keep: ArrayTensor
+    ) -> OlmoEarthSample:
         """Add two OlmoEarthSamples together."""
         if not isinstance(other, OlmoEarthSample):
             raise ValueError("Addition only supported for OlmoEarthSamples")
@@ -518,7 +523,7 @@ class OlmoEarthSample(NamedTuple):
         summed_dict["timestamps"] = timestamps_to_keep
         return OlmoEarthSample(**summed_dict)
 
-    def rotate(self) -> "OlmoEarthSample":
+    def rotate(self) -> OlmoEarthSample:
         """Rotate the instances by one.
 
         If previously, we had a batch of three instances [B1, B2, B3],
@@ -531,6 +536,22 @@ class OlmoEarthSample(NamedTuple):
             elif isinstance(v, torch.Tensor):
                 output_dict[key] = torch.cat((v[1:], v[:1]), dim=0)
         return OlmoEarthSample(**output_dict)
+
+    def to_tensors(self) -> OlmoEarthSample:
+        """Convert all numpy arrays to torch tensors.
+
+        This is useful for applying masking in the dataloader workers,
+        where the data is still in numpy format but masking expects torch tensors.
+
+        Returns:
+            A new OlmoEarthSample with all numpy arrays converted to torch tensors.
+        """
+        return OlmoEarthSample(
+            **{
+                key: torch.from_numpy(val) if isinstance(val, np.ndarray) else val
+                for key, val in self.as_dict(ignore_nones=True).items()
+            }
+        )
 
 
 def collate_olmoearth_pretrain(
@@ -555,6 +576,74 @@ def collate_olmoearth_pretrain(
     # Create a dictionary of stacked tensors for each field
     collated_dict = {field: stack_or_none(field) for field in sample_fields}
     return patch_size, OlmoEarthSample(**collated_dict)
+
+
+def collate_single_masked(
+    batch: list[tuple[int, MaskedOlmoEarthSample]],
+) -> tuple[int, MaskedOlmoEarthSample]:
+    """Collate function for single masked batches (LatentMIM, MAE).
+
+    Args:
+        batch: List of (patch_size, MaskedOlmoEarthSample) tuples.
+
+    Returns:
+        A tuple of (patch_size, collated MaskedOlmoEarthSample).
+    """
+    from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
+
+    def stack_or_none(attr: str) -> torch.Tensor | None:
+        """Stack the tensors while handling None values."""
+        if getattr(batch[0][1], attr) is None:
+            return None
+        tensors = [getattr(sample, attr) for _, sample in batch]
+        return torch.stack(tensors, dim=0)
+
+    patch_size, batch_zero = batch[0]
+    sample_fields = list(batch_zero.as_dict(return_none=False).keys())
+
+    collated_dict = {field: stack_or_none(field) for field in sample_fields}
+    return patch_size, MaskedOlmoEarthSample(**collated_dict)
+
+
+def collate_double_masked(
+    batch: list[tuple[int, MaskedOlmoEarthSample, MaskedOlmoEarthSample]],
+) -> tuple[int, MaskedOlmoEarthSample, MaskedOlmoEarthSample]:
+    """Collate function for double masked batches (ContrastiveLatentMIM, Galileo).
+
+    Args:
+        batch: List of (patch_size, MaskedOlmoEarthSample_a, MaskedOlmoEarthSample_b) tuples.
+
+    Returns:
+        A tuple of (patch_size, collated MaskedOlmoEarthSample_a, collated MaskedOlmoEarthSample_b).
+    """
+    from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
+
+    def stack_or_none_a(attr: str) -> torch.Tensor | None:
+        """Stack the tensors for view a while handling None values."""
+        if getattr(batch[0][1], attr) is None:
+            return None
+        tensors = [getattr(sample_a, attr) for _, sample_a, _ in batch]
+        return torch.stack(tensors, dim=0)
+
+    def stack_or_none_b(attr: str) -> torch.Tensor | None:
+        """Stack the tensors for view b while handling None values."""
+        if getattr(batch[0][2], attr) is None:
+            return None
+        tensors = [getattr(sample_b, attr) for _, _, sample_b in batch]
+        return torch.stack(tensors, dim=0)
+
+    patch_size, batch_zero_a, batch_zero_b = batch[0]
+    sample_fields_a = list(batch_zero_a.as_dict(return_none=False).keys())
+    sample_fields_b = list(batch_zero_b.as_dict(return_none=False).keys())
+
+    collated_dict_a = {field: stack_or_none_a(field) for field in sample_fields_a}
+    collated_dict_b = {field: stack_or_none_b(field) for field in sample_fields_b}
+
+    return (
+        patch_size,
+        MaskedOlmoEarthSample(**collated_dict_a),
+        MaskedOlmoEarthSample(**collated_dict_b),
+    )
 
 
 class GetItemArgs(NamedTuple):
@@ -1110,7 +1199,7 @@ class OlmoEarthDatasetConfig(Config):
         """Get the cache directory."""
         return UPath(self.cache_dir)
 
-    def build(self) -> "OlmoEarthDataset":
+    def build(self) -> OlmoEarthDataset:
         """Build the dataset."""
         self.validate()
         kwargs = self.as_dict(exclude_none=True, recurse=False)

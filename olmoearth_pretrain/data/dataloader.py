@@ -31,7 +31,12 @@ from olmoearth_pretrain.data.dataset import (
     GetItemArgs,
     OlmoEarthDataset,
     OlmoEarthSample,
+    collate_double_masked,
+    collate_single_masked,
 )
+from olmoearth_pretrain.data.transform import Transform, TransformConfig
+from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
+from olmoearth_pretrain.train.masking import MaskingConfig, MaskingStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +70,40 @@ class OlmoEarthDataLoader(DataLoaderBase):
         persistent_workers: bool = True,
         multiprocessing_context: str = "spawn",
         num_dataset_repeats_per_epoch: int = 1,
+        # New fields for dataloader-side masking
+        transform: Transform | None = None,
+        masking_strategy: MaskingStrategy | None = None,
+        masking_strategy_b: MaskingStrategy | None = None,
+        num_masked_views: int = 0,
     ):
-        """Initialize the OlmoEarthDataLoader."""
+        """Initialize the OlmoEarthDataLoader.
+
+        Args:
+            dataset: The dataset to load from.
+            work_dir: The working directory for storing indices.
+            global_batch_size: The global batch size across all workers.
+            min_patch_size: Minimum patch size for training.
+            max_patch_size: Maximum patch size for training.
+            sampled_hw_p_list: List of possible height/width in patches to sample.
+            token_budget: Optional token budget per instance.
+            dp_world_size: Data parallel world size.
+            dp_rank: Data parallel rank.
+            fs_local_rank: File system local rank.
+            seed: Random seed.
+            shuffle: Whether to shuffle the data.
+            num_workers: Number of dataloader workers.
+            prefetch_factor: Prefetch factor for dataloader.
+            collator: Collation function.
+            target_device_type: Target device type ("cpu" or "cuda").
+            drop_last: Whether to drop the last incomplete batch.
+            persistent_workers: Whether to keep workers alive between epochs.
+            multiprocessing_context: Multiprocessing context ("spawn" or "forkserver").
+            num_dataset_repeats_per_epoch: Number of times to repeat the dataset per epoch.
+            transform: Optional transform to apply in the dataloader workers.
+            masking_strategy: Optional masking strategy to apply in the dataloader workers.
+            masking_strategy_b: Optional second masking strategy for Galileo-style training.
+            num_masked_views: Number of masked views to return (0=legacy, 1=single, 2=double).
+        """
         super().__init__(
             work_dir=work_dir,
             global_batch_size=global_batch_size,
@@ -93,6 +130,23 @@ class OlmoEarthDataLoader(DataLoaderBase):
         self.persistent_workers = persistent_workers
         self.multiprocessing_context = multiprocessing_context
         self.num_dataset_repeats_per_epoch = num_dataset_repeats_per_epoch
+
+        # Dataloader-side masking configuration
+        self.transform = transform
+        self.masking_strategy = masking_strategy
+        self.masking_strategy_b = masking_strategy_b
+        self.num_masked_views = num_masked_views
+
+        # Validate configuration
+        if num_masked_views > 0 and masking_strategy is None:
+            raise ValueError(
+                "masking_strategy must be provided when num_masked_views > 0"
+            )
+        if num_masked_views not in (0, 1, 2):
+            raise ValueError(
+                f"num_masked_views must be 0, 1, or 2, got {num_masked_views}"
+            )
+
         if self.num_workers > 0 and self.multiprocessing_context == "forkserver":
             # Overhead of loading modules on import by preloading them
             mp.set_forkserver_preload(["torch", "rasterio"])
@@ -461,6 +515,11 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[OlmoEarthSample])
             )
             for i in range(workers)
         ]
+        # Dataloader-side masking configuration
+        self.transform = data_loader.transform
+        self.masking_strategy = data_loader.masking_strategy
+        self.masking_strategy_b = data_loader.masking_strategy_b
+        self.num_masked_views = data_loader.num_masked_views
 
     def _get_batch_item_params_iterator(
         self,
@@ -505,11 +564,62 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[OlmoEarthSample])
         """Get worker info."""
         return torch.utils.data.get_worker_info()
 
-    def __iter__(self) -> Iterator[OlmoEarthSample]:
-        """Iterate over the dataset."""
+    def _process_sample(
+        self, sample: tuple[int, OlmoEarthSample]
+    ) -> (
+        tuple[int, OlmoEarthSample]
+        | tuple[int, MaskedOlmoEarthSample]
+        | tuple[int, MaskedOlmoEarthSample, MaskedOlmoEarthSample]
+    ):
+        """Process a sample, optionally applying transform and masking.
+
+        Args:
+            sample: A tuple of (patch_size, OlmoEarthSample).
+
+        Returns:
+            Depending on num_masked_views:
+            - 0: (patch_size, OlmoEarthSample) - legacy mode
+            - 1: (patch_size, MaskedOlmoEarthSample) - single masked view
+            - 2: (patch_size, MaskedOlmoEarthSample, MaskedOlmoEarthSample) - double masked views
+        """
+        patch_size, olmo_sample = sample
+
+        # Apply transform if configured
+        if self.transform is not None:
+            olmo_sample = self.transform.apply(olmo_sample)
+
+        # If no masking configured, return the (possibly transformed) sample
+        if self.num_masked_views == 0 or self.masking_strategy is None:
+            return (patch_size, olmo_sample)
+
+        # Convert to tensors for masking
+        sample_tensor = olmo_sample.to_tensors()
+
+        if self.num_masked_views == 1:
+            # Single masked view (for LatentMIM, MAE)
+            masked = self.masking_strategy.apply_mask(sample_tensor, patch_size)
+            return (patch_size, masked)
+        else:
+            # Double masked views (for ContrastiveLatentMIM, Galileo)
+            masked_a = self.masking_strategy.apply_mask(sample_tensor, patch_size)
+            # Use masking_strategy_b if provided, otherwise use the same strategy
+            strategy_b = self.masking_strategy_b or self.masking_strategy
+            masked_b = strategy_b.apply_mask(sample_tensor, patch_size)
+            return (patch_size, masked_a, masked_b)
+
+    def __iter__(self) -> Iterator[Any]:
+        """Iterate over the dataset.
+
+        Yields batches in one of three formats depending on num_masked_views:
+        - 0: (patch_size, OlmoEarthSample) - legacy mode
+        - 1: (patch_size, MaskedOlmoEarthSample) - single masked view
+        - 2: (patch_size, MaskedOlmoEarthSample, MaskedOlmoEarthSample) - double masked views
+        """
         global_indices = self.data_loader.get_global_indices()
         indices = self.data_loader._get_local_instance_indices(global_indices)
-        instance_iterator = (
+
+        # Create iterator that fetches samples from the dataset
+        raw_instance_iterator = (
             self.data_loader._get_dataset_item(int(idx), patch_size, sampled_hw_p)
             for idx, patch_size, sampled_hw_p in self._get_batch_item_params_iterator(
                 indices,
@@ -519,10 +629,15 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[OlmoEarthSample])
             )
         )
 
+        # Apply transform and masking (if configured) to each sample
+        processed_instance_iterator = (
+            self._process_sample(sample) for sample in raw_instance_iterator
+        )
+
         return (
-            self.data_loader.collator(batch)
+            self.data_loader.collator(batch)  # type: ignore[arg-type]
             for batch in iter_batched(
-                instance_iterator,
+                processed_instance_iterator,  # type: ignore[arg-type]
                 self.data_loader.rank_batch_size,
                 self.data_loader.drop_last,
             )
@@ -546,6 +661,11 @@ class OlmoEarthDataLoaderConfig(Config):
     target_device_type: str | None = None
     drop_last: bool = True
     num_dataset_repeats_per_epoch: int = 1
+    # New fields for dataloader-side masking
+    transform_config: TransformConfig | None = None
+    masking_config: MaskingConfig | None = None
+    masking_config_b: MaskingConfig | None = None
+    num_masked_views: int = 0  # 0 = legacy (no masking), 1 = single, 2 = double
 
     def validate(self) -> None:
         """Validate the configuration."""
@@ -553,6 +673,14 @@ class OlmoEarthDataLoaderConfig(Config):
             raise ValueError("Work directory is not set")
         if self.min_patch_size > self.max_patch_size:
             raise ValueError("min_patch_size must be less than max_patch_size")
+        if self.num_masked_views > 0 and self.masking_config is None:
+            raise ValueError(
+                "masking_config must be provided when num_masked_views > 0"
+            )
+        if self.num_masked_views not in (0, 1, 2):
+            raise ValueError(
+                f"num_masked_views must be 0, 1, or 2, got {self.num_masked_views}"
+            )
 
     @property
     def work_dir_upath(self) -> UPath:
@@ -568,6 +696,24 @@ class OlmoEarthDataLoaderConfig(Config):
         """Build the OlmoEarthDataLoader."""
         self.validate()
         dataset.prepare()
+
+        # Build transform and masking strategies if configured
+        transform = (
+            self.transform_config.build() if self.transform_config is not None else None
+        )
+        masking_strategy = (
+            self.masking_config.build() if self.masking_config is not None else None
+        )
+        masking_strategy_b = (
+            self.masking_config_b.build() if self.masking_config_b is not None else None
+        )
+
+        # Select appropriate collator based on num_masked_views
+        if self.num_masked_views == 1:
+            collator = collate_single_masked
+        elif self.num_masked_views == 2:
+            collator = collate_double_masked
+        # else: use the provided collator (legacy mode)
 
         return OlmoEarthDataLoader(
             dataset=dataset,
@@ -588,6 +734,10 @@ class OlmoEarthDataLoaderConfig(Config):
             sampled_hw_p_list=self.sampled_hw_p_list,
             token_budget=self.token_budget,
             num_dataset_repeats_per_epoch=self.num_dataset_repeats_per_epoch,
+            transform=transform,
+            masking_strategy=masking_strategy,
+            masking_strategy_b=masking_strategy_b,
+            num_masked_views=self.num_masked_views,
         )
 
 
