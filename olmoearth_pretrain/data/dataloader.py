@@ -425,27 +425,60 @@ class OlmoEarthDataLoader(DataLoaderBase):
         output_dict["timestamps"] = timestamps
         return OlmoEarthSample(**output_dict)
 
-    def get_mock_batch(self) -> OlmoEarthSample:
-        """Get a mock batch, for dry-run of forward and backward pass."""
+    def get_mock_batch(self) -> Any:
+        """Get a mock batch, for dry-run of forward and backward pass.
+
+        Returns the appropriate batch format based on num_masked_views:
+        - 0: (patch_size, OlmoEarthSample) - legacy mode
+        - 1: (patch_size, MaskedOlmoEarthSample) - single masked view
+        - 2: (patch_size, MaskedOlmoEarthSample, MaskedOlmoEarthSample) - double masked
+        """
         logger.info("Getting mock batch NOT FROM DATASET")
         logger.info(f"Training modalities: {self.dataset.training_modalities}")
+        logger.info(f"num_masked_views: {self.num_masked_views}")
         rng = get_rng(42)
         batch_size = self.global_batch_size // self.dp_world_size
         patch_size = 1
-        collated_sample = self.collator(
-            [
+
+        # Generate mock samples
+        mock_samples = [
+            self._get_mock_sample(rng).subset_default(
+                patch_size,
+                max_tokens_per_instance=1500,
+                sampled_hw_p=6,
+                current_length=12,
+            )
+            for _ in range(batch_size)
+        ]
+
+        if self.num_masked_views == 0 or self.masking_strategy is None:
+            # Legacy mode: return (patch_size, OlmoEarthSample) tuples
+            collated_sample = self.collator(
+                [(patch_size, sample) for sample in mock_samples]
+            )
+        elif self.num_masked_views == 1:
+            # Single masked view
+            masked_samples = [
                 (
                     patch_size,
-                    self._get_mock_sample(rng).subset_default(
-                        patch_size,
-                        max_tokens_per_instance=1500,
-                        sampled_hw_p=6,
-                        current_length=12,
-                    ),
+                    self.masking_strategy.apply_mask(sample.to_tensors(), patch_size),
                 )
-                for num in range(batch_size)
+                for sample in mock_samples
             ]
-        )
+            collated_sample = self.collator(masked_samples)
+        else:
+            # Double masked views (num_masked_views == 2)
+            strategy_b = self.masking_strategy_b or self.masking_strategy
+            masked_samples = [
+                (  # type: ignore[misc]
+                    patch_size,
+                    self.masking_strategy.apply_mask(sample.to_tensors(), patch_size),
+                    strategy_b.apply_mask(sample.to_tensors(), patch_size),
+                )
+                for sample in mock_samples
+            ]
+            collated_sample = self.collator(masked_samples)
+
         return collated_sample
 
     def fast_forward(self, global_step: int) -> np.ndarray:
