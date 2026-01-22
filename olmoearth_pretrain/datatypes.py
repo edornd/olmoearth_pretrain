@@ -182,3 +182,19 @@ class MaskedOlmoEarthSample(NamedTuple):
                 for key, val in self.as_dict(return_none=False).items()
             }
         )
+
+    def squeeze_batch(self) -> MaskedOlmoEarthSample:
+        """Remove the batch dimension (dim 0) from all tensors.
+
+        This is useful after applying masking to a single sample that was
+        unsqueezed to add a batch dimension.
+
+        Returns:
+            A new MaskedOlmoEarthSample with batch dimension removed from all tensors.
+        """
+        return MaskedOlmoEarthSample(
+            **{
+                key: val.squeeze(0) if isinstance(val, torch.Tensor) else val
+                for key, val in self.as_dict(return_none=False).items()
+            }
+        )

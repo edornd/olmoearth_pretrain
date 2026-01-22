@@ -458,22 +458,30 @@ class OlmoEarthDataLoader(DataLoaderBase):
             )
         elif self.num_masked_views == 1:
             # Single masked view
+            # Add batch dimension for masking, then remove for collation
             masked_samples = [
                 (
                     patch_size,
-                    self.masking_strategy.apply_mask(sample.to_tensors(), patch_size),
+                    self.masking_strategy.apply_mask(
+                        sample.to_tensors().unsqueeze_batch(), patch_size
+                    ).squeeze_batch(),
                 )
                 for sample in mock_samples
             ]
             collated_sample = self.collator(masked_samples)
         else:
             # Double masked views (num_masked_views == 2)
+            # Add batch dimension for masking, then remove for collation
             strategy_b = self.masking_strategy_b or self.masking_strategy
             masked_samples = [
                 (  # type: ignore[misc]
                     patch_size,
-                    self.masking_strategy.apply_mask(sample.to_tensors(), patch_size),
-                    strategy_b.apply_mask(sample.to_tensors(), patch_size),
+                    self.masking_strategy.apply_mask(
+                        sample.to_tensors().unsqueeze_batch(), patch_size
+                    ).squeeze_batch(),
+                    strategy_b.apply_mask(
+                        sample.to_tensors().unsqueeze_batch(), patch_size
+                    ).squeeze_batch(),
                 )
                 for sample in mock_samples
             ]
@@ -625,20 +633,23 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[OlmoEarthSample])
         if self.num_masked_views == 0 or self.masking_strategy is None:
             return (patch_size, olmo_sample)
 
-        # Convert to tensors for masking
-        sample_tensor = olmo_sample.to_tensors()
+        # Convert to tensors and add batch dimension for masking
+        # Masking strategies expect batched input (B, T, H, W, C)
+        sample_tensor = olmo_sample.to_tensors().unsqueeze_batch()
 
         if self.num_masked_views == 1:
             # Single masked view (for LatentMIM, MAE)
             masked = self.masking_strategy.apply_mask(sample_tensor, patch_size)
-            return (patch_size, masked)
+            # Remove batch dimension since collator will stack samples
+            return (patch_size, masked.squeeze_batch())
         else:
             # Double masked views (for ContrastiveLatentMIM, Galileo)
             masked_a = self.masking_strategy.apply_mask(sample_tensor, patch_size)
             # Use masking_strategy_b if provided, otherwise use the same strategy
             strategy_b = self.masking_strategy_b or self.masking_strategy
             masked_b = strategy_b.apply_mask(sample_tensor, patch_size)
-            return (patch_size, masked_a, masked_b)
+            # Remove batch dimension since collator will stack samples
+            return (patch_size, masked_a.squeeze_batch(), masked_b.squeeze_batch())
 
     def __iter__(self) -> Iterator[Any]:
         """Iterate over the dataset.
