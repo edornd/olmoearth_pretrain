@@ -68,35 +68,29 @@ def split_masked_batch(
     Returns:
         list[MaskedOlmoEarthSample]: List of MaskedOlmoEarthSample objects.
     """
-    # Get batch size from timestamps (always present)
     batch_size = batch.timestamps.shape[0]
 
-    # If the batch is already small enough, no need to split.
     if batch_size <= microbatch_size:
         return [batch]
 
-    # Calculate how many micro-batches we need.
     num_microbatches = (batch_size + microbatch_size - 1) // microbatch_size
-    microbatches = []
 
-    # Convert the MaskedOlmoEarthSample to a dictionary so we can slice each field if present.
-    batch_dict = batch.as_dict(return_none=False)
+    # Compute split sizes (last chunk may be smaller)
+    split_sizes = [microbatch_size] * (num_microbatches - 1)
+    split_sizes.append(batch_size - microbatch_size * (num_microbatches - 1))
 
-    for mb_idx in range(num_microbatches):
-        start = mb_idx * microbatch_size
-        end = min(start + microbatch_size, batch_size)
+    # Split all non-None fields at once using torch.split
+    splits: dict[str, tuple] = {}
+    for field in batch._fields:
+        data = getattr(batch, field)
+        if data is not None:
+            splits[field] = data.split(split_sizes, dim=0)
 
-        # Create a new dict for the sliced data
-        microbatch_dict = {}
-        for field_name, data in batch_dict.items():
-            assert data is not None
-            # Slice the first dimension (batch dimension)
-            microbatch_dict[field_name] = data[start:end]
-
-        # Create a new MaskedOlmoEarthSample from the sliced fields
-        microbatches.append(MaskedOlmoEarthSample(**microbatch_dict))
-
-    return microbatches
+    # Build microbatches
+    return [
+        MaskedOlmoEarthSample(**{f: chunks[i] for f, chunks in splits.items()})
+        for i in range(num_microbatches)
+    ]
 
 
 def log_memory_usage_for_process(process: psutil.Process) -> tuple[int, int, int, int]:
