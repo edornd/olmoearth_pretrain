@@ -388,19 +388,54 @@ class OlmoEarthDataset(Dataset):
             dtype=self.dtype,
         )
 
-        # Copy the existing data to the appropriate timestep positions
+        # Copy the existing data to the appropriate timestep positions using vectorized indexing
         present_indices = np.where(missing_timestep_mask)[0]
-        for i, idx in enumerate(present_indices):
-            if i < t:  # Only copy if we have data for this timestep
-                full_timesteps_data[..., idx, :] = modality_data[..., i, :]
+        num_to_copy = min(len(present_indices), t)
+        if num_to_copy > 0:
+            full_timesteps_data[:, :, present_indices[:num_to_copy], :] = modality_data[
+                :, :, :num_to_copy, :
+            ]
 
         return full_timesteps_data
 
+    @staticmethod
+    def _get_expected_shape(
+        modality: str, height: int | None, width: int | None, time: int
+    ) -> tuple[int, ...]:
+        """Get expected shape for a modality without creating OlmoEarthSample."""
+        modality_spec = Modality.get(modality)
+        num_bands = modality_spec.num_bands
+
+        if modality_spec.is_spacetime_varying:
+            assert height is not None and width is not None, (
+                f"height and width required for spatial modality {modality}"
+            )
+            return (
+                height * modality_spec.image_tile_size_factor,
+                width * modality_spec.image_tile_size_factor,
+                time,
+                num_bands,
+            )
+        elif modality_spec.is_space_only_varying:
+            assert height is not None and width is not None, (
+                f"height and width required for spatial modality {modality}"
+            )
+            return (
+                height * modality_spec.image_tile_size_factor,
+                width * modality_spec.image_tile_size_factor,
+                1,
+                num_bands,
+            )
+        elif modality_spec.is_time_only_varying:
+            return (time, num_bands)
+        else:
+            return (num_bands,)
+
     def _fill_missing_modality(
-        self, sample: OlmoEarthSample, modality: str
-    ) -> OlmoEarthSample:
+        self, modality: str, height: int | None, width: int | None, time: int
+    ) -> np.ndarray:
         """Fill an array of shape of modality with the missing value."""
-        expected_shape = sample.get_expected_shape(modality)
+        expected_shape = self._get_expected_shape(modality, height, width, time)
         logger.debug(f"Filling {modality} with shape {expected_shape}")
         return np.full(
             expected_shape,
@@ -416,12 +451,27 @@ class OlmoEarthDataset(Dataset):
             f"Timestamps shape {sample_dict['timestamps'].shape[0]} does not match max_sequence_length {self.max_sequence_length}"
         )
         missing_modalities = []
-        sample = OlmoEarthSample(**sample_dict)
+
+        # Extract h, w, t from sample_dict to avoid creating OlmoEarthSample early
+        time = sample_dict["timestamps"].shape[0]
+        height, width = None, None
+        for mod_name, mod_data in sample_dict.items():
+            if mod_name == "timestamps":
+                continue
+            mod_spec = Modality.get(mod_name)
+            if mod_spec.is_spatial and mod_data is not None:
+                # shape is (H, W, T, C) without batch dim
+                height = mod_data.shape[0] // mod_spec.image_tile_size_factor
+                width = mod_data.shape[1] // mod_spec.image_tile_size_factor
+                break
+
         for modality in self.training_modalities:
             # If one modality is completely missing, we need to fill it all with missing values
             if modality not in sample_dict.keys():
                 logger.debug(f"Filling {modality} with missing values")
-                sample_dict[modality] = self._fill_missing_modality(sample, modality)
+                sample_dict[modality] = self._fill_missing_modality(
+                    modality, height, width, time
+                )
                 missing_modalities.append(modality)
                 continue
 
