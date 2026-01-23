@@ -605,36 +605,6 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[OlmoEarthSample])
         """Get worker info."""
         return torch.utils.data.get_worker_info()
 
-    def _process_sample(
-        self, sample: tuple[int, OlmoEarthSample]
-    ) -> tuple[int, OlmoEarthSample]:
-        """Process a sample, optionally applying transform in legacy mode.
-
-        When num_masked_views > 0, transform and masking are handled by the
-        batched collator, so this function just returns the raw sample.
-
-        When num_masked_views == 0 (legacy mode), transform is applied here
-        if configured.
-
-        Args:
-            sample: A tuple of (patch_size, OlmoEarthSample).
-
-        Returns:
-            A tuple of (patch_size, OlmoEarthSample).
-        """
-        patch_size, olmo_sample = sample
-
-        # When num_masked_views > 0, transform + masking are handled by
-        # the batched collator, so just return the raw sample
-        if self.num_masked_views > 0:
-            return (patch_size, olmo_sample)
-
-        # Legacy mode (num_masked_views == 0): apply transform if configured
-        if self.transform is not None:
-            olmo_sample = self.transform.apply(olmo_sample)
-
-        return (patch_size, olmo_sample)
-
     def __iter__(self) -> Iterator[Any]:
         """Iterate over the dataset.
 
@@ -642,12 +612,15 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[OlmoEarthSample])
         - 0: (patch_size, OlmoEarthSample) - legacy mode
         - 1: (patch_size, MaskedOlmoEarthSample) - single masked view
         - 2: (patch_size, MaskedOlmoEarthSample, MaskedOlmoEarthSample) - double masked views
+
+        When num_masked_views > 0, transform and masking are applied in the
+        batched collator for better vectorization.
         """
         global_indices = self.data_loader.get_global_indices()
         indices = self.data_loader._get_local_instance_indices(global_indices)
 
         # Create iterator that fetches samples from the dataset
-        raw_instance_iterator = (
+        instance_iterator = (
             self.data_loader._get_dataset_item(int(idx), patch_size, sampled_hw_p)
             for idx, patch_size, sampled_hw_p in self._get_batch_item_params_iterator(
                 indices,
@@ -657,16 +630,10 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[OlmoEarthSample])
             )
         )
 
-        # Process each sample (transform is applied here only in legacy mode;
-        # when num_masked_views > 0, transform + masking happen in the collator)
-        processed_instance_iterator = (
-            self._process_sample(sample) for sample in raw_instance_iterator
-        )
-
         return (
             self.data_loader.collator(batch)  # type: ignore[arg-type]
             for batch in iter_batched(
-                processed_instance_iterator,  # type: ignore[arg-type]
+                instance_iterator,  # type: ignore[arg-type]
                 self.data_loader.rank_batch_size,
                 self.data_loader.drop_last,
             )
