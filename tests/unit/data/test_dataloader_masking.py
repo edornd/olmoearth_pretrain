@@ -22,55 +22,6 @@ from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
 from olmoearth_pretrain.train.masking import MaskingConfig
 
 
-class TestOlmoEarthSampleToTensors:
-    """Tests for OlmoEarthSample.to_tensors() method."""
-
-    def test_to_tensors_converts_numpy_arrays(self) -> None:
-        """Test that to_tensors converts numpy arrays to torch tensors."""
-        sample = OlmoEarthSample(
-            sentinel2_l2a=np.ones((8, 8, 12, 13), dtype=np.float32),
-            latlon=np.array([0.5, 0.5], dtype=np.float32),
-            timestamps=np.array([[1, 1, 2020] for _ in range(12)], dtype=np.int32),
-        )
-
-        tensor_sample = sample.to_tensors()
-
-        assert isinstance(tensor_sample.sentinel2_l2a, torch.Tensor)
-        assert isinstance(tensor_sample.latlon, torch.Tensor)
-        assert isinstance(tensor_sample.timestamps, torch.Tensor)
-        assert tensor_sample.sentinel2_l2a.shape == (8, 8, 12, 13)
-        assert tensor_sample.latlon.shape == (2,)
-        assert tensor_sample.timestamps.shape == (12, 3)
-
-    def test_to_tensors_preserves_existing_tensors(self) -> None:
-        """Test that to_tensors preserves tensors that are already torch tensors."""
-        original_tensor = torch.ones((8, 8, 12, 13))
-        sample = OlmoEarthSample(
-            sentinel2_l2a=original_tensor,
-            latlon=np.array([0.5, 0.5], dtype=np.float32),
-            timestamps=np.array([[1, 1, 2020] for _ in range(12)], dtype=np.int32),
-        )
-
-        tensor_sample = sample.to_tensors()
-
-        # The existing tensor should be the same object
-        assert tensor_sample.sentinel2_l2a is original_tensor
-
-    def test_to_tensors_handles_none_modalities(self) -> None:
-        """Test that to_tensors handles None modalities correctly."""
-        sample = OlmoEarthSample(
-            sentinel2_l2a=np.ones((8, 8, 12, 13), dtype=np.float32),
-            sentinel1=None,  # Explicitly None
-            latlon=np.array([0.5, 0.5], dtype=np.float32),
-            timestamps=np.array([[1, 1, 2020] for _ in range(12)], dtype=np.int32),
-        )
-
-        tensor_sample = sample.to_tensors()
-
-        assert tensor_sample.sentinel1 is None
-        assert isinstance(tensor_sample.sentinel2_l2a, torch.Tensor)
-
-
 class TestOlmoEarthSampleUnsqueezeBatch:
     """Tests for OlmoEarthSample.unsqueeze_batch() method."""
 

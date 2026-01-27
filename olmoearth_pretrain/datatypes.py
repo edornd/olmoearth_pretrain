@@ -511,22 +511,6 @@ class OlmoEarthSample(NamedTuple):
                 output_dict[key] = torch.cat((v[1:], v[:1]), dim=0)
         return OlmoEarthSample(**output_dict)
 
-    def to_tensors(self) -> OlmoEarthSample:
-        """Convert all numpy arrays to torch tensors.
-
-        This is useful for applying masking in the dataloader workers,
-        where the data is still in numpy format but masking expects torch tensors.
-
-        Returns:
-            A new OlmoEarthSample with all numpy arrays converted to torch tensors.
-        """
-        return OlmoEarthSample(
-            **{
-                key: torch.from_numpy(val) if isinstance(val, np.ndarray) else val
-                for key, val in self.as_dict(ignore_nones=True).items()
-            }
-        )
-
     def unsqueeze_batch(self) -> OlmoEarthSample:
         """Add a batch dimension (dim 0) to all tensors.
 
