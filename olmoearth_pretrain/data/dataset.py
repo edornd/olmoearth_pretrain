@@ -7,11 +7,7 @@ import logging
 import shutil
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple
-
-if TYPE_CHECKING:
-    from olmoearth_pretrain.data.transform import Transform
-    from olmoearth_pretrain.train.masking import MaskingStrategy
+from typing import Any, NamedTuple
 
 import h5py
 
@@ -37,12 +33,14 @@ from olmoearth_pretrain.data.constants import (
     ModalitySpec,
 )
 from olmoearth_pretrain.data.normalize import Normalizer, Strategy
+from olmoearth_pretrain.data.transform import Transform
 from olmoearth_pretrain.dataset.convert_to_h5py import ConvertToH5py
 from olmoearth_pretrain.datatypes import (
     MaskedOlmoEarthSample,
     OlmoEarthSample,
     collate_olmoearth_pretrain,
 )
+from olmoearth_pretrain.train.masking import MaskingStrategy
 
 logger = logging.getLogger(__name__)
 

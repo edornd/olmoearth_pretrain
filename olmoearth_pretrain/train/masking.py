@@ -12,11 +12,14 @@ from einops import rearrange, repeat
 
 from olmoearth_pretrain.config import Config
 from olmoearth_pretrain.data.constants import MISSING_VALUE, Modality, ModalitySpec
-from olmoearth_pretrain.data.dataset import OlmoEarthSample
 
 # Re-export MaskValue and MaskedOlmoEarthSample for backwards compatibility
 # These are now defined in olmoearth_pretrain.datatypes
-from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample, MaskValue
+from olmoearth_pretrain.datatypes import (
+    MaskedOlmoEarthSample,
+    MaskValue,
+    OlmoEarthSample,
+)
 from olmoearth_pretrain.decorators import experimental
 from olmoearth_pretrain.types import ArrayTensor
 
