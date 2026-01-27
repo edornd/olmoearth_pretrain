@@ -247,23 +247,6 @@ class Modality:
         name="sentinel2_l2a",
         tile_resolution_factor=16,
         band_sets=[
-            # BandSet(
-            #     [
-            #         "B02",
-            #         "B03",
-            #         "B04",
-            #         "B08",
-            #         "B05",
-            #         "B06",
-            #         "B07",
-            #         "B8A",
-            #         "B11",
-            #         "B12",
-            #         "B01",
-            #         "B09",
-            #     ],
-            #     16,
-            # ),
             # 10 m/pixel bands.
             BandSet(["B02", "B03", "B04", "B08"], 16),
             # 20 m/pixel bands.
@@ -279,9 +262,6 @@ class Modality:
         name="landsat",
         tile_resolution_factor=16,
         band_sets=[
-            # BandSet(
-            #     ["B8", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9", "B10", "B11"], 16
-            # ),
             # 15 m/pixel bands that we store at 10 m/pixel.
             BandSet(["B8"], 16),
             # 30 m/pixel bands that we store at 20 m/pixel.
