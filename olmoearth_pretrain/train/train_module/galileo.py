@@ -340,34 +340,20 @@ class GalileoTrainModule(OlmoEarthTrainModule):
             total_batch_loss,
             ReduceType.mean,
         )
-        # Note: For pre-masked batches, we don't have access to the masking strategy names
-        # from the train module, so we use generic names when pre-masked
-        if not is_pre_masked:
-            self.trainer.record_metric(
-                f"{self.masking_strategy_a.name}_masking_{self.base_loss_a.name}",
-                total_mask_a_loss,
-                ReduceType.mean,
-                namespace="train",
-            )
-            self.trainer.record_metric(
-                f"{self.masking_strategy_b.name}_masking_{self.base_loss_b.name}",
-                total_mask_b_loss,
-                ReduceType.mean,
-                namespace="train",
-            )
-        else:
-            self.trainer.record_metric(
-                f"mask_a_{self.base_loss_a.name}",
-                total_mask_a_loss,
-                ReduceType.mean,
-                namespace="train",
-            )
-            self.trainer.record_metric(
-                f"mask_b_{self.base_loss_b.name}",
-                total_mask_b_loss,
-                ReduceType.mean,
-                namespace="train",
-            )
+
+        self.trainer.record_metric(
+            f"{self.masking_strategy_a.name}_masking_{self.base_loss_a.name}",
+            total_mask_a_loss,
+            ReduceType.mean,
+            namespace="train",
+        )
+        self.trainer.record_metric(
+            f"{self.masking_strategy_b.name}_masking_{self.base_loss_b.name}",
+            total_mask_b_loss,
+            ReduceType.mean,
+            namespace="train",
+        )
+
         self.trainer.record_metric("train/epoch", self.trainer.epoch)
         self.log_regularization(total_batch_reg)
 
