@@ -512,30 +512,6 @@ class OlmoEarthSample(NamedTuple):
         return OlmoEarthSample(**output_dict)
 
 
-def collate_olmoearth_pretrain(
-    batch: list[tuple[int, OlmoEarthSample]],
-) -> tuple[int, OlmoEarthSample]:
-    """Collate function that automatically handles any modalities present in the samples."""
-
-    # Stack tensors while handling None values
-    def stack_or_none(attr: str) -> torch.Tensor | None:
-        """Stack the tensors while handling None values."""
-        # For partially missing samples we use MISSING_VALUE so we only check the first sample
-        if getattr(batch[0][1], attr) is None:
-            return None
-        stacked_tensor = torch.stack(
-            [torch.from_numpy(getattr(sample, attr)) for _, sample in batch], dim=0
-        )
-        return stacked_tensor
-
-    patch_size, batch_zero = batch[0]
-    sample_fields = batch_zero.modalities
-
-    # Create a dictionary of stacked tensors for each field
-    collated_dict = {field: stack_or_none(field) for field in sample_fields}
-    return patch_size, OlmoEarthSample(**collated_dict)
-
-
 class MaskValue(Enum):
     """Masks can take 4 possible values.
 
