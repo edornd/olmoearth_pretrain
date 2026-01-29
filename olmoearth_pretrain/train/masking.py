@@ -1617,7 +1617,21 @@ class RandomFixedModalityMaskingStrategy(FixedModalityMaskingStrategy):
 
 @MASKING_STRATEGY_REGISTRY.register("random_with_decode")
 class RandomWithDecodeMaskingStrategy(MaskingStrategy):
-    """Random masking strategy except for decode modalities, which only get decoded."""
+    """Random masking strategy that separates band sets into encode-only and decode-only roles.
+
+    This masking strategy does two things:
+
+    1. For all only_decode_modalities, all non-missing tokens are assigned MaskValue.DECODE
+    2. For all other band sets, we randomly select which to encode and which to decode at
+       an instance level. Random masking is then applied per instance per bandset.
+
+    The ratio of encoded tokens will be < encode_ratio. For encode_ratio == 0.5,
+    we'd encode between 7% and 26% of tokens, from 1000 simulated masks.
+
+    Conversely, the ratio of decoded tokens can be >> decode_ratio, since we decode everything
+    we can from the only_decode_modalities. For a decode_ratio == 0.5, we'd encode between
+    26% and 92% of tokens, from 1000 simulated masks.
+    """
 
     def __init__(
         self,
