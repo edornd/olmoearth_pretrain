@@ -1552,7 +1552,11 @@ class FixedModalityMaskingStrategy(MaskingStrategy):
             )
             if mask is None:
                 continue
+            instance = getattr(masked_sample, modality)
             mask[:] = MaskValue.DECODER.value
+            mask = self.fill_mask_with_missing_values(
+                instance, mask, Modality.get(modality)
+            )
 
         # Randomly decide whether to mark the randomize_missing_modalities as missing.
         # We do this on a per-instance basis since we want to make sure we don't mark
