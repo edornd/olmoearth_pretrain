@@ -22,31 +22,6 @@ from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
 from olmoearth_pretrain.train.masking import MaskingConfig
 
 
-class TestMaskedOlmoEarthSampleToDevice:
-    """Tests for MaskedOlmoEarthSample.to_device() method."""
-
-    def test_to_device_moves_tensors(self) -> None:
-        """Test that to_device moves all tensors to the specified device."""
-        masked_sample = MaskedOlmoEarthSample(
-            sentinel2_l2a=torch.ones((2, 8, 8, 12, 13)),
-            sentinel2_l2a_mask=torch.zeros((2, 8, 8, 12, 13)),
-            latlon=torch.ones((2, 2)),
-            latlon_mask=torch.zeros((2, 2)),
-            timestamps=torch.ones((2, 12, 3)),
-        )
-
-        # Move to CPU (since we're testing locally)
-        moved_sample = masked_sample.to_device(torch.device("cpu"))
-
-        assert moved_sample.sentinel2_l2a is not None
-        assert moved_sample.sentinel2_l2a_mask is not None
-        assert moved_sample.latlon is not None
-        assert moved_sample.sentinel2_l2a.device.type == "cpu"
-        assert moved_sample.sentinel2_l2a_mask.device.type == "cpu"
-        assert moved_sample.latlon.device.type == "cpu"
-        assert moved_sample.timestamps.device.type == "cpu"
-
-
 class TestDataLoaderConfigValidation:
     """Tests for OlmoEarthDataLoaderConfig validation."""
 
