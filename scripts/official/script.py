@@ -136,10 +136,10 @@ def build_dataloader_config(
     dataloader workers.
     """
     return OlmoEarthDataLoaderConfig(
-        num_workers=16,
+        num_workers=12,
         global_batch_size=512,
         token_budget=2250,
-        prefetch_factor=4,
+        prefetch_factor=2,
         sampled_hw_p_list=list(range(1, 13)),  # try only temporal tokens
         min_patch_size=MIN_PATCH_SIZE,
         max_patch_size=MAX_PATCH_SIZE,
