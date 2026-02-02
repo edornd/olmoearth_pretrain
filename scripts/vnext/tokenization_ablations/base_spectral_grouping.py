@@ -18,14 +18,15 @@ water detection, and atmospheric effects.
 
 import logging
 import sys
-from functools import partial
 from pathlib import Path
 
 # Add official directory to path for script imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "official"))
 
 from script import (
-    build_common_components,
+    build_common_components as build_common_components_base,
+)
+from script import (
     build_dataloader_config,
     build_dataset_config,
     build_train_module_config,
@@ -33,7 +34,7 @@ from script import (
     build_visualize_config,
 )
 
-from olmoearth_pretrain.internal.experiment import CommonComponents, main
+from olmoearth_pretrain.internal.experiment import CommonComponents, SubCmd, main
 from olmoearth_pretrain.internal.utils import MODEL_SIZE_ARGS
 from olmoearth_pretrain.nn.flexihelios import (
     EncoderConfig,
@@ -74,6 +75,15 @@ TOKENIZATION_CONFIG = TokenizationConfig(
 )
 
 
+def build_common_components(
+    script: str, cmd: SubCmd, run_name: str, cluster: str, overrides: list[str]
+) -> CommonComponents:
+    """Build common components with spectral grouping tokenization."""
+    common = build_common_components_base(script, cmd, run_name, cluster, overrides)
+    common.tokenization_config = TOKENIZATION_CONFIG
+    return common
+
+
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config with spectral grouping tokenization for Sentinel-2."""
     model_size = MODEL_SIZE_ARGS["base_shallow_decoder"]
@@ -87,7 +97,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         max_patch_size=MAX_PATCH_SIZE,
         drop_path=0.1,
         max_sequence_length=12,
-        tokenization_config=TOKENIZATION_CONFIG,
+        tokenization_config=common.tokenization_config,
     )
     decoder_config = PredictorConfig(
         encoder_embedding_size=model_size["encoder_embedding_size"],
@@ -97,7 +107,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         num_heads=model_size["decoder_num_heads"],
         supported_modality_names=common.training_modalities,
         max_sequence_length=12,
-        tokenization_config=TOKENIZATION_CONFIG,
+        tokenization_config=common.tokenization_config,
     )
     model_config = LatentMIMConfig(
         encoder_config=encoder_config,
@@ -107,18 +117,12 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
 
 
 if __name__ == "__main__":
-    # Use functools.partial to pass tokenization_config to builders that need it.
-    # This ensures the masking strategy uses the same band groupings as the model.
     main(
         common_components_builder=build_common_components,
         model_config_builder=build_model_config,
-        train_module_config_builder=partial(
-            build_train_module_config, tokenization_config=TOKENIZATION_CONFIG
-        ),
+        train_module_config_builder=build_train_module_config,
         dataset_config_builder=build_dataset_config,
-        dataloader_config_builder=partial(
-            build_dataloader_config, tokenization_config=TOKENIZATION_CONFIG
-        ),
+        dataloader_config_builder=build_dataloader_config,
         trainer_config_builder=build_trainer_config,
         visualize_config_builder=build_visualize_config,
     )

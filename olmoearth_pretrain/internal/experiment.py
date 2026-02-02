@@ -33,6 +33,7 @@ from olmoearth_pretrain.internal.utils import (
     MockLatentMIMTrainModule,
     MockOlmoEarthDataLoader,
 )
+from olmoearth_pretrain.nn.tokenization import TokenizationConfig
 from olmoearth_pretrain.train.train_module.train_module import (
     OlmoEarthTrainModuleConfig,
 )
@@ -72,14 +73,25 @@ HeliosBeakerLaunchConfig = _deprecated_class_alias(
 
 @dataclass
 class CommonComponents(Config):
-    """Any configurable items that are common to all experiments."""
+    """Any configurable items that are common to all experiments.
+
+    Args:
+        run_name: Name of the experiment run.
+        save_folder: Path to save checkpoints and logs.
+        training_modalities: List of modality names to train on.
+        launch: Optional Beaker launch configuration.
+        nccl_debug: Whether to enable NCCL debugging.
+        tokenization_config: Optional custom tokenization config for band groupings.
+            If provided, will be used by both the model and masking strategy to ensure
+            consistent band groupings.
+    """
 
     run_name: str
     save_folder: str
     training_modalities: list[str]
     launch: OlmoEarthBeakerLaunchConfig | None = None
     nccl_debug: bool = False
-    # callbacks: dict[str, Callback]
+    tokenization_config: TokenizationConfig | None = None
 
     def validate(self) -> None:
         """Validate the common components."""
@@ -91,6 +103,8 @@ class CommonComponents(Config):
             raise ValueError(
                 "training_modalities must contain only valid modality names"
             )
+        if self.tokenization_config is not None:
+            self.tokenization_config.validate()
 
 
 @dataclass
