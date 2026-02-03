@@ -340,6 +340,23 @@ class OlmoEarthDataset(Dataset):
             dtype=self.dtype,
         )
 
+    @staticmethod
+    def extract_hwt_from_sample_dict(
+        sample_dict: dict[str, Any],
+    ) -> tuple[int, int, int]:
+        """Extract h, w, t from sample_dict."""
+        time = sample_dict["timestamps"].shape[0]
+        for mod_name, mod_data in sample_dict.items():
+            if mod_name == "timestamps":
+                continue
+            mod_spec = Modality.get(mod_name)
+            if mod_spec.is_spatial and mod_data is not None:
+                # shape is (H, W, T, C) without batch dim
+                height = mod_data.shape[0] // mod_spec.image_tile_size_factor
+                width = mod_data.shape[1] // mod_spec.image_tile_size_factor
+                return height, width, time
+        raise ValueError("Expected sample dict to have at least one spatial modality")
+
     def fill_sample_with_missing_values(
         self, sample_dict: dict[str, Any], missing_timesteps_masks: dict[str, Any]
     ) -> tuple[OlmoEarthSample, list[str]]:
@@ -349,18 +366,7 @@ class OlmoEarthDataset(Dataset):
         )
         missing_modalities = []
 
-        # Extract h, w, t from sample_dict to avoid creating OlmoEarthSample early
-        time = sample_dict["timestamps"].shape[0]
-        height, width = None, None
-        for mod_name, mod_data in sample_dict.items():
-            if mod_name == "timestamps":
-                continue
-            mod_spec = Modality.get(mod_name)
-            if mod_spec.is_spatial and mod_data is not None:
-                # shape is (H, W, T, C) without batch dim
-                height = mod_data.shape[0] // mod_spec.image_tile_size_factor
-                width = mod_data.shape[1] // mod_spec.image_tile_size_factor
-                break
+        height, width, time = self.extract_hwt_from_sample_dict(sample_dict)
 
         for modality in self.training_modalities:
             # If one modality is completely missing, we need to fill it all with missing values
