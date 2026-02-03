@@ -1682,7 +1682,9 @@ class RandomWithDecodeMaskingStrategy(MaskingStrategy):
                     device = None
                 modality = Modality.get(modality_name)
 
-                mask_shape = instance.shape[:-1] + (len(modality.band_sets),)
+                mask_shape = instance.shape[:-1] + (
+                    self._get_num_bandsets(modality_name),
+                )
                 mask = torch.full(
                     mask_shape, fill_value=MaskValue.DECODER.value, device=device
                 )
