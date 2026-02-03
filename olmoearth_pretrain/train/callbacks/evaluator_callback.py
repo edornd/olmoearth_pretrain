@@ -388,7 +388,7 @@ class DownstreamEvaluator:
             self.trainer.save_folder,
             self.evaluation_name,
             f"lr{self.ft_lr}",
-            "resume.ckpt",
+            "last.ckpt",
         )
         return resume_checkpoint_path
 
