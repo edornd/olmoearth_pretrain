@@ -14,7 +14,12 @@ from olmo_core.distributed.parallel.data_parallel import (
 )
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from script import build_common_components, build_dataset_config, build_visualize_config
+from script import (
+    build_common_components,
+    build_dataset_config,
+    build_trainer_config,
+    build_visualize_config,
+)
 
 from olmoearth_pretrain.data.constants import Modality
 from olmoearth_pretrain.data.dataloader import OlmoEarthDataLoaderConfig
@@ -32,7 +37,12 @@ logger = logging.getLogger(__name__)
 MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
 
-__all__ = ["build_common_components", "build_dataset_config", "build_visualize_config"]
+__all__ = [
+    "build_common_components",
+    "build_dataset_config",
+    "build_visualize_config",
+    "build_trainer_config",
+]
 
 
 def get_masking_config(common: CommonComponents) -> MaskingConfig:
