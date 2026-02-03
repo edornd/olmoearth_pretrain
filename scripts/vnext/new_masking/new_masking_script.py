@@ -7,7 +7,6 @@ from pathlib import Path
 # Add official directory to path for script imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "official"))
 
-
 from olmo_core.config import DType
 from olmo_core.distributed.parallel.data_parallel import (
     DataParallelConfig,
@@ -15,6 +14,7 @@ from olmo_core.distributed.parallel.data_parallel import (
 )
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
+from script import build_common_components
 
 from olmoearth_pretrain.data.constants import Modality
 from olmoearth_pretrain.data.dataloader import OlmoEarthDataLoaderConfig
@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
+
+__all__ = ["build_common_components"]
 
 
 def get_masking_config(common: CommonComponents) -> MaskingConfig:
