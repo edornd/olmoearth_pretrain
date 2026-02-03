@@ -226,9 +226,19 @@ def _set_rng_state(state: dict) -> None:
     """Restore RNG states."""
     random.setstate(state["python"])
     np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch"])
+    # Ensure torch state is ByteTensor (required by set_rng_state)
+    torch_state = state["torch"]
+    if not isinstance(torch_state, torch.ByteTensor):
+        torch_state = torch_state.to(dtype=torch.uint8)
+    torch.set_rng_state(torch_state)
     if torch.cuda.is_available() and "cuda" in state:
-        torch.cuda.set_rng_state_all(state["cuda"])
+        cuda_states = state["cuda"]
+        # Ensure each CUDA state is ByteTensor
+        cuda_states = [
+            s if isinstance(s, torch.ByteTensor) else s.to(dtype=torch.uint8)
+            for s in cuda_states
+        ]
+        torch.cuda.set_rng_state_all(cuda_states)
 
 
 def _save_training_checkpoint(
