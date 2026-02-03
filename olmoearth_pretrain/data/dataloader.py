@@ -26,14 +26,16 @@ from upath import UPath
 
 from olmoearth_pretrain._compat import deprecated_class_alias as _deprecated_class_alias
 from olmoearth_pretrain.config import Config
+from olmoearth_pretrain.data.collate import (
+    collate_double_masked_batched,
+    collate_single_masked_batched,
+)
 from olmoearth_pretrain.data.concat import OlmoEarthConcatDataset
 from olmoearth_pretrain.data.constants import IMAGE_TILE_SIZE, Modality
 from olmoearth_pretrain.data.dataset import (
     GetItemArgs,
     OlmoEarthDataset,
     OlmoEarthSample,
-    collate_double_masked_batched,
-    collate_single_masked_batched,
 )
 from olmoearth_pretrain.data.transform import Transform, TransformConfig
 from olmoearth_pretrain.train.masking import MaskingConfig, MaskingStrategy

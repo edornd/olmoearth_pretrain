@@ -5,15 +5,13 @@ from pathlib import Path
 
 import numpy as np
 
+from olmoearth_pretrain.data.collate import collate_single_masked_batched
 from olmoearth_pretrain.data.constants import Modality
 from olmoearth_pretrain.data.dataloader import (
     OlmoEarthDataLoader,
     _IterableDatasetWrapper,
 )
-from olmoearth_pretrain.data.dataset import (
-    OlmoEarthDataset,
-    collate_single_masked_batched,
-)
+from olmoearth_pretrain.data.dataset import OlmoEarthDataset
 from olmoearth_pretrain.train.masking import MaskingConfig
 
 

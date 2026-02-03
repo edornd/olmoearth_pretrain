@@ -6,17 +6,16 @@ import numpy as np
 import pytest
 import torch
 
+from olmoearth_pretrain.data.collate import (
+    collate_double_masked_batched,
+    collate_single_masked_batched,
+)
 from olmoearth_pretrain.data.constants import Modality
 from olmoearth_pretrain.data.dataloader import (
     OlmoEarthDataLoader,
     OlmoEarthDataLoaderConfig,
 )
-from olmoearth_pretrain.data.dataset import (
-    OlmoEarthDataset,
-    OlmoEarthSample,
-    collate_double_masked_batched,
-    collate_single_masked_batched,
-)
+from olmoearth_pretrain.data.dataset import OlmoEarthDataset, OlmoEarthSample
 from olmoearth_pretrain.datatypes import MaskedOlmoEarthSample
 from olmoearth_pretrain.train.masking import MaskingConfig
 
