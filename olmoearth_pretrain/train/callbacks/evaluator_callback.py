@@ -434,7 +434,9 @@ class DownstreamEvaluator:
         best_checkpoint_path = self._get_best_checkpoint_path()
         resume_checkpoint_path = self._get_resume_checkpoint_path()
         if os.path.exists(best_checkpoint_path):
-            logger.info("Best checkpoint already exists, skipping finetuning")
+            logger.info(
+                f"Best checkpoint for {self.evaluation_name} already exists, skipping finetuning"
+            )
             return EvalTaskResult(val_result=None, test_result=None)
 
         if os.path.exists(resume_checkpoint_path):
