@@ -34,6 +34,15 @@ from olmoearth_pretrain.evals.metrics import EvalResult, EvalTaskResult
 logger = getLogger(__name__)
 
 
+# Finetuning constants
+FREEZE_EPOCH_FRACTION = 0.2  # Freeze backbone for first 20% of epochs
+UNFREEZE_LR_FACTOR = 0.1  # Reduce LR by 10x when unfreezing backbone
+SCHEDULER_FACTOR = 0.2
+SCHEDULER_PATIENCE = 2
+SCHEDULER_MIN_LR = 0.0
+SCHEDULER_COOLDOWN = 10
+
+
 def _get_wandb_logger(trainer: Trainer) -> Any | None:
     """Return the wandb module from the OlmoEarth callback, if available."""
     from olmoearth_pretrain.train.callbacks.wandb import OlmoEarthWandBCallback
@@ -85,8 +94,8 @@ def run_finetune_eval(
         sample_batch, label = next(iter(train_loader))
         _, _ = ft(to_device(sample_batch, device), label.to(device))
 
-    # Freeze the backbone for the first 20% of the epochs
-    freeze_epochs = math.ceil(0.2 * epochs) if epochs > 0 else 0
+    # Freeze the backbone for the first portion of epochs
+    freeze_epochs = math.ceil(FREEZE_EPOCH_FRACTION * epochs) if epochs > 0 else 0
     backbone_unfrozen = freeze_epochs == 0
     if not backbone_unfrozen:
         set_backbone_trainable(ft.backbone, False)
@@ -99,10 +108,10 @@ def run_finetune_eval(
     scheduler = ReduceLROnPlateau(
         opt,
         mode="max",
-        factor=0.2,
-        patience=2,
-        min_lr=0.0,
-        cooldown=10,
+        factor=SCHEDULER_FACTOR,
+        patience=SCHEDULER_PATIENCE,
+        min_lr=SCHEDULER_MIN_LR,
+        cooldown=SCHEDULER_COOLDOWN,
     )
     if task_config.task_type == TaskType.CLASSIFICATION:
         loss_fn: nn.Module = (
@@ -122,7 +131,7 @@ def run_finetune_eval(
     if resume_checkpoint_path:
         if not os.path.exists(resume_checkpoint_path):
             logger.info(
-                f"Resume checkpoint {resume_checkpoint_path} not found, " 
+                f"Resume checkpoint {resume_checkpoint_path} not found, "
                 f"starting fresh training..."
             )
         else:
@@ -153,7 +162,7 @@ def run_finetune_eval(
         if not backbone_unfrozen and epoch >= freeze_epochs:
             set_backbone_trainable(ft.backbone, True)
             backbone_unfrozen = True
-            current_lr = lr / 10.0
+            current_lr = lr * UNFREEZE_LR_FACTOR
             for group in opt.param_groups:
                 group["lr"] = current_lr
             logger.info(
@@ -221,7 +230,7 @@ def run_finetune_eval(
             f"Finetune Epoch [{epoch + 1}/{epochs}] Validation Metric: {val_result.primary:.4f}"
         )
         scheduler.step(val_result.primary)
-        
+
         # This assumes that the validation metric is the higher the better.
         if val_result.primary > best_val_metric:
             best_val_metric = val_result.primary

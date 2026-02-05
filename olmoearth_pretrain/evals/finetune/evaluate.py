@@ -19,10 +19,10 @@ def eval_cls(
     device: torch.device,
     is_multilabel: bool,
 ) -> EvalResult:
-    """Evaluate classification metric.
+    """Evaluate classification metrics.
 
     Returns:
-        EvalResult with metrics: micro f1 if multilabel, accuracy otherwise.
+        EvalResult with metrics: micro f1 (if multilabel) or accuracy.
     """
     module.eval()
     logits_all, labels_all = [], []
