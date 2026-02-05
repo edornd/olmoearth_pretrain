@@ -1,12 +1,32 @@
 """Launch fine-tune evaluation sweeps for OlmoEarth and other models.
 
-Example run:
-python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --project_name test_finetune_resume --module_path olmoearth_pretrain/evals/models/clay/clay_launch.py --cluster ai2/jupiter --model clay --defaults_only
+Usage examples:
 
-python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/phase2.0_base_lr0.0001_wd0.02/step667200 --project_name test_finetune_resume --module_path scripts/official/base.py --cluster ai2/jupiter --defaults_only
+1. Finetune all eval tasks using TerraMind model (default lr only):
+   python olmoearth_pretrain/internal/full_eval_sweep_finetune.py \
+       --project_name test_finetune \
+       --module_path olmoearth_pretrain/evals/models/terramind/terramind_launch.py \
+       --cluster ai2/jupiter \
+       --model terramind \
+       --defaults_only
 
-To run only a subset of tasks, add the following argument:
-"--trainer.callbacks.downstream_evaluator.tasks_to_run=['m_eurosat', 'm_so2sat']"
+2. Finetune all eval tasks using OlmoEarth model (default lr only):
+   python olmoearth_pretrain/internal/full_eval_sweep_finetune.py \
+       --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/phase2.0_base_lr0.0001_wd0.02/step667200 \
+       --project_name test_finetune \
+       --module_path scripts/official/base.py \
+       --cluster ai2/jupiter \
+       --defaults_only
+
+3. To run a subset of tasks, add:
+     --trainer.callbacks.downstream_evaluator.tasks_to_run='["m_eurosat","m_so2sat"]'
+
+Flags:
+  --defaults_only  Runs just one job: lr = 1e-4
+  (omit)           Sweeps lrs: [1e-4, 5e-4, 1e-3]
+
+OlmoEarth: normalization method (pretrained vs dataset) is *not* swept.
+Each FT eval task's normalization is defined in all_evals.py.
 """
 
 import argparse
