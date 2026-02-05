@@ -5,7 +5,7 @@ python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --project_name te
 
 python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/phase2.0_base_lr0.0001_wd0.02/step667200 --project_name test_finetune_resume --module_path scripts/official/base.py --cluster ai2/jupiter --defaults_only
 
-To run only certain tasks, add the following argument:
+To run only a subset of tasks, add the following argument:
 "--trainer.callbacks.downstream_evaluator.tasks_to_run=['m_eurosat', 'm_so2sat']"
 """
 
