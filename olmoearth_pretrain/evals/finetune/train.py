@@ -52,6 +52,34 @@ def _get_wandb_logger(trainer: Trainer) -> Any | None:
     return None
 
 
+def compute_eval_metrics(
+    ft: nn.Module,
+    task_config: EvalDatasetConfig,
+    val_loader: DataLoader,
+    test_loader: DataLoader | None,
+    device: torch.device,
+    patch_size: int,
+) -> EvalTaskResult:
+    """Evaluate a finetuned model on val and test sets."""
+    ft.eval()
+
+    if task_config.task_type == TaskType.CLASSIFICATION:
+        val_result = eval_cls(ft, val_loader, device, task_config.is_multilabel)
+    else:
+        val_result = eval_seg(ft, val_loader, device, task_config.num_classes, patch_size)
+
+    test_result: EvalResult | None = None
+    if test_loader is not None:
+        if task_config.task_type == TaskType.CLASSIFICATION:
+            test_result = eval_cls(ft, test_loader, device, task_config.is_multilabel)
+        else:
+            test_result = eval_seg(
+                ft, test_loader, device, task_config.num_classes, patch_size
+            )
+
+    return EvalTaskResult(val_result=val_result, test_result=test_result)
+
+
 def run_finetune_eval(
     task_name: str,
     task_config: EvalDatasetConfig,
@@ -93,6 +121,15 @@ def run_finetune_eval(
         sample_batch, label = next(iter(train_loader))
         _, _ = ft(to_device(sample_batch, device), label.to(device))
 
+    # If best checkpoint exists, load it and evaluate directly
+    if best_checkpoint_path and os.path.exists(best_checkpoint_path):
+        logger.info(f"Loading existing best checkpoint from {best_checkpoint_path}")
+        state = torch.load(best_checkpoint_path, map_location=device)
+        ft.load_state_dict(state)
+        return compute_eval_metrics(
+            ft, task_config, val_loader, test_loader, device, patch_size
+        )
+
     # Freeze the backbone for the first portion of epochs
     freeze_epochs = math.ceil(FREEZE_EPOCH_FRACTION * epochs) if epochs > 0 else 0
     backbone_unfrozen = freeze_epochs == 0
@@ -126,28 +163,22 @@ def run_finetune_eval(
     best_val_result: EvalResult | None = None
     start_epoch = 0
 
-    # Try to resume from checkpoint
-    if resume_checkpoint_path:
-        if not os.path.exists(resume_checkpoint_path):
-            logger.info(
-                f"Resume checkpoint {resume_checkpoint_path} not found, "
-                f"starting fresh training..."
-            )
-        else:
-            ckpt = load_training_checkpoint(resume_checkpoint_path, device)
-            start_epoch = ckpt["epoch"] + 1
-            ft.load_state_dict(ckpt["model_state"])
-            opt.load_state_dict(ckpt["optimizer_state"])
-            scheduler.load_state_dict(ckpt["scheduler_state"])
-            best_state = ckpt["best_state"]
-            best_val_metric = ckpt["best_val_metric"]
-            backbone_unfrozen = ckpt["backbone_unfrozen"]
-            # Handle backbone freeze state on resume
-            set_backbone_trainable(ft.backbone, backbone_unfrozen)
-            logger.info(
-                f"Resumed from epoch {start_epoch}, best_val_metric={best_val_metric:.4f}, "
-                f"backbone_unfrozen={backbone_unfrozen}"
-            )
+    # Resume from checkpoint if it exists
+    if resume_checkpoint_path and os.path.exists(resume_checkpoint_path):
+        ckpt = load_training_checkpoint(resume_checkpoint_path, device)
+        start_epoch = ckpt["epoch"] + 1
+        ft.load_state_dict(ckpt["model_state"])
+        opt.load_state_dict(ckpt["optimizer_state"])
+        scheduler.load_state_dict(ckpt["scheduler_state"])
+        best_state = ckpt["best_state"]
+        best_val_metric = ckpt["best_val_metric"]
+        backbone_unfrozen = ckpt["backbone_unfrozen"]
+        # Handle backbone freeze state on resume
+        set_backbone_trainable(ft.backbone, backbone_unfrozen)
+        logger.info(
+            f"Resumed from epoch {start_epoch}, best_val_metric={best_val_metric:.4f}, "
+            f"backbone_unfrozen={backbone_unfrozen}"
+        )
 
     ft.train()
     wandb_logger = _get_wandb_logger(trainer)
