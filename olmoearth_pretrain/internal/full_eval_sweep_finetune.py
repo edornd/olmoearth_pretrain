@@ -19,7 +19,8 @@ Usage examples:
        --defaults_only
 
 3. To run a subset of tasks, add:
-     --trainer.callbacks.downstream_evaluator.tasks_to_run='["m_eurosat","m_so2sat"]'
+     --trainer.callbacks.downstream_evaluator.tasks_to_run='["m_eurosat","m_so2sat","mados"]'
+   You can also launch multiple jobs with different tasks_to_run values to speed up the finetuning.
 
 Flags:
   --defaults_only  Runs just one job: lr = 1e-4
