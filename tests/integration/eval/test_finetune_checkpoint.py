@@ -54,9 +54,3 @@ def test_resume_from_checkpoint() -> None:
         assert ckpt["epoch"] + 1 == 3
         assert ckpt["backbone_unfrozen"] is False
         assert ckpt["best_val_metric"] == 0.5
-
-
-def test_load_nonexistent_checkpoint_returns_none() -> None:
-    """Test that loading missing checkpoint returns None gracefully."""
-    result = load_training_checkpoint("/nonexistent/path/last.pt", torch.device("cpu"))
-    assert result is None

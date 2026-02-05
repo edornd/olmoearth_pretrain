@@ -120,8 +120,13 @@ def run_finetune_eval(
 
     # Try to resume from checkpoint
     if resume_checkpoint_path:
-        ckpt = load_training_checkpoint(resume_checkpoint_path, device)
-        if ckpt is not None:
+        if not os.path.exists(resume_checkpoint_path):
+            logger.info(
+                f"Resume checkpoint {resume_checkpoint_path} not found, " 
+                f"starting fresh training..."
+            )
+        else:
+            ckpt = load_training_checkpoint(resume_checkpoint_path, device)
             start_epoch = ckpt["epoch"] + 1
             ft.load_state_dict(ckpt["model_state"])
             opt.load_state_dict(ckpt["optimizer_state"])
@@ -216,7 +221,8 @@ def run_finetune_eval(
             f"Finetune Epoch [{epoch + 1}/{epochs}] Validation Metric: {val_result.primary:.4f}"
         )
         scheduler.step(val_result.primary)
-
+        
+        # This assumes that the validation metric is the higher the better.
         if val_result.primary > best_val_metric:
             best_val_metric = val_result.primary
             best_val_result = val_result

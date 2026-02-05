@@ -53,27 +53,23 @@ def save_training_checkpoint(
         raise
 
 
-def load_training_checkpoint(path: str, device: torch.device) -> dict | None:
-    """Load a training checkpoint if it exists and is valid."""
-    if not os.path.exists(path):
-        return None
+def load_training_checkpoint(path: str, device: torch.device) -> dict:
+    """Load a training checkpoint."""
     try:
         ckpt = torch.load(path, map_location=device, weights_only=False)
-        # Validate required keys
-        required = [
-            "epoch",
-            "model_state",
-            "optimizer_state",
-            "scheduler_state",
-            "best_state",
-            "best_val_metric",
-            "backbone_unfrozen",
-        ]
-        if not all(k in ckpt for k in required):
-            logger.warning(f"Checkpoint {path} missing keys, ignoring")
-            return None
-        logger.info(f"Loading training checkpoint from {path}")
-        return ckpt
     except Exception as e:
-        logger.warning(f"Failed to load checkpoint {path}: {e}, starting fresh")
-        return None
+        raise RuntimeError(f"Failed to load checkpoint {path}: {e}") from e
+    required = [
+        "epoch",
+        "model_state",
+        "optimizer_state",
+        "scheduler_state",
+        "best_state",
+        "best_val_metric",
+        "backbone_unfrozen",
+    ]
+    missing = [k for k in required if k not in ckpt]
+    if missing:
+        raise ValueError(f"Checkpoint {path} missing keys: {missing}")
+    logger.info(f"Loaded training checkpoint from {path}")
+    return ckpt
