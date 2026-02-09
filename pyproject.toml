@@ -2,17 +2,16 @@
 name = "olmoearth-pretrain"
 version = "0.1.0"
 description = "A library for developing earth system foundation models"
-authors = [
-    { name = "OlmoEarth Team" },
-]
+authors = [{ name = "OlmoEarth Team" }]
 readme = "README.md"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 requires-python = ">=3.11, <3.14" # For torch  2.7.1 compatibility
 dependencies = [
     # Minimal inference dependencies
     "einops>=0.7.0",
     "huggingface_hub",
     "numpy>=1.26.4",
+    "pydantic>=2.12.3",
     "torch>=2.7,<2.8",
     "universal-pathlib>=0.2.5",
 ]
@@ -33,26 +32,20 @@ include = ["olmoearth_pretrain*", "helios*"]
 [tool.ruff]
 fix = true
 
-[tool.ruff.lint]
-extend-select = ["D", "I", "UP"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.pytest.ini_options]
-testpaths = [
-    "tests",
-]
-addopts = [
-    "--import-mode=importlib",
-]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib"]
 
 [tool.uv.sources]
 claymodel = { git = "https://github.com/Clay-foundation/model.git" }
 geobench = { git = "https://github.com/ServiceNow/geo-bench.git" }
 torch = [
-  { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
-  { index = "pytorch-cu128", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux'" },
 ]
 
 [[tool.uv.index]]
@@ -91,7 +84,7 @@ beaker = [
     "pyyaml>=6.0.3",
     "requests>=2.32.5",
     "rich>=12.3,<14.0",
-    "google-cloud-compute"
+    "google-cloud-compute",
 ]
 dataset-creation = [
     "class-registry>=2.1.2",
@@ -137,9 +130,7 @@ eval = [
     "xarray>=2025.10.1",
 ]
 
-flash_attn = [
-    "flash-attn>=2.4.0",
-]
+flash_attn = ["flash-attn>=2.4.0"]
 
 [tool.uv.extra-build-dependencies]
 flash-attn = [{ requirement = "torch", match-runtime = true }]

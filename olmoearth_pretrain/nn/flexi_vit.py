@@ -1,5 +1,3 @@
-"""Model code for the OlmoEarth Pretrain model."""
-
 import logging
 import math
 from dataclasses import dataclass
@@ -35,13 +33,9 @@ from olmoearth_pretrain.nn.utils import get_cumulative_sequence_lengths
 logger = logging.getLogger(__name__)
 
 
-def get_modalities_to_process(
-    available_modalities: list[str], supported_modality_names: list[str]
-) -> list[str]:
+def get_modalities_to_process(available_modalities: list[str], supported_modality_names: list[str]) -> list[str]:
     """Get the modalities to process."""
-    modalities_to_process = set(supported_modality_names).intersection(
-        set(available_modalities)
-    )
+    modalities_to_process = set(supported_modality_names).intersection(set(available_modalities))
     return list(modalities_to_process)
 
 
@@ -49,9 +43,7 @@ def return_modalities_from_dict(
     per_modality_input_tokens: dict[str, Tensor],
 ) -> list[str]:
     """Return the modalities from a dictionary of per modality input tokens."""
-    return [
-        key for key in per_modality_input_tokens.keys() if not key.endswith("_mask")
-    ]
+    return [key for key in per_modality_input_tokens.keys() if not key.endswith("_mask")]
 
 
 class PoolingType(StrEnum):
@@ -145,11 +137,7 @@ class TokensAndMasks(NamedTuple):
     @property
     def modalities(self) -> list[str]:
         """Return all data fields."""
-        return [
-            x
-            for x in self._fields
-            if not x.endswith("mask") and getattr(self, x) is not None
-        ]
+        return [x for x in self._fields if not x.endswith("mask") and getattr(self, x) is not None]
 
     def get_shape_dict(self) -> dict[str, tuple]:
         """Return a dictionary of the shapes of the fields."""
@@ -159,9 +147,7 @@ class TokensAndMasks(NamedTuple):
     def _flatten(x: Tensor) -> Tensor:
         return rearrange(x, "b ... d -> b (...) d")
 
-    def flatten_tokens_and_masks(
-        self, return_lists: bool = False
-    ) -> tuple[Tensor, Tensor]:
+    def flatten_tokens_and_masks(self, return_lists: bool = False) -> tuple[Tensor, Tensor]:
         """Return the flattened tokens and masks.
 
         Args:
@@ -177,9 +163,7 @@ class TokensAndMasks(NamedTuple):
             masked_attr = getattr(self, mask_attr_name)
             if attr is not None:
                 if masked_attr is None:
-                    raise ValueError(
-                        f"Can't have present {attr_name} but None {mask_attr_name}"
-                    )
+                    raise ValueError(f"Can't have present {attr_name} but None {mask_attr_name}")
                 masked_attr = masked_attr.unsqueeze(dim=-1)
                 flattened_x.append(self._flatten(attr))
                 flattened_masks.append(self._flatten(masked_attr))
@@ -228,9 +212,7 @@ class TokensAndMasks(NamedTuple):
                     if pooling_type == PoolingType.MEAN:
                         spatial_average.append(torch.mean(attr, dim=(-2, -3)))
                     else:
-                        spatial_average.append(
-                            torch.max(torch.max(attr, dim=-2).values, dim=-2).values
-                        )
+                        spatial_average.append(torch.max(torch.max(attr, dim=-2).values, dim=-2).values)
         if len(spatial_average) == 0:
             raise ValueError("Missing unmasked spatial modalities for spatial pooling.")
         spatial_average_t = torch.stack(spatial_average, dim=-1)
@@ -246,17 +228,13 @@ class TokensAndMasks(NamedTuple):
         mask = (mask == MaskValue.ONLINE_ENCODER.value).long()
         x_for_pooling = x * mask.unsqueeze(-1)
         if pooling_type == PoolingType.MAX:
-            x_for_pooling = x_for_pooling.masked_fill(
-                ~mask.bool().unsqueeze(-1), -float("inf")
-            )
+            x_for_pooling = x_for_pooling.masked_fill(~mask.bool().unsqueeze(-1), -float("inf"))
             return x_for_pooling.max(dim=1).values
         elif pooling_type == PoolingType.MEAN:
             num_encoded_tokens = torch.sum(mask, -1, keepdim=True)
             logger.debug(f"num_encoded_tokens: {num_encoded_tokens}")
             if (num_encoded_tokens == 0).any():
-                raise ValueError(
-                    f"num_encoded_tokens is 0 for some samples {num_encoded_tokens}"
-                )
+                raise ValueError(f"num_encoded_tokens is 0 for some samples {num_encoded_tokens}")
             return x_for_pooling.sum(dim=1) / num_encoded_tokens
         else:
             raise ValueError(f"Invalid pooling type: {pooling_type}")
@@ -312,23 +290,17 @@ class ProjectAndAggregate(nn.Module):
         self.projection = nn.Sequential(*projections)
         self.aggregate_then_project = aggregate_then_project
 
-    def apply_aggregate_then_project(
-        self, x: TokensAndMasks | torch.Tensor
-    ) -> torch.Tensor:
+    def apply_aggregate_then_project(self, x: TokensAndMasks | torch.Tensor) -> torch.Tensor:
         """Apply the aggregate operation to the input."""
         if isinstance(x, TokensAndMasks):
-            pooled_for_contrastive = x.pool_unmasked_tokens(
-                PoolingType.MEAN, spatial_pooling=False
-            )
+            pooled_for_contrastive = x.pool_unmasked_tokens(PoolingType.MEAN, spatial_pooling=False)
         elif isinstance(x, torch.Tensor):
             pooled_for_contrastive = reduce(x, "b ... d -> b  d", "mean")
         else:
             raise ValueError(f"Invalid input type: {type(x)}")
         return self.projection(pooled_for_contrastive)
 
-    def apply_project_then_aggregate(
-        self, x: TokensAndMasks | torch.Tensor
-    ) -> torch.Tensor:
+    def apply_project_then_aggregate(self, x: TokensAndMasks | torch.Tensor) -> torch.Tensor:
         """Apply the project operation to the input then aggregate."""
         if isinstance(x, TokensAndMasks):
             decoder_emedded_dict = x._asdict()
@@ -338,13 +310,9 @@ class ProjectAndAggregate(nn.Module):
                 x_modality = self.projection(x_modality)
                 masked_modality_name = x.get_masked_modality_name(modality)
                 decoder_emedded_dict[modality] = x_modality
-                decoder_emedded_dict[masked_modality_name] = getattr(
-                    x, masked_modality_name
-                )
+                decoder_emedded_dict[masked_modality_name] = getattr(x, masked_modality_name)
             x_projected = TokensAndMasks(**decoder_emedded_dict)
-            projected_pooled = x_projected.pool_unmasked_tokens(
-                PoolingType.MEAN, spatial_pooling=False
-            )
+            projected_pooled = x_projected.pool_unmasked_tokens(PoolingType.MEAN, spatial_pooling=False)
         elif isinstance(x, torch.Tensor):
             x_projected = self.projection(x)
             projected_pooled = reduce(x_projected, "b ... d -> b  d", "mean")
@@ -392,21 +360,15 @@ class MultiModalPatchEmbeddings(nn.Module):
         self.per_modality_embeddings = nn.ModuleDict({})
 
         for modality in self.supported_modality_names:
-            self.per_modality_embeddings[modality] = (
-                self._get_patch_embedding_module_for_modality(modality)
-            )
+            self.per_modality_embeddings[modality] = self._get_patch_embedding_module_for_modality(modality)
 
         # For every patch embedding module we want to create a unique buffer
         # for selecting the correct band indices from the data tensor
         for modality in self.supported_modality_names:
-            for idx, bandset_indices in enumerate(
-                self.tokenization_config.get_bandset_indices(modality)
-            ):
+            for idx, bandset_indices in enumerate(self.tokenization_config.get_bandset_indices(modality)):
                 buffer_name = self._get_buffer_name(modality, idx)
                 banset_indices_tensor = torch.tensor(bandset_indices, dtype=torch.long)
-                self.register_buffer(
-                    buffer_name, banset_indices_tensor, persistent=False
-                )
+                self.register_buffer(buffer_name, banset_indices_tensor, persistent=False)
 
         # Create a dictionary of per modality index tensors to do  index select with registered buffer
 
@@ -487,15 +449,9 @@ class MultiModalPatchEmbeddings(nn.Module):
                 modality_specific_kwargs = {"patch_size": patch_size}
 
             buffer_name = self._get_buffer_name(modality, idx)
-            patchified_data = torch.index_select(
-                modality_data, -1, getattr(self, buffer_name)
-            )
-            embedding_module = self.per_modality_embeddings[modality][
-                self._get_embedding_module_name(modality, idx)
-            ]
-            patchified_data = embedding_module(
-                patchified_data, **modality_specific_kwargs
-            )
+            patchified_data = torch.index_select(modality_data, -1, getattr(self, buffer_name))
+            embedding_module = self.per_modality_embeddings[modality][self._get_embedding_module_name(modality, idx)]
+            patchified_data = embedding_module(patchified_data, **modality_specific_kwargs)
 
             modality_tokens.append(patchified_data)
             modality_masks.append(token_mask)
@@ -528,13 +484,9 @@ class MultiModalPatchEmbeddings(nn.Module):
         for the H, W dimensions
         """
         output_dict = {}
-        modalities_to_process = get_modalities_to_process(
-            input_data.modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(input_data.modalities, self.supported_modality_names)
         for modality in modalities_to_process:
-            modality_tokens, modality_masks = self.apply_embedding_to_modality(
-                modality, input_data, patch_size
-            )
+            modality_tokens, modality_masks = self.apply_embedding_to_modality(modality, input_data, patch_size)
             output_dict[modality] = modality_tokens
             modality_mask_name = input_data.get_masked_modality_name(modality)
             output_dict[modality_mask_name] = modality_masks
@@ -569,8 +521,8 @@ class Reconstructor(nn.Module):
         # TODO: want to be able to remove certain bands and modalities
         self.per_modality_reconstructions = nn.ModuleDict({})
         for modality in self.supported_modalities:
-            self.per_modality_reconstructions[modality.name] = (
-                self._get_patch_reconstruction_module_for_modality(modality)
+            self.per_modality_reconstructions[modality.name] = self._get_patch_reconstruction_module_for_modality(
+                modality
             )
 
     def apply_compile(self) -> None:
@@ -589,9 +541,7 @@ class Reconstructor(nn.Module):
         """
         return f"{modality}__{idx}"
 
-    def _get_patch_reconstruction_module_for_modality(
-        self, modality: ModalitySpec
-    ) -> nn.Module:
+    def _get_patch_reconstruction_module_for_modality(self, modality: ModalitySpec) -> nn.Module:
         """Get the patch reconstruction module for a modality."""
         # Get bandset indices from tokenization config (may be overridden)
         bandset_indices = self.tokenization_config.get_bandset_indices(modality.name)
@@ -612,9 +562,7 @@ class Reconstructor(nn.Module):
         else:
             return nn.ModuleDict(
                 {
-                    self._get_reconstruction_module_name(
-                        modality.name, idx
-                    ): FlexiPatchReconstruction(
+                    self._get_reconstruction_module_name(modality.name, idx): FlexiPatchReconstruction(
                         out_chans=len(channel_set_idxs),
                         embedding_size=self.embedding_size,
                         max_patch_size=self.max_patch_size,
@@ -640,9 +588,7 @@ class Reconstructor(nn.Module):
         for idx, channel_set_indices in enumerate(bandset_indices):
             data = modality_data[..., idx, :]
             masks = modality_mask[..., idx]
-            r_model = self.per_modality_reconstructions[modality][
-                self._get_reconstruction_module_name(modality, idx)
-            ]
+            r_model = self.per_modality_reconstructions[modality][self._get_reconstruction_module_name(modality, idx)]
             if modality_spec.get_tile_resolution() == 0:
                 data = r_model(data)
             else:
@@ -680,9 +626,7 @@ class Reconstructor(nn.Module):
             input_data.modalities, [m.name for m in self.supported_modalities]
         )
         for modality in modalities_to_process:
-            modality_tokens, modality_masks = self.apply_reconstruction_to_modality(
-                modality, input_data, patch_size
-            )
+            modality_tokens, modality_masks = self.apply_reconstruction_to_modality(modality, input_data, patch_size)
             output_dict[modality] = modality_tokens
             modality_mask_name = input_data.get_masked_modality_name(modality)
             output_dict[modality_mask_name] = modality_masks
@@ -752,14 +696,10 @@ class CompositeEncodings(nn.Module):
         super().__init__()
         self.embedding_size = embedding_size
         self.supported_modalities = supported_modalities
-        self.supported_modality_names = [
-            modality.name for modality in supported_modalities
-        ]
+        self.supported_modality_names = [modality.name for modality in supported_modalities]
         self.tokenization_config = tokenization_config or TokenizationConfig()
         self.embedding_size = embedding_size
-        self.max_sequence_length = (
-            max_sequence_length  # This max sequence length is a time dim thing
-        )
+        self.max_sequence_length = max_sequence_length  # This max sequence length is a time dim thing
         # TODO: we need to be able to calculate the size of the param based on what types of embeddings it will get
 
         # we have 4 embeddings types (pos_in_time, pos_in_space, month, channel) so each get
@@ -781,9 +721,7 @@ class CompositeEncodings(nn.Module):
             for modality in self.supported_modalities:
                 num_bandsets = self.tokenization_config.get_num_bandsets(modality.name)
                 shape = (num_bandsets, self.embedding_dim_per_embedding_type)
-                channel_embeddings = nn.Parameter(
-                    torch.zeros(shape), requires_grad=False
-                )
+                channel_embeddings = nn.Parameter(torch.zeros(shape), requires_grad=False)
                 self.per_modality_channel_embeddings[modality.name] = channel_embeddings
         else:
             # Channel embeddings
@@ -900,9 +838,7 @@ class CompositeEncodings(nn.Module):
                     f"{actual_bandsets}. Ensure tokenization_config is "
                     "consistently passed to the encoder/decoder and masking strategy."
                 )
-            channel_embed = repeat(
-                channel_embed, f"b_s d -> {ein_string}", **ein_dict
-            ).to(device)
+            channel_embed = repeat(channel_embed, f"b_s d -> {ein_string}", **ein_dict).to(device)
             modality_embed[..., :n] += channel_embed
 
         if modality.is_multitemporal and use_temporal_encodings:
@@ -928,9 +864,7 @@ class CompositeEncodings(nn.Module):
                 device=device,
             )
             spatial_embed = rearrange(spatial_embed, "b (h w) d -> b h w d", h=h, w=w)
-            spatial_embed = repeat(
-                spatial_embed, f"b h w d -> {ein_string}", **ein_dict
-            )
+            spatial_embed = repeat(spatial_embed, f"b h w d -> {ein_string}", **ein_dict)
             modality_embed[..., n * 3 : n * 4] += spatial_embed
         return modality_tokens + modality_embed
 
@@ -954,9 +888,7 @@ class CompositeEncodings(nn.Module):
         """
         output_dict = {}
         available_modalities = return_modalities_from_dict(per_modality_input_tokens)
-        modalities_to_process = get_modalities_to_process(
-            available_modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(available_modalities, self.supported_modality_names)
         for modality_name in modalities_to_process:
             output_dict[modality_name] = self._apply_encodings_per_modality(
                 modality_name,
@@ -1057,13 +989,9 @@ class FlexiVitBase(nn.Module):
         """Collapse the tokens and masks, respectively, into two tensors."""
         tokens, masks = [], []
         available_modalities = return_modalities_from_dict(x)
-        modalities_to_process = get_modalities_to_process(
-            available_modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(available_modalities, self.supported_modality_names)
         for modality in modalities_to_process:
-            masked_modality_name = MaskedOlmoEarthSample.get_masked_modality_name(
-                modality
-            )
+            masked_modality_name = MaskedOlmoEarthSample.get_masked_modality_name(modality)
             x_modality = x[modality]
             x_modality_mask = x[masked_modality_name]
             tokens.append(rearrange(x_modality, "b ... d -> b (...) d"))
@@ -1088,9 +1016,7 @@ class FlexiVitBase(nn.Module):
         """
         dim_dict = {f"dim{i}": size for i, size in enumerate(spatial_dims)}
         # e.g., "d -> (dim0) (dim1) (dim2) (dim3) d"
-        pattern_input = (
-            "d -> " + " ".join(f"(dim{i})" for i in range(len(spatial_dims))) + " d"
-        )
+        pattern_input = "d -> " + " ".join(f"(dim{i})" for i in range(len(spatial_dims))) + " d"
         return pattern_input, dim_dict
 
     def split_tokens_masks_and_dims(
@@ -1101,23 +1027,17 @@ class FlexiVitBase(nn.Module):
         original_masks_dict = {}
         modalities_to_dims_dict = {}
         available_modalities = return_modalities_from_dict(x)
-        modalities_to_process = get_modalities_to_process(
-            available_modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(available_modalities, self.supported_modality_names)
         for modality in modalities_to_process:
             x_modality = x[modality]
             tokens_only_dict[modality] = x_modality
             modalities_to_dims_dict[modality] = x_modality.shape
-            masked_modality_name = MaskedOlmoEarthSample.get_masked_modality_name(
-                modality
-            )
+            masked_modality_name = MaskedOlmoEarthSample.get_masked_modality_name(modality)
             original_masks_dict[masked_modality_name] = x[masked_modality_name]
         return tokens_only_dict, original_masks_dict, modalities_to_dims_dict
 
     @staticmethod
-    def split_and_expand_per_modality(
-        x: Tensor, modalities_to_dims_dict: dict
-    ) -> dict[str, Tensor]:
+    def split_and_expand_per_modality(x: Tensor, modalities_to_dims_dict: dict) -> dict[str, Tensor]:
         """Split and expand the tokens per modality.
 
         Args:
@@ -1134,9 +1054,7 @@ class FlexiVitBase(nn.Module):
             num_tokens_for_modality = math.prod(middle_dims)
 
             # Extract tokens for this modality (b n d)
-            modality_tokens = x[
-                :, tokens_reshaped : tokens_reshaped + num_tokens_for_modality
-            ]
+            modality_tokens = x[:, tokens_reshaped : tokens_reshaped + num_tokens_for_modality]
 
             # TODO: see if there  is a general and clean einops way to do this
             # Reshape to original dimensions (e.g., for 4D spatial dims: b d1 d2 d3 d4 e)
@@ -1261,9 +1179,7 @@ class Encoder(FlexiVitBase):
         self.has_register_tokens = num_register_tokens > 0
         self.log_token_norm_stats = log_token_norm_stats
         if self.has_register_tokens:
-            self.register_tokens = nn.Parameter(
-                torch.zeros(num_register_tokens, embedding_size)
-            )
+            self.register_tokens = nn.Parameter(torch.zeros(num_register_tokens, embedding_size))
         self.min_patch_size = min_patch_size
         self.max_patch_size = max_patch_size
         self.embedding_size = embedding_size
@@ -1291,18 +1207,14 @@ class Encoder(FlexiVitBase):
         """Initialize the register tokens."""
         nn.init.xavier_uniform_(self.register_tokens)
 
-    def create_token_exit_ids(
-        self, x: dict[str, Tensor], token_exit_cfg: dict[str, int]
-    ) -> dict[str, Tensor]:
+    def create_token_exit_ids(self, x: dict[str, Tensor], token_exit_cfg: dict[str, int]) -> dict[str, Tensor]:
         """Create the token exit ids for # of layers of attention for each band group.
 
         Assumes modality channel groups are in the second to last dimension of the tokens.
         """
         exit_ids_per_modality_dict = {}
         available_modalities = return_modalities_from_dict(x)
-        modalities_to_process = get_modalities_to_process(
-            available_modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(available_modalities, self.supported_modality_names)
         for modality in modalities_to_process:
             num_exit_layers = token_exit_cfg[modality]
             exit_seq_modality = torch.full_like(x[modality], fill_value=num_exit_layers)
@@ -1310,9 +1222,7 @@ class Encoder(FlexiVitBase):
         return exit_ids_per_modality_dict
 
     @staticmethod
-    def remove_masked_tokens(
-        x: Tensor, mask: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def remove_masked_tokens(x: Tensor, mask: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """Remove masked tokens from the tokens and masks.
 
         Implementation from https://stackoverflow.com/a/68621610/2332296
@@ -1351,9 +1261,7 @@ class Encoder(FlexiVitBase):
         return x, indices, updated_mask, seq_lengths, max_length
 
     @staticmethod
-    def add_removed_tokens(
-        x: Tensor, indices: Tensor, mask: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    def add_removed_tokens(x: Tensor, indices: Tensor, mask: Tensor) -> tuple[Tensor, Tensor]:
         """Add removed tokens to the tokens and masks.
 
         Args:
@@ -1365,12 +1273,8 @@ class Encoder(FlexiVitBase):
             tokens: Tokens with removed tokens added
             mask: Mask with removed tokens added
         """
-        assert x.shape[1] > 0, (
-            "x must have at least one token we should not mask all tokens"
-        )
-        masked_tokens = repeat(
-            torch.zeros_like(x[0, 0, :]), "d -> b t d", b=x.shape[0], t=indices.shape[1]
-        )
+        assert x.shape[1] > 0, "x must have at least one token we should not mask all tokens"
+        masked_tokens = repeat(torch.zeros_like(x[0, 0, :]), "d -> b t d", b=x.shape[0], t=indices.shape[1])
         full_mask = torch.cat(
             (
                 mask,
@@ -1404,9 +1308,7 @@ class Encoder(FlexiVitBase):
             "tokens_only_dict should not contain mask keys"
         )
         if token_exit_cfg:
-            exit_ids_per_modality = self.create_token_exit_ids(
-                tokens_only_dict, token_exit_cfg
-            )
+            exit_ids_per_modality = self.create_token_exit_ids(tokens_only_dict, token_exit_cfg)
             exit_ids_per_modality.update(mask_only_dict)
             # Exit ids seqs tells us which layer to exit each token
             exit_ids_seq, _ = self.collapse_and_combine_hwtc(exit_ids_per_modality)
@@ -1459,9 +1361,7 @@ class Encoder(FlexiVitBase):
         tokens = tokens[:, self.num_register_tokens :, :]
         return tokens, register_tokens
 
-    def get_token_norm_stats(
-        self, tokens: Tensor, register_tokens: Tensor
-    ) -> dict[str, float]:
+    def get_token_norm_stats(self, tokens: Tensor, register_tokens: Tensor) -> dict[str, float]:
         """Get the token norm stats."""
         # Compute norms for register tokens: [batch_size, num_register_tokens]
         register_tokens_norms = torch.norm(register_tokens, dim=2)
@@ -1478,9 +1378,7 @@ class Encoder(FlexiVitBase):
         percentiles = [25.0, 75.0, 90.0, 95.0, 99.0]
         nonreg_percentiles = torch.quantile(
             nonreg_norms_flat.float(),
-            torch.tensor(
-                [p / 100.0 for p in percentiles], device=nonreg_norms_flat.device
-            ),
+            torch.tensor([p / 100.0 for p in percentiles], device=nonreg_norms_flat.device),
         ).tolist()
         nonreg_stats = {
             "nonregister_mean": nonreg_norms_flat.mean().item(),
@@ -1513,9 +1411,7 @@ class Encoder(FlexiVitBase):
             bool_mask = None
         else:
             bool_mask = mask == MaskValue.ONLINE_ENCODER.value
-            tokens, indices, new_mask, seq_lengths, max_seqlen = (
-                self.remove_masked_tokens(tokens, bool_mask)
-            )
+            tokens, indices, new_mask, seq_lengths, max_seqlen = self.remove_masked_tokens(tokens, bool_mask)
         return tokens, indices, new_mask, seq_lengths, max_seqlen, bool_mask
 
     def _maybe_add_removed_tokens(
@@ -1540,13 +1436,9 @@ class Encoder(FlexiVitBase):
         fast_pass: bool = False,
     ) -> tuple[dict[str, Tensor], dict[str, Any] | None]:
         """Apply the attention to the tokens and masks."""
-        tokens_only_dict, original_masks_dict, modalities_to_dims_dict = (
-            self.split_tokens_masks_and_dims(x)
-        )
+        tokens_only_dict, original_masks_dict, modalities_to_dims_dict = self.split_tokens_masks_and_dims(x)
         # already a no-op but we could remove entirely
-        exit_ids_seq = self.create_exit_seqs(
-            tokens_only_dict, original_masks_dict, token_exit_cfg
-        )
+        exit_ids_seq = self.create_exit_seqs(tokens_only_dict, original_masks_dict, token_exit_cfg)
         # exited tokens are just the linear projection
         exited_tokens, _ = self.collapse_and_combine_hwtc(x)
 
@@ -1559,18 +1451,14 @@ class Encoder(FlexiVitBase):
         tokens_dict.update(original_masks_dict)
         tokens, mask = self.collapse_and_combine_hwtc(tokens_dict)
 
-        tokens, indices, new_mask, seq_lengths, max_seqlen, bool_mask = (
-            self._maybe_remove_masked_tokens(tokens, mask, fast_pass)
+        tokens, indices, new_mask, seq_lengths, max_seqlen, bool_mask = self._maybe_remove_masked_tokens(
+            tokens, mask, fast_pass
         )
 
         if exit_ids_seq is not None:
-            exit_ids_seq, _, _, _, _ = self.remove_masked_tokens(
-                exit_ids_seq, bool_mask
-            )
+            exit_ids_seq, _, _, _, _ = self.remove_masked_tokens(exit_ids_seq, bool_mask)
             # still linear projections
-            exited_tokens, _, _, _, _ = self.remove_masked_tokens(
-                exited_tokens, bool_mask
-            )
+            exited_tokens, _, _, _, _ = self.remove_masked_tokens(exited_tokens, bool_mask)
 
         # Pack x tokens
         if self.use_flash_attn:
@@ -1617,9 +1505,7 @@ class Encoder(FlexiVitBase):
         if self.has_register_tokens:
             tokens, register_tokens = self.pop_register_tokens(tokens)
             token_norm_stats = (
-                self.get_token_norm_stats(tokens, register_tokens)
-                if self.log_token_norm_stats
-                else None
+                self.get_token_norm_stats(tokens, register_tokens) if self.log_token_norm_stats else None
             )
         else:
             token_norm_stats = None
@@ -1645,9 +1531,7 @@ class Encoder(FlexiVitBase):
         # just use the original, unclipped mask here
         tokens = self._maybe_add_removed_tokens(tokens, indices, new_mask, fast_pass)
 
-        tokens_per_modality_dict = self.split_and_expand_per_modality(
-            tokens, modalities_to_dims_dict
-        )
+        tokens_per_modality_dict = self.split_and_expand_per_modality(tokens, modalities_to_dims_dict)
         # merge original masks and the processed tokens
         tokens_per_modality_dict.update(original_masks_dict)
         return tokens_per_modality_dict, token_norm_stats
@@ -1676,9 +1560,7 @@ class Encoder(FlexiVitBase):
             raise ValueError("token_exit_cfg cannot be set when fast_pass is True")
 
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
-        if token_exit_cfg is None or any(
-            [exit_depth > 0 for exit_depth in token_exit_cfg.values()]
-        ):
+        if token_exit_cfg is None or any([exit_depth > 0 for exit_depth in token_exit_cfg.values()]):
             patchified_tokens_and_masks, token_norm_stats = self.apply_attn(
                 x=patchified_tokens_and_masks,
                 timestamps=x.timestamps,
@@ -1779,15 +1661,11 @@ class PredictorBase(FlexiVitBase):
         self.learnable_channel_embeddings = learnable_channel_embeddings
         self.random_channel_embeddings = random_channel_embeddings
         self.encoder_embedding_size = encoder_embedding_size
-        self.encoder_to_decoder_embed = nn.Linear(
-            encoder_embedding_size, decoder_embedding_size, bias=True
-        )
+        self.encoder_to_decoder_embed = nn.Linear(encoder_embedding_size, decoder_embedding_size, bias=True)
         if output_embedding_size is None:
             output_embedding_size = encoder_embedding_size
         self.output_embedding_size = output_embedding_size
-        self.to_output_embed = nn.Linear(
-            decoder_embedding_size, output_embedding_size, bias=True
-        )
+        self.to_output_embed = nn.Linear(decoder_embedding_size, output_embedding_size, bias=True)
         # THIS is the learnable mask token
         self.mask_token = nn.Parameter(torch.zeros(decoder_embedding_size))
 
@@ -1803,9 +1681,7 @@ class PredictorBase(FlexiVitBase):
         """
         output_dict = {}
         available_modalities = return_modalities_from_dict(x)
-        modalities_to_process = get_modalities_to_process(
-            available_modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(available_modalities, self.supported_modality_names)
         for modality in modalities_to_process:
             x_modality = x[modality]
             mask_name = MaskedOlmoEarthSample.get_masked_modality_name(modality)
@@ -1814,17 +1690,13 @@ class PredictorBase(FlexiVitBase):
             kept_mask = mask_modality == MaskValue.DECODER.value
 
             # Build the einops pattern and dimension dict
-            spatial_dims = x_modality.shape[
-                :-1
-            ]  # all dimensions except the last (embedding)
+            spatial_dims = x_modality.shape[:-1]  # all dimensions except the last (embedding)
             pattern_input, dim_dict = self._construct_einops_pattern(spatial_dims)
 
             mask_token_broadcasted = repeat(self.mask_token, pattern_input, **dim_dict)
 
             # Where kept_mask is True, use the broadcasted mask token
-            x_modality = torch.where(
-                kept_mask.unsqueeze(-1).bool(), mask_token_broadcasted, x_modality
-            )
+            x_modality = torch.where(kept_mask.unsqueeze(-1).bool(), mask_token_broadcasted, x_modality)
 
             output_dict[modality] = x_modality
 
@@ -1863,9 +1735,7 @@ class PredictorBase(FlexiVitBase):
         mask[missing_mask] = MaskValue.TARGET_ENCODER_ONLY.value
 
         # Sort tokens by mask value (descending order)
-        sorted_mask, indices = torch.sort(
-            mask.int(), dim=1, descending=True, stable=True
-        )
+        sorted_mask, indices = torch.sort(mask.int(), dim=1, descending=True, stable=True)
         tokens = tokens.gather(1, indices[:, :, None].expand_as(tokens))
 
         # Create binary masks for Encoder and Decoder
@@ -1880,18 +1750,14 @@ class PredictorBase(FlexiVitBase):
         # the y mask is going to be used to determine which of the y values take. True values
         # take part in the attention (we don't take the inverse here, unlike in the decoder)
         tokens_to_decode = tokens[:, :max_length_of_decoded_tokens]
-        tokens_to_decode_mask = binarized_decoder_mask[
-            :, :max_length_of_decoded_tokens
-        ].to(org_mask_dtype)
+        tokens_to_decode_mask = binarized_decoder_mask[:, :max_length_of_decoded_tokens].to(org_mask_dtype)
 
         unmasked_tokens = tokens[:, -max_length_of_unmasked_tokens:]
         # the x_mask is just going to be used in the reconstruction, to know which
         # x tokens to add back into the token list. TODO is this even necessary? it could
         # get padded with noise tokens since we don't care about reconstruction at all
         # for a whole bunch of tokens
-        unmasked_tokens_mask = binarized_online_encoder_mask[
-            :, -max_length_of_unmasked_tokens:
-        ].to(org_mask_dtype)
+        unmasked_tokens_mask = binarized_online_encoder_mask[:, -max_length_of_unmasked_tokens:].to(org_mask_dtype)
 
         return (
             tokens_to_decode,
@@ -1932,15 +1798,9 @@ class PredictorBase(FlexiVitBase):
         # Get dimensions
         B, T = indices.shape[0], indices.shape[1]
         D = tokens_to_decode.shape[-1]
-        tokens = torch.zeros(
-            (B, T, D), dtype=tokens_to_decode.dtype, device=tokens_to_decode.device
-        )
-        tokens[:, -unmasked_tokens.shape[1] :] = (
-            unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
-        )
-        tokens[:, : tokens_to_decode.shape[1]] += (
-            tokens_to_decode * tokens_to_decode_mask.unsqueeze(-1)
-        )
+        tokens = torch.zeros((B, T, D), dtype=tokens_to_decode.dtype, device=tokens_to_decode.device)
+        tokens[:, -unmasked_tokens.shape[1] :] = unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
+        tokens[:, : tokens_to_decode.shape[1]] += tokens_to_decode * tokens_to_decode_mask.unsqueeze(-1)
         tokens = tokens.scatter(1, indices[:, :, None].expand_as(tokens), tokens)
         return tokens
 
@@ -1967,12 +1827,8 @@ class Predictor(PredictorBase):
         input_res: int,
     ) -> dict[str, Tensor]:
         """Apply attention to the tokens."""
-        tokens_only_dict, original_masks_dict, modalities_to_dims_dict = (
-            self.split_tokens_masks_and_dims(x)
-        )
-        tokens_dict = self.composite_encodings(
-            tokens_only_dict, timestamps, patch_size, input_res
-        )
+        tokens_only_dict, original_masks_dict, modalities_to_dims_dict = self.split_tokens_masks_and_dims(x)
+        tokens_dict = self.composite_encodings(tokens_only_dict, timestamps, patch_size, input_res)
         tokens_dict.update(original_masks_dict)
         all_tokens, mask = self.collapse_and_combine_hwtc(tokens_dict)
         # X contains the tokens to decode, Y contains the tokens to attend to for context
@@ -1990,19 +1846,11 @@ class Predictor(PredictorBase):
         # Pack x tokens
         if self.use_flash_attn:
             og_shape_tokens_to_decode = tokens_to_decode.shape
-            tokens_to_decode = self.pack_tokens(
-                tokens_to_decode, tokens_to_decode_mask.bool()
-            )
+            tokens_to_decode = self.pack_tokens(tokens_to_decode, tokens_to_decode_mask.bool())
             og_shape_unmasked_tokens = unmasked_tokens.shape
-            unmasked_tokens = self.pack_tokens(
-                unmasked_tokens, unmasked_tokens_mask.bool()
-            )
-            cu_seqlens_tokens_to_decode = get_cumulative_sequence_lengths(
-                seqlens_tokens_to_decode
-            )
-            cu_seqlens_unmasked_tokens = get_cumulative_sequence_lengths(
-                seqlens_unmasked_tokens
-            )
+            unmasked_tokens = self.pack_tokens(unmasked_tokens, unmasked_tokens_mask.bool())
+            cu_seqlens_tokens_to_decode = get_cumulative_sequence_lengths(seqlens_tokens_to_decode)
+            cu_seqlens_unmasked_tokens = get_cumulative_sequence_lengths(seqlens_unmasked_tokens)
         else:
             cu_seqlens_tokens_to_decode = None
             cu_seqlens_unmasked_tokens = None
@@ -2039,9 +1887,7 @@ class Predictor(PredictorBase):
             unmasked_tokens_mask=unmasked_tokens_mask,
             indices=indices,
         )
-        tokens_per_modality_dict = self.split_and_expand_per_modality(
-            x, modalities_to_dims_dict
-        )
+        tokens_per_modality_dict = self.split_and_expand_per_modality(x, modalities_to_dims_dict)
         tokens_per_modality_dict.update(original_masks_dict)
         return tokens_per_modality_dict
 
@@ -2066,9 +1912,7 @@ class Predictor(PredictorBase):
         decoder_emedded_dict = x.as_dict(return_none=False)
         # Apply Input Norms and encoder to decoder embeds to each modality
         available_modalities = x.modalities
-        modalities_to_process = get_modalities_to_process(
-            available_modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(available_modalities, self.supported_modality_names)
         for modality in modalities_to_process:
             x_modality = getattr(x, modality)
             # Although, we do not account for missing tokens both proj and normalize are on token dimension so there is no mixing with real tokens
@@ -2076,25 +1920,17 @@ class Predictor(PredictorBase):
             x_modality = self.encoder_to_decoder_embed(x_modality)
             masked_modality_name = x.get_masked_modality_name(modality)
             decoder_emedded_dict[modality] = x_modality
-            decoder_emedded_dict[masked_modality_name] = getattr(
-                x, masked_modality_name
-            )
+            decoder_emedded_dict[masked_modality_name] = getattr(x, masked_modality_name)
 
         tokens_only_dict = self.add_masks(decoder_emedded_dict)
         decoder_emedded_dict.update(tokens_only_dict)
-        tokens_and_masks = self.apply_attn(
-            decoder_emedded_dict, timestamps, patch_size, input_res
-        )
+        tokens_and_masks = self.apply_attn(decoder_emedded_dict, timestamps, patch_size, input_res)
         # TODO: Factor this out into a more readable function
         output_dict = {}
         available_modalities = return_modalities_from_dict(tokens_and_masks)
-        modalities_to_process = get_modalities_to_process(
-            available_modalities, self.supported_modality_names
-        )
+        modalities_to_process = get_modalities_to_process(available_modalities, self.supported_modality_names)
         for modality in modalities_to_process:
-            masked_modality_name = MaskedOlmoEarthSample.get_masked_modality_name(
-                modality
-            )
+            masked_modality_name = MaskedOlmoEarthSample.get_masked_modality_name(modality)
             modality_mask = tokens_and_masks[masked_modality_name]
             # patchify masked data
             per_modality_output_tokens = []
